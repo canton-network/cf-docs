@@ -30,12 +30,12 @@ DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expandus
 DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "protobuf-history"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "protobuf-history" / "manifest.json"
 DEFAULT_ADMIN_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "admin-api-protobuf-history" / "manifest.json"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "protobuf-history"
-DEFAULT_LEGACY_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "protobuf"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "protobuf"
 DEFAULT_ADMIN_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "admin-api" / "protobuf"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
-GROUP_LABEL = "Canton Protobuf History"
+# Former Ledger API render root; its routes now redirect into the output directory.
+RETIRED_LEDGER_ROUTE_PREFIX = "/appdev/reference/protobuf-history"
 DETAILS_LABEL = "Details and History"
 LEDGER_OVERVIEW_NAME = "overview.mdx"
 LEDGER_OVERVIEW_TITLE = "Ledger API protobuf"
@@ -102,7 +102,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--admin-manifest-out", default=str(DEFAULT_ADMIN_MANIFEST))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    parser.add_argument("--legacy-output-dir", default=str(DEFAULT_LEGACY_OUTPUT_DIR))
     parser.add_argument("--admin-output-dir", default=str(DEFAULT_ADMIN_OUTPUT_DIR))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     parser.add_argument("--nav-dropdown", default="API Reference")
@@ -481,30 +480,6 @@ def ensure_group_path(items: list[Any], group_path: list[str]) -> list[Any]:
     return current_pages
 
 
-def update_docs_navigation(
-    *,
-    docs_json_path: Path,
-    dropdown_label: str,
-    parent_groups: list[str],
-    output_dir: Path,
-    legacy_overview_path: Path,
-) -> None:
-    docs = load_json(docs_json_path)
-    pages = reference_nav.navigation_pages(docs, label=dropdown_label, docs_json_path=docs_json_path)
-
-    page_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
-    legacy_page_ref = docs_json_page_ref(legacy_overview_path, docs_json_path)
-    pages[:] = prune_nav_items(
-        pages,
-        page_refs={page_ref, legacy_page_ref},
-        group_labels=reference_nav.PROTOBUF_GROUP_ALIASES,
-    )
-    target_pages = ensure_group_path(pages, parent_groups)
-    target_pages.append({"group": GROUP_LABEL, "pages": [page_ref, legacy_page_ref]})
-    docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
-    print(f"Updated docs navigation: {docs_json_path}")
-
-
 def replace_group_at_path(items: list[Any], group_path: list[str], group: dict[str, Any]) -> None:
     target_pages = ensure_group_path(items, group_path)
     group_label = group.get("group")
@@ -522,7 +497,6 @@ def update_split_protobuf_navigation(
     docs_json_path: Path,
     dropdown_label: str,
     ledger_output_dir: Path,
-    ledger_legacy_output_dir: Path,
     admin_output_dir: Path | None,
 ) -> None:
     docs = load_json(docs_json_path)
@@ -531,8 +505,6 @@ def update_split_protobuf_navigation(
     stale_refs = {
         docs_json_page_ref(ledger_output_dir / "index.mdx", docs_json_path),
         docs_json_page_ref(ledger_output_dir / LEDGER_OVERVIEW_NAME, docs_json_path),
-        docs_json_page_ref(ledger_legacy_output_dir / "index.mdx", docs_json_path),
-        docs_json_page_ref(ledger_legacy_output_dir / LEDGER_OVERVIEW_NAME, docs_json_path),
     }
     if admin_output_dir is not None:
         stale_refs.add(docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path))
@@ -544,7 +516,7 @@ def update_split_protobuf_navigation(
     )
 
     ledger_group = generated_reference_nav.build_protobuf_nav_group(
-        output_dir=ledger_legacy_output_dir,
+        output_dir=ledger_output_dir,
         docs_json_path=docs_json_path,
         group_label=reference_nav.PROTOBUF_GROUP,
         overview_name=LEDGER_OVERVIEW_NAME,
@@ -597,13 +569,6 @@ def write_manifest(
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote manifest: {manifest_path}")
     return manifest_path
-
-
-def sync_output_tree(*, source_dir: Path, target_dir: Path) -> None:
-    if target_dir.exists():
-        shutil.rmtree(target_dir)
-    shutil.copytree(source_dir, target_dir)
-    print(f"Synced output tree: {target_dir}")
 
 
 def strip_trailing_whitespace_tree(root: Path) -> None:
@@ -745,17 +710,22 @@ def ensure_redirect(*, docs_json_path: Path, source: str, destination: str) -> N
 def ensure_ledger_protobuf_redirects(
     *,
     docs_json_path: Path,
-    output_dirs: tuple[Path, ...],
+    output_dir: Path,
 ) -> None:
-    for output_dir in output_dirs:
-        prefix = "/" + output_dir.resolve().relative_to(docs_json_path.resolve().parent).as_posix()
-        destination = f"{prefix}/overview"
-        ensure_redirect(docs_json_path=docs_json_path, source=prefix, destination=destination)
-        ensure_redirect(
-            docs_json_path=docs_json_path,
-            source=f"{prefix}/index",
-            destination=destination,
-        )
+    prefix = "/" + output_dir.resolve().relative_to(docs_json_path.resolve().parent).as_posix()
+    destination = f"{prefix}/overview"
+    for source in (
+        prefix,
+        f"{prefix}/index",
+        RETIRED_LEDGER_ROUTE_PREFIX,
+        f"{RETIRED_LEDGER_ROUTE_PREFIX}/index",
+    ):
+        ensure_redirect(docs_json_path=docs_json_path, source=source, destination=destination)
+    ensure_redirect(
+        docs_json_path=docs_json_path,
+        source=f"{RETIRED_LEDGER_ROUTE_PREFIX}/:slug*",
+        destination=f"{prefix}/:slug*",
+    )
 
 
 def ensure_admin_protobuf_redirects(
@@ -808,7 +778,6 @@ def main() -> int:
             version_filter = f"stable Canton release bundles >= {min_version}"
 
     ledger_output_dir = Path(args.output_dir).resolve()
-    ledger_legacy_output_dir = Path(args.legacy_output_dir).resolve()
     docs_json_path = Path(args.docs_json).resolve()
     if not args.skip_ledger_api:
         ledger_releases = materialize_releases(
@@ -830,7 +799,7 @@ def main() -> int:
             manifest_path=Path(args.manifest_out).resolve(),
             source_name=args.source_name,
         )
-        canonical_route_prefix = ledger_legacy_output_dir.relative_to(docs_json_path.parent).as_posix()
+        ledger_route_prefix = ledger_output_dir.relative_to(docs_json_path.parent).as_posix()
         result = render_protobuf_reference(
             manifest_path=ledger_manifest_path,
             output_dir=ledger_output_dir,
@@ -840,7 +809,7 @@ def main() -> int:
             surface_id="ledger-api-protobuf",
             surface_title=LEDGER_OVERVIEW_TITLE,
             configured_scope="Ledger API protobuf service methods",
-            reader_route_prefix=canonical_route_prefix,
+            reader_route_prefix=ledger_route_prefix,
             overview_name=LEDGER_OVERVIEW_NAME,
         )
         if result != 0:
@@ -849,10 +818,6 @@ def main() -> int:
         retitle_overview_page(
             ledger_output_dir / LEDGER_OVERVIEW_NAME,
             title=LEDGER_OVERVIEW_TITLE,
-        )
-        sync_output_tree(
-            source_dir=ledger_output_dir,
-            target_dir=ledger_legacy_output_dir,
         )
 
     admin_output_dir: Path | None = None
@@ -902,13 +867,12 @@ def main() -> int:
         docs_json_path=docs_json_path,
         dropdown_label=args.nav_dropdown,
         ledger_output_dir=ledger_output_dir,
-        ledger_legacy_output_dir=ledger_legacy_output_dir,
         admin_output_dir=admin_output_dir,
     )
     if not args.skip_ledger_api:
         ensure_ledger_protobuf_redirects(
             docs_json_path=docs_json_path,
-            output_dirs=(ledger_output_dir, ledger_legacy_output_dir),
+            output_dir=ledger_output_dir,
         )
     if admin_output_dir is not None:
         ensure_admin_protobuf_redirects(

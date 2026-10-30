@@ -2,6 +2,7 @@
 title: "Validator Disaster Recovery"
 description: "Disaster recovery and restore procedures for validator nodes"
 ---
+{/* Generated from /src/global-synchronizer/production-operations/validator-disaster-recovery.mdx by `npm run generate:network-variable-tabs`. Edit that file, not this one. */}
 
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDisasterRecoveryBash140 from "/snippets/internal/splice/main/splice-rst-code-docs-src-validator-operator-validator-disaster-recovery-bash-140.mdx";
 import ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesParticipantBootstrapMigrateToNewParticipantStart from "/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-standalone-validator-values-participant-bootstrap-migrate-to-new-participant-start.mdx";
@@ -87,6 +88,10 @@ To re-onboard a validator in a Kubernetes deployment and recover the balances of
 
 <ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesParticipantBootstrapMigrateToNewParticipantStart />
 
+- Set `enableRepairCommands: true` in `standalone-participant-values.yaml`.
+  The participant's repair service is required to import the contracts of your parties.
+  Disable it again once the validator is up and running.
+
 ### Docker-Compose Deployment
 
 To re-onboard a validator in a Docker-compose deployment and recover the balances of all users it hosts, type:
@@ -96,6 +101,7 @@ To re-onboard a validator in a Docker-compose deployment and recover the balance
 ```
 
 where `<node_identities_dump_file>` is the path to the file containing the node identities backup, and `<new_participant_id>` is a new identifier to be used for the new participant. It must be one never used before. Note that in subsequent restarts of the validator, you should keep providing `-P` with the same `<new_participant_id>`.
+The `-i` flag also enables the participant's repair service, which is required to import the contracts of your parties.
 
 ### Obtaining an Identities Backup from a Participant Database Backup
 
@@ -108,6 +114,8 @@ In case you do not have a usable identities backup but instead have a backup of 
     - In case the restored participant shuts down immediately due to failures, add the following [additional configuration](/global-synchronizer/deployment/configuration):
 
     <ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDisasterRecoveryYaml185 />
+
+    - The commands below download the participant's private keys, so [enable key downloads](/global-synchronizer/reference/canton-console-reference#repair-commands-and-key-downloads) on the temporary participant first.
 
 2.  Open a [Canton console](/global-synchronizer/canton-console/essential-commands) to the temporary participant.
 
@@ -132,10 +140,9 @@ In some cases you might want to force the migration attempt for a set of parties
 
 #### Troubleshooting failed ACS imports
 
-{/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/production-operations/validator-disaster-recovery-1.mdx" */}
 <Tabs>
 
-<Tab title="DevNet (0.9.2)">
+<Tab title="DevNet (0.9.4)">
 
 If you still observe issues, in particular you observe `ACS_COMMITMENT_MISMATCH` warnings in your participant logs, something has likely gone wrong while importing the active contracts of at least one of the parties hosted on your node. Another common symptom (in case the validator party is affected) is that your your validator initialization fails with a `Unknown secret` error and your validator logs contain a `ValidatorLicense not found` message. To address a failed `ACS` import, you can usually:
 
@@ -155,7 +162,7 @@ If you still observe issues, in particular you observe `ACS_COMMITMENT_MISMATCH`
 
     1.  Stop your validator app.
 
-    2.  Open a [participant console](/global-synchronizer/canton-console/essential-commands) to that new validator and keep it open for the next steps.
+    2.  Open a [participant console](/global-synchronizer/canton-console/essential-commands) to that new validator and keep it open for the next steps. Make sure that the [repair service is enabled](/global-synchronizer/reference/canton-console-reference#repair-commands-and-key-downloads) on the participant.
 
     3.  From the Canton console, run:
 
@@ -182,7 +189,7 @@ If you still observe issues, in particular you observe `ACS_COMMITMENT_MISMATCH`
 
 </Tab>
 
-<Tab title="TestNet (0.9.1)">
+<Tab title="TestNet (0.9.3)">
 
 If you still observe issues, in particular you observe `ACS_COMMITMENT_MISMATCH` warnings in your participant logs, something has likely gone wrong while importing the active contracts of at least one of the parties hosted on your node. Another common symptom (in case the validator party is affected) is that your your validator initialization fails with a `Unknown secret` error and your validator logs contain a `ValidatorLicense not found` message. To address a failed `ACS` import, you can usually:
 
@@ -202,7 +209,7 @@ If you still observe issues, in particular you observe `ACS_COMMITMENT_MISMATCH`
 
     1.  Stop your validator app.
 
-    2.  Open a [participant console](/global-synchronizer/canton-console/essential-commands) to that new validator and keep it open for the next steps.
+    2.  Open a [participant console](/global-synchronizer/canton-console/essential-commands) to that new validator and keep it open for the next steps. Make sure that the [repair service is enabled](/global-synchronizer/reference/canton-console-reference#repair-commands-and-key-downloads) on the participant.
 
     3.  From the Canton console, run:
 
@@ -229,7 +236,7 @@ If you still observe issues, in particular you observe `ACS_COMMITMENT_MISMATCH`
 
 </Tab>
 
-<Tab title="MainNet (0.9.0)">
+<Tab title="MainNet (0.9.3)">
 
 If you still observe issues, in particular you observe `ACS_COMMITMENT_MISMATCH` warnings in your participant logs, something has likely gone wrong while importing the active contracts of at least one of the parties hosted on your node. Another common symptom (in case the validator party is affected) is that your your validator initialization fails with a `Unknown secret` error and your validator logs contain a `ValidatorLicense not found` message. To address a failed `ACS` import, you can usually:
 
@@ -249,7 +256,7 @@ If you still observe issues, in particular you observe `ACS_COMMITMENT_MISMATCH`
 
     1.  Stop your validator app.
 
-    2.  Open a [participant console](/global-synchronizer/canton-console/essential-commands) to that new validator and keep it open for the next steps.
+    2.  Open a [participant console](/global-synchronizer/canton-console/essential-commands) to that new validator and keep it open for the next steps. Make sure that the [repair service is enabled](/global-synchronizer/reference/canton-console-reference#repair-commands-and-key-downloads) on the participant.
 
     3.  From the Canton console, run:
 
@@ -277,7 +284,6 @@ If you still observe issues, in particular you observe `ACS_COMMITMENT_MISMATCH`
 </Tab>
 
 </Tabs>
-{/* NETWORKVARS_END */}
 
 #### Troubleshooting rejected topology snapshots
 
@@ -297,10 +303,9 @@ To work around this, follow these steps:
 
 ## Recover the Coin balance of an external party
 
-{/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/production-operations/validator-disaster-recovery-2.mdx" */}
 <Tabs>
 
-<Tab title="DevNet (0.9.2)">
+<Tab title="DevNet (0.9.4)">
 
 For a party relying on external signing, a similar procedure can be used to recover its coin balance in case the validator originally hosting it becomes unusable for whatever reason.
 
@@ -311,6 +316,7 @@ The target validator that you use to host the party after recovery **must** be a
 First, setup a new validator following the standard standard validator deployment docs.
 
 Next, connect a Canton console to that new validator.
+Importing the ACS of the party requires the participant's [repair service to be enabled](/global-synchronizer/reference/canton-console-reference#repair-commands-and-key-downloads).
 
 We now need to sign and submit the topology transaction to host the external party on the new node and import the ACS for that party.
 
@@ -414,7 +420,7 @@ The party is now hosted on the node and can participat in transactions. The last
 
 </Tab>
 
-<Tab title="TestNet (0.9.1)">
+<Tab title="TestNet (0.9.3)">
 
 For a party relying on external signing, a similar procedure can be used to recover its coin balance in case the validator originally hosting it becomes unusable for whatever reason.
 
@@ -425,6 +431,7 @@ The target validator that you use to host the party after recovery **must** be a
 First, setup a new validator following the standard standard validator deployment docs.
 
 Next, connect a Canton console to that new validator.
+Importing the ACS of the party requires the participant's [repair service to be enabled](/global-synchronizer/reference/canton-console-reference#repair-commands-and-key-downloads).
 
 We now need to sign and submit the topology transaction to host the external party on the new node and import the ACS for that party.
 
@@ -528,7 +535,7 @@ The party is now hosted on the node and can participat in transactions. The last
 
 </Tab>
 
-<Tab title="MainNet (0.9.0)">
+<Tab title="MainNet (0.9.3)">
 
 For a party relying on external signing, a similar procedure can be used to recover its coin balance in case the validator originally hosting it becomes unusable for whatever reason.
 
@@ -539,6 +546,7 @@ The target validator that you use to host the party after recovery **must** be a
 First, setup a new validator following the standard standard validator deployment docs.
 
 Next, connect a Canton console to that new validator.
+Importing the ACS of the party requires the participant's [repair service to be enabled](/global-synchronizer/reference/canton-console-reference#repair-commands-and-key-downloads).
 
 We now need to sign and submit the topology transaction to host the external party on the new node and import the ACS for that party.
 
@@ -643,7 +651,6 @@ The party is now hosted on the node and can participat in transactions. The last
 </Tab>
 
 </Tabs>
-{/* NETWORKVARS_END */}
 
 ## Roll Forward Logical Synchronizer Upgrade
 

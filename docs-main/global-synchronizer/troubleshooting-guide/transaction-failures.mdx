@@ -52,11 +52,14 @@ PACKAGE_NOT_FOUND: Could not find package <package-id>
 Upload the required DAR to your validator:
 
 ```bash
-# Via REST API
-curl -X POST "http://localhost/api/validator/v0/admin/dars" \
+# Via the JSON Ledger API of your participant
+curl -X POST "http://json-ledger-api.localhost/v2/dars" \
   -H "Authorization: Bearer $TOKEN" \
-  -F "dar=@path/to/your-app.dar"
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @path/to/your-app.dar
 ```
+
+The host above is the Docker Compose validator's route to the participant's JSON Ledger API (port 7575). On other deployments, use the address where your participant serves it. The request body is the raw DAR file, not a multipart form, and `$TOKEN` must belong to a user with participant admin rights.
 
 Or via Canton Console:
 
@@ -173,6 +176,11 @@ A participant node logs warning messages when it detects a fork with the ACS of 
 - `ACS_COMMITMENT_DEGRADATION_WITH_INEFFECTIVE_CONFIG`: This error code indicates that there is a degradation in commitment computation and the catch-up mode started, however the catch-up mode configuration is invalid and will not improve performance.
 
 ## Inspection Tools
+
+> [!NOTE]
+> These inspection tools work for synchronizers using protocol version 35 or lower with the old ACS commitment processor.
+> The new ACS commitment processor active since protocol version 36 does not support these inspections.
+> When used on such a connected synchronizer, the inspection instructions may fail or return incorrect information.
 
 Inspection tools enable the operator to understand to what extent its participant node agrees on its ACS state with its counter-participants. This is especially useful in two situations:
 

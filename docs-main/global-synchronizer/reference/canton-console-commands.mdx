@@ -3,7 +3,7 @@ title: "Canton Console Commands"
 description: "Canton admin console command reference: participant, mediator, sequencer, and topology commands."
 ---
 
-{/* GENERATED_FROM source="canton-open-source-3.6.2.tar.gz" ref="v3.6.2" digest="sha256:b496f0d17c15323f8ba8cfbdaacf34164ff642c8b2d463d1e9170389b16da9ea" template_source="digital-asset/canton:docs-open/src/main/resources/console.rst.template" template_commit="fad99cfe87ab5a4d400f2a0d45f1d4a31097e3d7" template_blob="3126accb7ff4175295a594648f25683f29b5e65c" raw_command_count="691" rendered_command_count="648" */}
+{/* GENERATED_FROM source="canton-open-source-3.7.0.tar.gz" ref="v3.7.0" digest="sha256:9cfe6196a4640ab30844ce61a7974508799a6bf83ce65c2acadffe1f0c95c4a5" template_source="digital-asset/canton:docs-open/src/main/resources/console.rst.template" template_commit="72bba4ca58c62aafee337035af885e47594e98ec" template_blob="3126accb7ff4175295a594648f25683f29b5e65c" raw_command_count="699" rendered_command_count="655" */}
 
 <div id="canton_console_reference">
 
@@ -64,6 +64,8 @@ After this call has finished successfully, all of the owners have stored the co-
 - `owners`: `Seq[com.digitalasset.canton.console.InstanceReference]`
 - `threshold`: `com.digitalasset.canton.config.RequireTypes.PositiveInt`
 - `store`: `com.digitalasset.canton.topology.admin.grpc.TopologyStoreId`
+- `protocolVersion`: `com.digitalasset.canton.version.ProtocolVersion`
+- `identityTransactions`: `Option[Seq[com.digitalasset.canton.topology.transaction.SignedTopologyTransaction[com.digitalasset.canton.topology.transaction.TopologyChangeOp,com.digitalasset.canton.topology.transaction.TopologyMapping]]]`
 
 **Returns:** `(com.digitalasset.canton.topology.Namespace, Seq[com.digitalasset.canton.topology.transaction.SignedTopologyTransaction.GenericSignedTopologyTransaction])`
 
@@ -136,6 +138,7 @@ Parameters:
 - `staticSynchronizerParameters`: `com.digitalasset.canton.admin.api.client.data.StaticSynchronizerParameters`
 - `mediatorRequestAmplification`: `com.digitalasset.canton.admin.api.client.data.SubmissionRequestAmplification`
 - `mediatorThreshold`: `com.digitalasset.canton.config.RequireTypes.PositiveInt`
+- `identityTransactions`: `Option[Seq[com.digitalasset.canton.topology.transaction.SignedTopologyTransaction[com.digitalasset.canton.topology.transaction.TopologyChangeOp,com.digitalasset.canton.topology.transaction.TopologyMapping]]]`
 
 **Returns:** `com.digitalasset.canton.topology.PhysicalSynchronizerId`
 
@@ -158,6 +161,7 @@ Bootstraps a new synchronizer with the given static synchronizer parameters and 
 - `staticSynchronizerParameters`: `com.digitalasset.canton.admin.api.client.data.StaticSynchronizerParameters`
 - `mediatorRequestAmplification`: `com.digitalasset.canton.admin.api.client.data.SubmissionRequestAmplification`
 - `mediatorThreshold`: `com.digitalasset.canton.config.RequireTypes.PositiveInt`
+- `identityTransactions`: `Option[Seq[com.digitalasset.canton.topology.transaction.SignedTopologyTransaction[com.digitalasset.canton.topology.transaction.TopologyChangeOp,com.digitalasset.canton.topology.transaction.TopologyMapping]]]`
 
 **Returns:** `com.digitalasset.canton.topology.PhysicalSynchronizerId`
 
@@ -2218,6 +2222,21 @@ If the default logback configuration is used, this will change the log level of 
 
 ### `health.status_1`
 
+Get status information for a single synchronizer.
+
+Returns the same information as `status`, but restricted to one synchronizer: node-level components are kept, while per-synchronizer entries (connected synchronizers and their health components) are kept only if they match the given `synchronizerId`. Accepts a logical or a physical synchronizer id; a logical id matches all physical instances of that synchronizer.
+
+**Arguments**
+
+- `synchronizerId`: `com.digitalasset.canton.topology.Synchronizer`
+
+**Returns:** `com.digitalasset.canton.admin.api.client.data.NodeStatus[com.digitalasset.canton.admin.api.client.data.ParticipantStatus]`
+
+
+<div id="health.status_2" />
+
+### `health.status_2`
+
 Get human (and machine) readable status information.
 
 **Returns:** `com.digitalasset.canton.admin.api.client.data.NodeStatus[S]`
@@ -2589,12 +2608,14 @@ Parameters:
 - `fingerprint`: The fingerprint of the key we want to rotate.
 - `newKmsKeyId`: The id of the new KMS key (e.g. Resource Name).
 - `name`: An optional name for the new key.
+- `synchronizerId`: Synchronizer on which to perform the rotation.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
 - `fingerprint`: `String`
 - `newKmsKeyId`: `String`
 - `name`: `String`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 **Returns:** `com.digitalasset.canton.crypto.PublicKey`
 
@@ -2613,11 +2634,13 @@ Parameters:
 
 - `fingerprint`: The fingerprint of the key we want to rotate.
 - `name`: An optional name for the new key.
+- `synchronizerId`: Synchronizer on which to perform the rotation.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
 - `fingerprint`: `String`
 - `name`: `String`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 **Returns:** `com.digitalasset.canton.crypto.PublicKey`
 
@@ -2633,6 +2656,14 @@ For a participant node it rotates the signing and encryption key pair.
 For a sequencer or mediator node it rotates the signing key pair as those nodes do not have an encryption key pair.
 
 NOTE: Namespace root or intermediate signing keys are NOT rotated by this command.
+
+Parameters:
+
+- `synchronizerId`: Synchronizer on which to perform the rotation.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
+
+**Arguments**
+
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 
 <div id="keys.secret.rotate_wrapper_key" />
@@ -2984,6 +3015,8 @@ See `submit_unassign` and `submit_assign` for the parameters.
 - `userId`: `String`
 - `submissionId`: `String`
 - `timeout`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
+- `overrideSourceValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
+- `overrideTargetValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
 
 **Returns:** `(com.digitalasset.canton.admin.api.client.commands.LedgerApiCommands.UpdateService.UnassignedWrapper, com.digitalasset.canton.admin.api.client.commands.LedgerApiCommands.UpdateService.AssignedWrapper)`
 
@@ -3012,6 +3045,8 @@ Timeout specifies the time how long to wait until the reassignment appears in th
 - `userId`: `String`
 - `submissionId`: `String`
 - `timeout`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
+- `overrideSourceValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
+- `overrideTargetValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
 
 **Returns:** `com.digitalasset.canton.admin.api.client.commands.LedgerApiCommands.UpdateService.UnassignedWrapper`
 
@@ -3034,6 +3069,8 @@ Provides access to the command submission service of the Ledger API.
 - `userId`: `String`
 - `commandId`: `String`
 - `submissionId`: `String`
+- `overrideSourceValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
+- `overrideTargetValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
 
 
 <div id="ledger_api.commands.submit_unassign_with_format" />
@@ -3061,6 +3098,8 @@ Timeout specifies the time how long to wait until the reassignment appears in th
 - `submissionId`: `String`
 - `eventFormat`: `Option[com.daml.ledger.api.v2.transaction_filter.EventFormat]`
 - `timeout`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
+- `overrideSourceValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
+- `overrideTargetValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
 
 **Returns:** `com.digitalasset.canton.admin.api.client.commands.LedgerApiCommands.UpdateService.EmptyOrUnassignedWrapper`
 
@@ -3211,6 +3250,8 @@ Timeout specifies the time how long to wait until the reassignment appears in th
 - `userId`: `String`
 - `submissionId`: `String`
 - `timeout`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
+- `overrideSourceValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
+- `overrideTargetValidationPackageIds`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.LfPackageId]`
 
 **Returns:** `com.daml.ledger.javaapi.data.Reassignment`
 
@@ -3301,37 +3342,6 @@ Help for specific commands (use help() or help("method") for more information).
 **Arguments**
 
 - `methodName`: `String`
-
-
-<div id="ledger_api.interactive_submission.preferred_package_version" />
-
-### `ledger_api.interactive_submission.preferred_package_version`
-
-Get the preferred package version for constructing a command submission.
-
-A preferred package is the highest-versioned package for a provided package-name that is vetted by all the participants hosting the provided parties.
-
-Ledger API clients should use this endpoint for constructing command submissions that are compatible with the provided preferred package, by making informed decisions on:
-
-- which are the compatible packages that can be used to create contracts
-- which contract or exercise choice argument version can be used in the command
-- which choices can be executed on a template or interface of a contract
-
-Parameters:
-
-- `parties`: The parties whose vetting state should be considered when computing the preferred package.
-- `packageName`: The package name for which the preferred package is requested.
-- `synchronizerId`: The synchronizer whose topology state to use for resolving this query. If not specified. the topology state of all the synchronizers the participant is connected to will be used.
-- `vettingValidAt`: The timestamp at which the package vetting validity should be computed If not provided, the participant's current clock time is used.
-
-**Arguments**
-
-- `parties`: `Set[com.digitalasset.canton.topology.Party]`
-- `packageName`: `com.digitalasset.canton.LfPackageName`
-- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
-- `vettingValidAt`: `Option[com.digitalasset.canton.data.CantonTimestamp]`
-
-**Returns:** `Option[com.daml.ledger.api.v2.interactive.interactive_submission_service.PackagePreference]`
 
 
 <div id="ledger_api.interactive_submission.preferred_packages" />
@@ -4102,6 +4112,7 @@ Parameters:
 - `otherConfirmingParticipantUids`: List of other participants that will be confirming daml transactions on behalf of the party.
 - `confirmationThreshold`: Number of confirming participants which need to approve a daml transaction.
 - `observingParticipantUids`: List of other participants that should observe the transactions of the external party.
+- `protocolVersion`: The protocol version to create the topology transactions for, so that clients that only read topology transactions of an older protocol version can read them, e.g. 36 on a synchronizer with protocol version 37. Defaults to the synchronizer's protocol version.
 
 **Arguments**
 
@@ -4112,6 +4123,7 @@ Parameters:
 - `otherConfirmingParticipantIds`: `Seq[com.digitalasset.canton.topology.ParticipantId]`
 - `confirmationThreshold`: `com.digitalasset.canton.config.RequireTypes.NonNegativeInt`
 - `observingParticipantIds`: `Seq[com.digitalasset.canton.topology.ParticipantId]`
+- `protocolVersion`: `Option[com.digitalasset.canton.version.ProtocolVersion]`
 
 **Returns:** `com.digitalasset.canton.admin.api.client.data.parties.GenerateExternalPartyTopology`
 
@@ -4283,6 +4295,20 @@ Help for specific commands (use help() or help("method") for more information).
 - `methodName`: `String`
 
 
+<div id="ledger_api.state.offsetforrecordtime" />
+
+### `ledger_api.state.offsetforrecordtime`
+
+Find offset for a synchronizer record time.
+
+**Arguments**
+
+- `synchronizerId`: `com.digitalasset.canton.topology.SynchronizerId`
+- `recordTime`: `com.digitalasset.canton.data.CantonTimestamp`
+
+**Returns:** `com.digitalasset.canton.data.Offset`
+
+
 <div id="ledger_api.state.status" />
 
 ### `ledger_api.state.status`
@@ -4374,6 +4400,7 @@ Parameters:
 - `activeAtOffsetO`: The offset at which the snapshot of the active contracts will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used.
 - `identityProviderId`: Limit the response to parties governed by the given identity provider.
 - `timeout`: The maximum wait time for the complete acs to arrive.
+- `includeIncompleteReassignments`: Whether the incomplete reassignments (incomplete assigned and incomplete unassigned events) should be included in the count.
 
 **Arguments**
 
@@ -4382,6 +4409,7 @@ Parameters:
 - `activeAtOffsetO`: `Option[Long]`
 - `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
 - `identityProviderId`: `String`
+- `includeIncompleteReassignments`: `Boolean`
 
 **Returns:** `Int`
 
@@ -4392,13 +4420,14 @@ Parameters:
 
 Generic search for contracts.
 
-This search function returns an untyped ledger-api event. The find will wait until the contract appears or throw an exception once it times out.
+This search function returns an untyped ledger-api event. The find will wait until the contract appears or throw an exception once it times out. The includeIncompleteReassignments parameter controls whether incomplete reassignments are also searched.
 
 **Arguments**
 
 - `partyId`: `com.digitalasset.canton.topology.Party`
 - `filter`: `com.digitalasset.canton.admin.api.client.commands.LedgerApiTypeWrappers.WrappedContractEntry => Boolean`
 - `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
+- `includeIncompleteReassignments`: `Boolean`
 
 **Returns:** `com.digitalasset.canton.admin.api.client.commands.LedgerApiTypeWrappers.WrappedContractEntry`
 
@@ -4499,6 +4528,7 @@ Parameters:
 - `identityProviderId`: Limit the response to parties governed by the given identity provider.
 - `includeCreatedEventBlob`: Whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty.
 - `resultFilter`: Custom filter of the results, applies before limit.
+- `includeIncompleteReassignments`: Whether the incomplete reassignments (incomplete assigned and incomplete unassigned events) should be included in the result.
 
 **Arguments**
 
@@ -4511,6 +4541,7 @@ Parameters:
 - `identityProviderId`: `String`
 - `includeCreatedEventBlob`: `Boolean`
 - `resultFilter`: `com.daml.ledger.api.v2.state_service.GetActiveContractsResponse => Boolean`
+- `includeIncompleteReassignments`: `Boolean`
 
 **Returns:** `Seq[com.digitalasset.canton.admin.api.client.commands.LedgerApiTypeWrappers.WrappedContractEntry]`
 
@@ -4533,6 +4564,7 @@ Parameters:
 - `timeout`: The maximum wait time for the complete acs to arrive.
 - `includeCreatedEventBlob`: Whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty.
 - `resultFilter`: Custom filter of the results, applies before limit.
+- `includeIncompleteReassignments`: Whether the incomplete reassignments (incomplete assigned and incomplete unassigned events) should be included in the result.
 
 **Arguments**
 
@@ -4545,6 +4577,7 @@ Parameters:
 - `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
 - `includeCreatedEventBlob`: `Boolean`
 - `resultFilter`: `com.daml.ledger.api.v2.state_service.GetActiveContractsResponse => Boolean`
+- `includeIncompleteReassignments`: `Boolean`
 
 **Returns:** `Seq[com.digitalasset.canton.admin.api.client.commands.LedgerApiTypeWrappers.WrappedContractEntry]`
 
@@ -4555,7 +4588,7 @@ Parameters:
 
 Wait until a contract becomes available and return the Java codegen contract.
 
-This function can be used for contracts with a code-generated Java model. You can refine your search using the `filter` function argument. You can restrict search to a synchronizer by specifying the optional synchronizer ID. The command will wait until the contract appears or throw an exception once it times out. Optionally, an `UnknownTrailingFieldPolicy` can be specified to control how unknown trailing fields in the contract payload are handled during decoding.
+This function can be used for contracts with a code-generated Java model. You can refine your search using the `filter` function argument. You can restrict search to a synchronizer by specifying the optional synchronizer ID. The command will wait until the contract appears or throw an exception once it times out. Optionally, an `UnknownTrailingFieldPolicy` can be specified to control how unknown trailing fields in the contract payload are handled during decoding. The includeIncompleteReassignments parameter controls whether contracts of incomplete reassignments are also considered.
 
 **Arguments**
 
@@ -4565,8 +4598,9 @@ This function can be used for contracts with a code-generated Java model. You ca
 - `predicate`: `TC => Boolean`
 - `synchronizerFilter`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 - `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
+- `includeIncompleteReassignments`: `Boolean`
 
-**Returns:** `(companion: com.daml.ledger.javaapi.data.codegen.ContractCompanion[TC,TCid,T], unknownTrailingFieldPolicy: com.daml.ledger.javaapi.data.codegen.UnknownTrailingFieldPolicy)(partyId: com.digitalasset.canton.topology.Party, predicate: TC => Boolean, synchronizerFilter: Option[com.digitalasset.canton.topology.SynchronizerId], timeout: com.digitalasset.canton.config.NonNegativeDuration): TC`
+**Returns:** `(companion: com.daml.ledger.javaapi.data.codegen.ContractCompanion[TC,TCid,T], unknownTrailingFieldPolicy: com.daml.ledger.javaapi.data.codegen.UnknownTrailingFieldPolicy)(partyId: com.digitalasset.canton.topology.Party, predicate: TC => Boolean, synchronizerFilter: Option[com.digitalasset.canton.topology.SynchronizerId], timeout: com.digitalasset.canton.config.NonNegativeDuration, includeIncompleteReassignments: Boolean): TC`
 
 
 <div id="ledger_api.javaapi.state.acs.filter" />
@@ -4575,7 +4609,7 @@ This function can be used for contracts with a code-generated Java model. You ca
 
 Filter the ACS for contracts of a particular Java code-generated template.
 
-To use this function, ensure a code-generated Java model for the target template exists. You can refine your search using the `predicate` function argument. You can restrict search to a synchronizer by specifying the optional synchronizer ID. Optionally, an `UnknownTrailingFieldPolicy` can be specified to control how unknown trailing fields in the contract payload are handled during decoding.
+To use this function, ensure a code-generated Java model for the target template exists. You can refine your search using the `predicate` function argument. You can restrict search to a synchronizer by specifying the optional synchronizer ID. Optionally, an `UnknownTrailingFieldPolicy` can be specified to control how unknown trailing fields in the contract payload are handled during decoding. The includeIncompleteReassignments parameter controls whether contracts of incomplete reassignments are also considered.
 
 **Arguments**
 
@@ -4584,8 +4618,9 @@ To use this function, ensure a code-generated Java model for the target template
 - `partyId`: `com.digitalasset.canton.topology.Party`
 - `predicate`: `TC => Boolean`
 - `synchronizerFilter`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
+- `includeIncompleteReassignments`: `Boolean`
 
-**Returns:** `(templateCompanion: com.daml.ledger.javaapi.data.codegen.ContractCompanion[TC,TCid,T], unknownTrailingFieldPolicy: com.daml.ledger.javaapi.data.codegen.UnknownTrailingFieldPolicy)(partyId: com.digitalasset.canton.topology.Party, predicate: TC => Boolean, synchronizerFilter: Option[com.digitalasset.canton.topology.SynchronizerId]): Seq[TC]`
+**Returns:** `(templateCompanion: com.daml.ledger.javaapi.data.codegen.ContractCompanion[TC,TCid,T], unknownTrailingFieldPolicy: com.daml.ledger.javaapi.data.codegen.UnknownTrailingFieldPolicy)(partyId: com.digitalasset.canton.topology.Party, predicate: TC => Boolean, synchronizerFilter: Option[com.digitalasset.canton.topology.SynchronizerId], includeIncompleteReassignments: Boolean): Seq[TC]`
 
 
 <div id="ledger_api.javaapi.state.acs.help" />
@@ -5846,6 +5881,21 @@ Parameters:
 **Returns:** `Long`
 
 
+<div id="parties.get_acs_replication_status" />
+
+### `parties.get_acs_replication_status`
+
+Obtain status on a pending ACS replication.
+
+Retrieve status information on an ACS replication previously triggered either via the `add_party_async` or `get_remote_acs` endpoint by specifying the previously returned request id parameter.
+
+**Arguments**
+
+- `acsReplicationRequestId`: `String`
+
+**Returns:** `com.digitalasset.canton.participant.admin.data.AcsReplicationStatus`
+
+
 <div id="parties.get_add_party_status" />
 
 ### `parties.get_add_party_status`
@@ -5986,6 +6036,7 @@ Parameters:
 - `contractImportMode`: Choose between `Validation` (default, validates that contract IDs comply with the scheme associated to the synchronizer where the contracts are assigned), or `Accept` the contracts as they are (if you know what you are doing).
 - `representativePackageIdOverride`: Defines override mappings for assigning representative package IDs to contracts upon ACS import.
 - `excludedStakeholders`: When defined, any contract that has one or more of these parties as a stakeholder will not be added.
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: force flag to proceed even if a topology transaction is at the ledger end. Defaults to false.
 
 **Arguments**
 
@@ -5996,6 +6047,7 @@ Parameters:
 - `contractImportMode`: `com.digitalasset.canton.participant.admin.data.ContractImportMode`
 - `representativePackageIdOverride`: `com.digitalasset.canton.participant.admin.data.RepresentativePackageIdOverride`
 - `excludedStakeholders`: `Set[com.digitalasset.canton.topology.PartyId]`
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: `Boolean`
 
 
 <div id="repair.change_assignation" />
@@ -6013,6 +6065,7 @@ Parameters:
 - `targetSynchronizerAlias`: Alias of the target synchronizer.
 - `reassignmentCounterOverride`: By default, the reassignment counter is increased by one during the change assignation procedure if the value of the reassignment counter needs to be forced, the new value can be passed in the map.
 - `skipInactive`: (default true) whether to skip inactive contracts mentioned in the contractIds list
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: force flag to proceed even if a topology transaction is at the ledger end. Defaults to false.
 
 **Arguments**
 
@@ -6021,6 +6074,7 @@ Parameters:
 - `targetSynchronizerAlias`: `com.digitalasset.canton.SynchronizerAlias`
 - `reassignmentCounterOverride`: `Map[com.digitalasset.canton.protocol.LfContractId,com.digitalasset.canton.ReassignmentCounter]`
 - `skipInactive`: `Boolean`
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: `Boolean`
 
 
 <div id="repair.delete_synchronizer_config" />
@@ -6124,6 +6178,7 @@ Parameters:
 - `contractImportMode`: Choose between `Validation` (default, validates that contract IDs comply with the scheme associated to the synchronizer where the contracts are assigned), or `Accept` the contracts as they are (if you know what you are doing).
 - `representativePackageIdOverride`: Defines override mappings for assigning representative package IDs to contracts upon ACS import.
 - `excludedStakeholders`: When defined, any contract that has one or more of these parties as a stakeholder will not be added.
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: force flag to proceed even if a topology transaction is at the ledger end. Defaults to false.
 
 **Arguments**
 
@@ -6133,6 +6188,7 @@ Parameters:
 - `contractImportMode`: `com.digitalasset.canton.participant.admin.data.ContractImportMode`
 - `representativePackageIdOverride`: `com.digitalasset.canton.participant.admin.data.RepresentativePackageIdOverride`
 - `excludedStakeholders`: `Set[com.digitalasset.canton.topology.PartyId]`
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: `Boolean`
 
 
 <div id="repair.migrate_synchronizer" />
@@ -6150,12 +6206,14 @@ Parameters:
 - `source`: The synchronizer alias of the source synchronizer.
 - `target`: The configuration for the target synchronizer.
 - `force`: If true, migration is forced ignoring in-flight transactions. Defaults to false.
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: force flag to proceed even if a topology transaction is at the ledger end. Defaults to false.
 
 **Arguments**
 
 - `source`: `com.digitalasset.canton.SynchronizerAlias`
 - `target`: `com.digitalasset.canton.admin.api.client.data.SynchronizerConnectionConfig`
 - `force`: `Boolean`
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: `Boolean`
 
 
 <div id="repair.perform_late_lsu" />
@@ -6196,6 +6254,7 @@ This is a last resort command to recover from data corruption, e.g. in scenarios
 - `synchronizerAlias`: `com.digitalasset.canton.SynchronizerAlias`
 - `contractIds`: `Seq[com.digitalasset.canton.protocol.LfContractId]`
 - `ignoreAlreadyPurged`: `Boolean`
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: `Boolean`
 
 
 <div id="repair.purge_deactivated_synchronizer" />
@@ -6224,12 +6283,14 @@ Parameters:
 - `reassignmentId`: Set of contract IDs that should change assignation to the new synchronizer.
 - `source`: The source synchronizer ID.
 - `target`: Alias of the target synchronizer.
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: force flag to proceed even if a topology transaction is at the ledger end. Defaults to false.
 
 **Arguments**
 
 - `reassignmentId`: `String`
 - `source`: `com.digitalasset.canton.topology.SynchronizerId`
 - `target`: `com.digitalasset.canton.topology.SynchronizerId`
+- `forceRepairWhenTopologyTransactionAtLedgerEnd`: `Boolean`
 
 
 <div id="repair.unignore_events" />
@@ -6677,6 +6738,28 @@ Authorize a transaction by its hash.
 **Returns:** `com.digitalasset.canton.topology.transaction.SignedTopologyTransaction[com.digitalasset.canton.topology.transaction.TopologyChangeOp,com.digitalasset.canton.topology.transaction.TopologyMapping]`
 
 
+<div id="topology.transactions.export_genesis_state" />
+
+### `topology.transactions.export_genesis_state`
+
+Stream the genesis state for a sequencer (intended for performing a major synchronizer upgrade) to a file.
+
+Download the topology snapshot which includes the entire history of topology transactions to initialize a sequencer for a major synchronizer upgrades. The `validFrom` and `validUntil` are set to `SignedTopologyTransaction.InitialTopologySequencingTime`.
+
+Parameters:
+
+- `outputFile`: The file to write the genesis state to.
+- `filterSynchronizerStore`: Must be specified if the genesis state is requested from a participant node.
+- `timestamp`: If not specified, the max effective time of the latest topology transaction is used. Otherwise, the given timestamp is used.
+
+**Arguments**
+
+- `outputFile`: `String`
+- `filterSynchronizerStore`: `Option[com.digitalasset.canton.topology.admin.grpc.TopologyStoreId.Synchronizer]`
+- `timestamp`: `Option[com.digitalasset.canton.data.CantonTimestamp]`
+- `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
+
+
 <div id="topology.transactions.export_identity_transactions" />
 
 ### `topology.transactions.export_identity_transactions`
@@ -6701,6 +6784,7 @@ Transactions serialized this way should be loaded into another node with load_fr
 **Arguments**
 
 - `file`: `String`
+- `protocolVersion`: `com.digitalasset.canton.version.ProtocolVersion`
 
 
 <div id="topology.transactions.export_topology_snapshot" />
@@ -6741,6 +6825,8 @@ Export topology snapshot.
 
 This command export the node's topology transactions as byte string.
 
+A byte string cannot exceed 2 GB. For larger topology snapshots, use export_topology_snapshot_to_file, which streams the snapshot to a file.
+
 Parameters:
 
 - `excludeMappings`: A list of topology mapping codes to exclude from the export. If not provided, all mappings are included.
@@ -6761,6 +6847,36 @@ Parameters:
 - `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
 
 **Returns:** `com.google.protobuf.ByteString`
+
+
+<div id="topology.transactions.export_topology_snapshot_to_file" />
+
+### `topology.transactions.export_topology_snapshot_to_file`
+
+Export topology snapshot to a file.
+
+This command streams the node's topology transactions to a file.
+
+Parameters:
+
+- `outputFile`: The file to write the topology transactions to.
+- `excludeMappings`: A list of topology mapping codes to exclude from the export. If not provided, all mappings are included.
+- `filterNamespace`: The namespace to filter the transactions by.
+- `protocolVersion`: The protocol version used to serialize the topology transactions. If not provided, the latest protocol version is used.
+
+**Arguments**
+
+- `outputFile`: `String`
+- `store`: `com.digitalasset.canton.topology.admin.grpc.TopologyStoreId`
+- `proposals`: `Boolean`
+- `timeQuery`: `com.digitalasset.canton.topology.store.TimeQuery`
+- `operation`: `Option[com.digitalasset.canton.topology.transaction.TopologyChangeOp]`
+- `filterMappings`: `Seq[com.digitalasset.canton.topology.transaction.TopologyMapping.Code]`
+- `excludeMappings`: `Seq[com.digitalasset.canton.topology.transaction.TopologyMapping.Code]`
+- `filterAuthorizedKey`: `Option[com.digitalasset.canton.crypto.Fingerprint]`
+- `protocolVersion`: `Option[String]`
+- `filterNamespace`: `String`
+- `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
 
 
 <div id="topology.transactions.find_latest_by_mapping" />
@@ -6807,6 +6923,29 @@ Parameters:
 **Returns:** `Option[com.digitalasset.canton.topology.store.StoredTopologyTransaction[com.digitalasset.canton.topology.transaction.TopologyChangeOp,M]]`
 
 
+<div id="topology.transactions.generate_onboarding_transactions" />
+
+### `topology.transactions.generate_onboarding_transactions`
+
+Generate identity topology transactions.
+
+Generate the identity topology transactions used to onboard a member to a synchronizer.  Note that the private key of the node's namespace must be accessible by the node for this to work.
+
+For backwards compatibility, the node will first look in the authorized store for these transactions with the requested protocol version.  This is only relevant for participant nodes: sequencer and mediator nodes no longer use the authorized store.
+
+Parameters:
+
+- `protocolVersion`: Desired protocol version for the topology transactions. Must match the protocol version of the synchronizer the node wants to join.
+- `temporaryStore`: By default, a new temporary topology store will be created to generate the topology transactions.  However, this is problematic if the root key is not present on the node.  Therefore, one can pass in a temporary store to use that is already seeded with both a signed root certificate, as well as a namespace delegation to an intermediate key that is present on the node.
+
+**Arguments**
+
+- `protocolVersion`: `com.digitalasset.canton.version.ProtocolVersion`
+- `temporaryStore`: `Option[com.digitalasset.canton.topology.admin.grpc.TopologyStoreId.Temporary]`
+
+**Returns:** `Seq[com.digitalasset.canton.topology.transaction.SignedTopologyTransaction[com.digitalasset.canton.topology.transaction.TopologyChangeOp,com.digitalasset.canton.topology.transaction.TopologyMapping]]`
+
+
 <div id="topology.transactions.genesis_state" />
 
 ### `topology.transactions.genesis_state`
@@ -6837,6 +6976,8 @@ Download the genesis state for a sequencer (intended for performing a major sync
 
 Download the topology snapshot which includes the entire history of topology transactions to initialize a sequencer for a major synchronizer upgrades. The `validFrom` and `validUntil` are set to `SignedTopologyTransaction.InitialTopologySequencingTime`.
 
+A byte string cannot exceed 2 GB. For larger genesis states, use export_genesis_state, which streams the genesis state to a file.
+
 Parameters:
 
 - `filterSynchronizerStore`: Must be specified if the genesis state is requested from a participant node.
@@ -6860,6 +7001,23 @@ Downloads the node's topology identity transactions.
 The node's identity is defined by topology transactions of type NamespaceDelegation and OwnerToKeyMapping.
 
 **Returns:** `Seq[com.digitalasset.canton.topology.transaction.SignedTopologyTransaction[com.digitalasset.canton.topology.transaction.TopologyChangeOp,com.digitalasset.canton.topology.transaction.TopologyMapping]]`
+
+
+<div id="topology.transactions.import_topology_snapshotv2" />
+
+### `topology.transactions.import_topology_snapshotv2`
+
+Loads topology transactions into the specified topology store.
+
+The byte string must contain data serialized by TopologyTransactions.
+
+A byte string cannot exceed 2 GB. For larger topology snapshots, use import_topology_snapshot_fromV2, which streams the snapshot from a file.
+
+**Arguments**
+
+- `topologyTransactions`: `com.google.protobuf.ByteString`
+- `store`: `com.digitalasset.canton.topology.admin.grpc.TopologyStoreId`
+- `synchronize`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
 
 
 <div id="topology.transactions.import_topology_snapshot_from" />
@@ -7497,6 +7655,7 @@ Parameters:
 - `signedBy`: Optional fingerprint of the authorizing key which in turn refers to a specific, locally existing certificate.
 - `synchronize`: Synchronize timeout can be used to ensure that the state has been propagated into the node.
 - `mustFullyAuthorize`: Whether to only add the key if the member is in the position to authorize the change.
+- `synchronizerId`: Synchronizer to add the key to.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
@@ -7506,6 +7665,7 @@ Parameters:
 - `signedBy`: `Seq[com.digitalasset.canton.crypto.Fingerprint]`
 - `synchronize`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
 - `mustFullyAuthorize`: `Boolean`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 
 <div id="topology.owner_to_key_mappings.add_keys" />
@@ -7523,6 +7683,7 @@ Parameters:
 - `signedBy`: Optional fingerprint of the authorizing key which in turn refers to a specific, locally existing certificate.
 - `synchronize`: Synchronize timeout can be used to ensure that the state has been propagated into the node.
 - `mustFullyAuthorize`: Whether to only add the key if the member is in the position to authorize the change.
+- `synchronizerId`: Synchronizer to add the keys to.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
@@ -7531,6 +7692,7 @@ Parameters:
 - `signedBy`: `Seq[com.digitalasset.canton.crypto.Fingerprint]`
 - `synchronize`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
 - `mustFullyAuthorize`: `Boolean`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 
 <div id="topology.owner_to_key_mappings.help" />
@@ -7580,6 +7742,7 @@ Paramters:
 - `synchronize`: Synchronize timeout can be used to ensure that the state has been propagated into the node.
 - `mustFullyAuthorize`: Whether to only add the key if the member is in the position to authorize the change.
 - `force`: Removing the last key is dangerous and must therefore be manually forced.
+- `synchronizerId`: The synchronizer from which to remove the key.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
@@ -7590,6 +7753,7 @@ Paramters:
 - `synchronize`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
 - `mustFullyAuthorize`: `Boolean`
 - `force`: `com.digitalasset.canton.topology.ForceFlags`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 
 <div id="topology.owner_to_key_mappings.rotate_key" />
@@ -7606,6 +7770,7 @@ Parameters:
 - `owner`: The member that owns the owner to key mapping.
 - `currentKey`: The current public key that will be rotated.
 - `newKey`: The new public key that has been generated.
+- `synchronizerId`: The synchronizer on which to add and remove the keys. If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
@@ -7613,6 +7778,7 @@ Parameters:
 - `currentKey`: `com.digitalasset.canton.crypto.PublicKey`
 - `newKey`: `com.digitalasset.canton.crypto.PublicKey`
 - `synchronize`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 
 <div id="topology.participant_synchronizer_permissions.find" />
@@ -7944,6 +8110,8 @@ Parameters:
 - `store`:
 - "Authorized": The topology transaction will be stored in the node's authorized store and automatically propagated to connected synchronizers, if applicable.
 - "\<synchronizer id\>": The topology transaction will be directly submitted to the specified synchronizer without storing it locally first. This also means it will _not_ be synchronized to other synchronizers automatically.
+- `participantStates`: The hosting state (Nominated, Freezing, Onboarding, Active) of each participant in newParticipants. A participant without an entry is Onboarding if it is in participantsRequiringPartyToBeOnboarded, and Active otherwise. Nominated and Freezing participants do not host the party, and while any participant is Freezing, the Canton protocol treats the party as if it were not hosted on any participant on the synchronizer. Nominated and Freezing are supported only in protocol version 37 and higher.
+- `protocolVersion`: The protocol version to create the topology transaction for, so that clients that only read topology transactions of an older protocol version can read it, e.g. 36 on a synchronizer with protocol version 37. Defaults to the store's protocol version. A topology transaction of protocol version 36 cannot express the Nominated and Freezing hosting states: the command fails if the new mapping has a participant in one of these states, and, unless forced, if the current mapping has one.
 
 **Arguments**
 
@@ -7959,6 +8127,8 @@ Parameters:
 - `store`: `com.digitalasset.canton.topology.admin.grpc.TopologyStoreId`
 - `forceFlags`: `com.digitalasset.canton.topology.ForceFlags`
 - `participantsRequiringPartyToBeOnboarded`: `Seq[com.digitalasset.canton.topology.ParticipantId]`
+- `participantStates`: `Map[com.digitalasset.canton.topology.ParticipantId,com.digitalasset.canton.topology.transaction.HostingParticipant.HostingState]`
+- `protocolVersion`: `Option[com.digitalasset.canton.version.ProtocolVersion]`
 
 **Returns:** `com.digitalasset.canton.topology.transaction.SignedTopologyTransaction[com.digitalasset.canton.topology.transaction.TopologyChangeOp,com.digitalasset.canton.topology.transaction.PartyToParticipant]`
 
@@ -7985,6 +8155,8 @@ Parameters:
 - "\<synchronizer id\>": The topology transaction will be directly submitted to the specified synchronizer without storing it locally first. This also means it will _not_ be synchronized to other synchronizers automatically.
 - `force`: Must be set when disabling a party with active contracts.
 - `requiresPartyToBeOnboarded`: When set to true, indicate that the added participants need to first onboard the party independently from this call before the added participants fully host the party.
+- `participantStates`: The hosting state (Nominated, Freezing, Onboarding, Active) of each participant that hosts the party after this change. A participant without an entry keeps its current state if it is not in adds. A participant in adds without an entry becomes Onboarding if requiresPartyToBeOnboarded is true and Active otherwise, which clears an existing onboarding flag; a Nominated or Freezing participant keeps its state instead, as moving it forward must be explicit. On protocol versions without Nominated and Freezing, and for the authorized store, a participant without an entry is Onboarding if it is in adds and requiresPartyToBeOnboarded is true, and Active otherwise, even if it currently has another state. Nominated and Freezing participants do not host the party, and while any participant is Freezing, the Canton protocol treats the party as if it were not hosted on any participant on the synchronizer. Nominated and Freezing are supported only in protocol version 37 and higher.
+- `protocolVersion`: The protocol version to create the topology transaction for, so that clients that only read topology transactions of an older protocol version can read it, e.g. 36 on a synchronizer with protocol version 37. Defaults to the store's protocol version. A topology transaction of protocol version 36 cannot express the Nominated and Freezing hosting states: the command fails if the new mapping has a participant in one of these states, and, unless forced, if the current mapping has one.
 
 **Arguments**
 
@@ -7998,6 +8170,8 @@ Parameters:
 - `store`: `com.digitalasset.canton.topology.admin.grpc.TopologyStoreId`
 - `forceFlags`: `com.digitalasset.canton.topology.ForceFlags`
 - `requiresPartyToBeOnboarded`: `Boolean`
+- `participantStates`: `Map[com.digitalasset.canton.topology.ParticipantId,com.digitalasset.canton.topology.transaction.HostingParticipant.HostingState]`
+- `protocolVersion`: `Option[com.digitalasset.canton.version.ProtocolVersion]`
 
 **Returns:** `com.digitalasset.canton.topology.transaction.SignedTopologyTransaction[com.digitalasset.canton.topology.transaction.TopologyChangeOp,com.digitalasset.canton.topology.transaction.PartyToParticipant]`
 
@@ -8694,7 +8868,7 @@ Provides a detailed breakdown of information required for pruning:
 - the current time according to this sequencer instance
 - synchronizer members that the sequencer supports
 - for each member when they were registered and whether they are enabled
-- a list of clients for each member, their last acknowledgement, and whether they are enabled
+- a list of clients for each member, their last acknowledgement, and whether they are enabled Members that are not registered yet are not included: those that only had traffic purchased for them, and those disabled before their registration. As they have no events, they do not affect pruning. Use `traffic_control.traffic_state_of_members` to inspect their traffic.
 
 **Returns:** `com.digitalasset.canton.synchronizer.sequencer.SequencerPruningStatus`
 
@@ -8739,26 +8913,14 @@ Initialize a sequencer from the beginning of the event stream.
 
 This should only be called for sequencer nodes being initialized at the same time as the corresponding synchronizer node.
 
-This is called as part of the synchronizer.setup.bootstrap command, so you are unlikely to need to call this directly. "
+This is called as part of the synchronizer.setup.bootstrap command, so you are unlikely to need to call this directly.
+
+A byte string cannot exceed 2 GB. For larger genesis states, use import_genesis_state, which streams the genesis state from a file. "
 
 **Arguments**
 
 - `genesisState`: `com.google.protobuf.ByteString`
 - `synchronizerParameters`: `com.digitalasset.canton.admin.api.client.data.StaticSynchronizerParameters`
-- `waitForReady`: `Boolean`
-
-**Returns:** `com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse`
-
-
-<div id="setup.assign_from_onboarding_state" />
-
-### `setup.assign_from_onboarding_state`
-
-Dynamically initialize a sequencer from a point later than the beginning of the event stream.
-
-**Arguments**
-
-- `onboardingState`: `com.google.protobuf.ByteString`
 - `waitForReady`: `Boolean`
 
 **Returns:** `com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse`
@@ -8770,12 +8932,40 @@ Dynamically initialize a sequencer from a point later than the beginning of the 
 
 Dynamically initialize a sequencer from a point later than the beginning of the event stream.
 
+A byte string cannot exceed 2 GB. For larger onboarding states, use import_onboarding_state, which streams the onboarding state from a file.
+
 **Arguments**
 
 - `onboardingState`: `com.google.protobuf.ByteString`
 - `waitForReady`: `Boolean`
 
 **Returns:** `com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse`
+
+
+<div id="setup.export_onboarding_state_at_timestamp" />
+
+### `setup.export_onboarding_state_at_timestamp`
+
+Stream the onboarding state at a given point in time to a file to bootstrap another sequencer.
+
+**Arguments**
+
+- `outputFile`: `String`
+- `timestamp`: `com.digitalasset.canton.data.CantonTimestamp`
+- `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
+
+
+<div id="setup.export_onboarding_state_for_sequencer" />
+
+### `setup.export_onboarding_state_for_sequencer`
+
+Stream the onboarding state for a given sequencer to a file.
+
+**Arguments**
+
+- `outputFile`: `String`
+- `sequencerId`: `com.digitalasset.canton.topology.SequencerId`
+- `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
 
 
 <div id="setup.help_1" />
@@ -8787,6 +8977,46 @@ Help for specific commands (use help() or help("method") for more information).
 **Arguments**
 
 - `methodName`: `String`
+
+
+<div id="setup.import_genesis_state" />
+
+### `setup.import_genesis_state`
+
+Initialize a sequencer from the beginning of the event stream, streaming the genesis state from a file.
+
+This should only be called for sequencer nodes being initialized at the same time as the corresponding synchronizer node.
+
+Parameters:
+
+- `inputFile`: Retrieved using sequencer.topology.transactions.export_genesis_state
+- `synchronizerParameters`: Synchronizer parameters of the node
+
+**Arguments**
+
+- `inputFile`: `String`
+- `synchronizerParameters`: `com.digitalasset.canton.admin.api.client.data.StaticSynchronizerParameters`
+- `waitForReady`: `Boolean`
+
+**Returns:** `com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse`
+
+
+<div id="setup.import_onboarding_state" />
+
+### `setup.import_onboarding_state`
+
+Dynamically initialize a sequencer from a point later than the beginning of the event stream, from a file.
+
+Parameters:
+
+- `inputFile`: Retrieved using sequencer.setup.export_onboarding_state_for_sequencer or sequencer.setup.export_onboarding_state_at_timestamp
+
+**Arguments**
+
+- `inputFile`: `String`
+- `waitForReady`: `Boolean`
+
+**Returns:** `com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse`
 
 
 <div id="setup.initialize_from_lsu_predecessor" />
@@ -8810,43 +9040,17 @@ Parameters:
 - `waitForReady`: `Boolean`
 
 
-<div id="setup.onboarding_state_at_timestamp" />
-
-### `setup.onboarding_state_at_timestamp`
-
-Download the onboarding state at a given point in time to bootstrap another sequencer.
-
-**Arguments**
-
-- `timestamp`: `com.digitalasset.canton.data.CantonTimestamp`
-- `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
-
-**Returns:** `com.google.protobuf.ByteString`
-
-
 <div id="setup.onboarding_state_at_timestampv2" />
 
 ### `setup.onboarding_state_at_timestampv2`
 
 Download the onboarding state at a given point in time to bootstrap another sequencer.
 
+A byte string cannot exceed 2 GB. For larger onboarding states, use export_onboarding_state_at_timestamp, which streams the onboarding state to a file.
+
 **Arguments**
 
 - `timestamp`: `com.digitalasset.canton.data.CantonTimestamp`
-- `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
-
-**Returns:** `com.google.protobuf.ByteString`
-
-
-<div id="setup.onboarding_state_for_sequencer" />
-
-### `setup.onboarding_state_for_sequencer`
-
-Download the onboarding state for a given sequencer.
-
-**Arguments**
-
-- `sequencerId`: `com.digitalasset.canton.topology.SequencerId`
 - `timeout`: `com.digitalasset.canton.config.NonNegativeDuration`
 
 **Returns:** `com.google.protobuf.ByteString`
@@ -8857,6 +9061,8 @@ Download the onboarding state for a given sequencer.
 ### `setup.onboarding_state_for_sequencerv2`
 
 Download the onboarding state for a given sequencer.
+
+A byte string cannot exceed 2 GB. For larger onboarding states, use export_onboarding_state_for_sequencer, which streams the onboarding state to a file.
 
 **Arguments**
 
@@ -8872,7 +9078,7 @@ Download the onboarding state for a given sequencer.
 
 Download sequencer snapshot at given point in time to bootstrap another sequencer.
 
-This method is only used for testing. It is recommended to use onboarding_state_for_sequencer for onboarding a new sequencer.
+This method is only used for testing. It is recommended to use onboarding_state_for_sequencerV2 for onboarding a new sequencer.
 
 **Arguments**
 
@@ -9082,9 +9288,9 @@ If the default logback configuration is used, this will change the log level of 
 - `level`: `ch.qos.logback.classic.Level`
 
 
-<div id="health.status_3" />
+<div id="health.status_4" />
 
-### `health.status_3`
+### `health.status_4`
 
 Get human (and machine) readable status information.
 
@@ -9457,12 +9663,14 @@ Parameters:
 - `fingerprint`: The fingerprint of the key we want to rotate.
 - `newKmsKeyId`: The id of the new KMS key (e.g. Resource Name).
 - `name`: An optional name for the new key.
+- `synchronizerId`: Synchronizer on which to perform the rotation.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
 - `fingerprint`: `String`
 - `newKmsKeyId`: `String`
 - `name`: `String`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 **Returns:** `com.digitalasset.canton.crypto.PublicKey`
 
@@ -9481,11 +9689,13 @@ Parameters:
 
 - `fingerprint`: The fingerprint of the key we want to rotate.
 - `name`: An optional name for the new key.
+- `synchronizerId`: Synchronizer on which to perform the rotation.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
 - `fingerprint`: `String`
 - `name`: `String`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 **Returns:** `com.digitalasset.canton.crypto.PublicKey`
 
@@ -9501,6 +9711,14 @@ For a participant node it rotates the signing and encryption key pair.
 For a sequencer or mediator node it rotates the signing key pair as those nodes do not have an encryption key pair.
 
 NOTE: Namespace root or intermediate signing keys are NOT rotated by this command.
+
+Parameters:
+
+- `synchronizerId`: Synchronizer on which to perform the rotation.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
+
+**Arguments**
+
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 
 <div id="keys.secret.rotate_wrapper_key_2" />
@@ -10188,9 +10406,9 @@ If the default logback configuration is used, this will change the log level of 
 - `level`: `ch.qos.logback.classic.Level`
 
 
-<div id="health.status_2" />
+<div id="health.status_3" />
 
-### `health.status_2`
+### `health.status_3`
 
 Get human (and machine) readable status information.
 
@@ -10563,12 +10781,14 @@ Parameters:
 - `fingerprint`: The fingerprint of the key we want to rotate.
 - `newKmsKeyId`: The id of the new KMS key (e.g. Resource Name).
 - `name`: An optional name for the new key.
+- `synchronizerId`: Synchronizer on which to perform the rotation.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
 - `fingerprint`: `String`
 - `newKmsKeyId`: `String`
 - `name`: `String`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 **Returns:** `com.digitalasset.canton.crypto.PublicKey`
 
@@ -10587,11 +10807,13 @@ Parameters:
 
 - `fingerprint`: The fingerprint of the key we want to rotate.
 - `name`: An optional name for the new key.
+- `synchronizerId`: Synchronizer on which to perform the rotation.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
 
 **Arguments**
 
 - `fingerprint`: `String`
 - `name`: `String`
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 **Returns:** `com.digitalasset.canton.crypto.PublicKey`
 
@@ -10607,6 +10829,14 @@ For a participant node it rotates the signing and encryption key pair.
 For a sequencer or mediator node it rotates the signing key pair as those nodes do not have an encryption key pair.
 
 NOTE: Namespace root or intermediate signing keys are NOT rotated by this command.
+
+Parameters:
+
+- `synchronizerId`: Synchronizer on which to perform the rotation.  If omitted, this will attempt to auto-detect a single configured and connected synchronizer.
+
+**Arguments**
+
+- `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
 
 
 <div id="keys.secret.rotate_wrapper_key_1" />

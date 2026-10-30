@@ -18,7 +18,7 @@ To run PQS you need the following:
 
 - Any access tokens or TLS certificates required by the above
 
-- PQS' `scribe.jar` or Docker image
+- PQS' `pqs.jar` or Docker image
 
 ### Running PQS
 
@@ -42,8 +42,8 @@ Exploring commands and parameters is easiest via the `--help` (and `--help-verbo
 you are running a downloaded `.jar` file:
 
 ```text
-$ ./scribe.jar --help
-Usage: scribe COMMAND
+$ ./pqs.jar --help
+Usage: pqs COMMAND
 
 An efficient ledger data exporting tool
 
@@ -56,15 +56,15 @@ Commands:
   pipeline     Initiate continuous ledger data export
   datastore    Perform operations supporting a certified data store
 
-Run 'scribe COMMAND --help[-verbose]' for more information on a command.
+Run 'pqs COMMAND --help[-verbose]' for more information on a command.
 ```
 
 Or similarly, using Docker:
 
 ```text
-$ docker run -it europe-docker.pkg.dev/da-images/public/docker/participant-query-store:0.6.14 --help
+$ docker run -it europe-docker.pkg.dev/da-images/public/docker/participant-query-store:3.6.1 --help
 Picked up JAVA_TOOL_OPTIONS: -javaagent:/open-telemetry.jar
-Usage: scribe COMMAND
+Usage: pqs COMMAND
 
 An efficient ledger data exporting tool
 
@@ -72,7 +72,7 @@ Commands:
   pipeline     Initiate continuous ledger data export
   datastore    Perform operations supporting a certified data store
 
-Run 'scribe COMMAND --help[-verbose]' for more information on a command.
+Run 'pqs COMMAND --help[-verbose]' for more information on a command.
 ```
 
 ### History slicing
@@ -222,21 +222,21 @@ timestamp, or duration.
 For detailed information on all available options, please run:
 
 ```text
-$ ./scribe.jar datastore postgres-document prune --help-verbose
+$ ./pqs.jar datastore postgres-document prune --help-verbose
 ```
 
 To use the `prune` command, you need to provide a pruning target as an argument. The pruning target can be an
 offset, a timestamp, or a duration (ISO 8601 [#]_):
 
 ```text
-$ ./scribe.jar datastore postgres-document prune --prune-target '<offset>'
+$ ./pqs.jar datastore postgres-document prune --prune-target '<offset>'
 ```
 
 By default, the `prune` command performs a dry run, meaning it displays the effects of the pruning operation
 without actually deleting any data. To execute the pruning operation, add the `--prune-mode Force` option:
 
 ```text
-$ ./scribe.jar datastore postgres-document prune --prune-target '<offset>' --prune-mode Force
+$ ./pqs.jar datastore postgres-document prune --prune-target '<offset>' --prune-mode Force
 ```
 
 #### Example with timestamp and duration
@@ -245,13 +245,13 @@ In addition to providing an offset as `--prune-target`, a timestamp or duration 
 cut-off. For example, to prune data older than 30 days (relative to now), you can use the following command:
 
 ```text
-$ ./scribe.jar datastore postgres-document prune --prune-target P30D
+$ ./pqs.jar datastore postgres-document prune --prune-target P30D
 ```
 
 To prune data up to a specific timestamp, you can use the following command:
 
 ```text
-$ ./scribe.jar datastore postgres-document prune --prune-target 2023-01-30T00:00:00.000Z
+$ ./pqs.jar datastore postgres-document prune --prune-target 2023-01-30T00:00:00.000Z
 ```
 
 #### Pruning with sql function
@@ -287,17 +287,15 @@ select * from prune_archived_to_offset(nearest_offset(interval '3 days'));
 
 #### Querying the pruning state
 
-{/* DIVERGENCE: this subsection is 3.5-only and absent from the source COPIED_START block above (docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/operate.rst, hash f00146d1); split into version tabs per PQS 3.4/3.5 divergence, cf-docs PR #1395 follow-up. */}
-
 <Tabs>
 
-<Tab title="PQS 3.4 (MainNet, TestNet)">
+<Tab title="PQS 3.4">
 
 Not available in PQS 3.4. Use the `prune` CLI command's dry-run mode (see [Pruning from the command line](#pruning-from-the-command-line)) to inspect the effect of a pruning operation before applying it.
 
 </Tab>
 
-<Tab title="PQS 3.5 (DevNet)">
+<Tab title="PQS 3.5+">
 
 PQS persists the offset of the last pruning operation. You can query it using the `pruned_offset()` function:
 
@@ -465,11 +463,9 @@ columns `argument` and `result` for a redacted exercise are `NULL`:
 
 {/* COPIED_END */}
 
-{/* DIVERGENCE: "Representative package ID support" existed only in PQS 3.4 (docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/operate.rst, hash f00146d1) and was removed from the 3.5 source; split into version tabs per PQS 3.4/3.5 divergence, cf-docs PR #1395 follow-up. */}
-
 <Tabs>
 
-<Tab title="PQS 3.4 (MainNet, TestNet)">
+<Tab title="PQS 3.4">
 
 ##### Representative package ID support
 
@@ -481,7 +477,7 @@ If you are using ACS import/export procedures that can replace the original pack
 
 </Tab>
 
-<Tab title="PQS 3.5 (DevNet)">
+<Tab title="PQS 3.5+">
 
 This limitation is no longer documented for PQS 3.5.
 
@@ -518,7 +514,7 @@ $ export OTEL_LOGS_EXPORTER=none
 $ export OTEL_METRICS_EXPORTER=prometheus
 $ export OTEL_EXPORTER_PROMETHEUS_PORT=9090
 $ export JDK_JAVA_OPTIONS="-javaagent:path/to/opentelemetry-javaagent.jar"
-$ ./scribe.jar pipeline ledger postgres-document ...
+$ ./pqs.jar pipeline ledger postgres-document ...
 ```
 
 PQS Docker images already come pre-configured this way, but users are free to override these values as they see fit
@@ -577,19 +573,19 @@ such as `prune`.
 - `Plain` / `Plain`
 
    ```text
-   00:00:23.737 I [zio-fiber-0] com.digitalasset.scribe.pipeline.pipeline.Impl:34 Starting pipeline on behalf of 'Alice_1::12209982174bbaf1e6283234ab828bcab9b73fbe313315b181134bcae9566d3bbf1b'  application=scribe
-   00:00:24.658 I [zio-fiber-0] com.digitalasset.scribe.pipeline.pipeline.Impl:61 Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'  application=scribe
-   00:00:25.043 I [zio-fiber-895] com.digitalasset.zio.daml.ledgerapi.package:201 Contract filter inclusive of 1 templates and 0 interfaces  application=scribe
-   00:00:25.724 I [zio-fiber-0] com.digitalasset.scribe.pipeline.pipeline.Impl:85 Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'  application=scribe
+   00:00:23.737 I [zio-fiber-0] com.digitalasset.pqs.pipeline.pipeline.Impl:34 Starting pipeline on behalf of 'Alice_1::12209982174bbaf1e6283234ab828bcab9b73fbe313315b181134bcae9566d3bbf1b'  application=pqs
+   00:00:24.658 I [zio-fiber-0] com.digitalasset.pqs.pipeline.pipeline.Impl:61 Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'  application=pqs
+   00:00:25.043 I [zio-fiber-895] com.digitalasset.zio.daml.ledgerapi.package:201 Contract filter inclusive of 1 templates and 0 interfaces  application=pqs
+   00:00:25.724 I [zio-fiber-0] com.digitalasset.pqs.pipeline.pipeline.Impl:85 Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'  application=pqs
    ```
 
 - `Plain` / `Standard`
 
    ```text
-   component=scribe instance_uuid=5f707d27-8188-4a44-904e-2f98ee9f4177 timestamp=2024-01-16T23:42:38.902+0000 level=INFO correlation_id=tbd description=Starting pipeline on behalf of 'Alice_1::1220c6d22d46d59c8454bd245e5a3bc238e5024d37bfd843dbad6885674f3a9673c5'  scribe=application=scribe
-   component=scribe instance_uuid=5f707d27-8188-4a44-904e-2f98ee9f4177 timestamp=2024-01-16T23:42:39.734+0000 level=INFO correlation_id=tbd description=Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'  scribe=application=scribe
-   component=scribe instance_uuid=5f707d27-8188-4a44-904e-2f98ee9f4177 timestamp=2024-01-16T23:42:39.982+0000 level=INFO correlation_id=tbd description=Contract filter inclusive of 1 templates and 0 interfaces  scribe=application=scribe
-   component=scribe instance_uuid=5f707d27-8188-4a44-904e-2f98ee9f4177 timestamp=2024-01-16T23:42:40.476+0000 level=INFO correlation_id=tbd description=Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'  scribe=application=scribe
+   component=pqs instance_uuid=5f707d27-8188-4a44-904e-2f98ee9f4177 timestamp=2024-01-16T23:42:38.902+0000 level=INFO correlation_id=tbd description=Starting pipeline on behalf of 'Alice_1::1220c6d22d46d59c8454bd245e5a3bc238e5024d37bfd843dbad6885674f3a9673c5'  pqs=application=pqs
+   component=pqs instance_uuid=5f707d27-8188-4a44-904e-2f98ee9f4177 timestamp=2024-01-16T23:42:39.734+0000 level=INFO correlation_id=tbd description=Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'  pqs=application=pqs
+   component=pqs instance_uuid=5f707d27-8188-4a44-904e-2f98ee9f4177 timestamp=2024-01-16T23:42:39.982+0000 level=INFO correlation_id=tbd description=Contract filter inclusive of 1 templates and 0 interfaces  pqs=application=pqs
+   component=pqs instance_uuid=5f707d27-8188-4a44-904e-2f98ee9f4177 timestamp=2024-01-16T23:42:40.476+0000 level=INFO correlation_id=tbd description=Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'  pqs=application=pqs
    ```
 
 - `Plain` / `Custom`
@@ -599,41 +595,41 @@ such as `prune`.
    ```
 
    ```text
-   2024-01-16T23:55:52 INFO com.digitalasset.scribe.pipeline.pipeline.Impl:34 Starting pipeline on behalf of 'Alice_1::1220444f494b31c0a40c2f393edac3f5900325028c6f810a203a0334cd830ec230c8'  application=scribe
-   2024-01-16T23:55:53 INFO com.digitalasset.scribe.pipeline.pipeline.Impl:61 Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'  application=scribe
-   2024-01-16T23:55:53 INFO com.digitalasset.zio.daml.ledgerapi.package:201 Contract filter inclusive of 1 templates and 0 interfaces  application=scribe
-   2024-01-16T23:55:53 INFO com.digitalasset.scribe.pipeline.pipeline.Impl:85 Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'  application=scribe
+   2024-01-16T23:55:52 INFO com.digitalasset.pqs.pipeline.pipeline.Impl:34 Starting pipeline on behalf of 'Alice_1::1220444f494b31c0a40c2f393edac3f5900325028c6f810a203a0334cd830ec230c8'  application=pqs
+   2024-01-16T23:55:53 INFO com.digitalasset.pqs.pipeline.pipeline.Impl:61 Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'  application=pqs
+   2024-01-16T23:55:53 INFO com.digitalasset.zio.daml.ledgerapi.package:201 Contract filter inclusive of 1 templates and 0 interfaces  application=pqs
+   2024-01-16T23:55:53 INFO com.digitalasset.pqs.pipeline.pipeline.Impl:85 Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'  application=pqs
    ```
 
 - `Json` / `Standard`
 
    ```json
-   {"component":"scribe","instance_uuid":"03c263a0-6e3d-416e-b7f2-0e56b9e34841","timestamp":"2024-01-17T00:04:12.537+0000","level":"INFO","correlation_id":"tbd","description":"Starting pipeline on behalf of 'Alice_1::1220f03ed424480ab4487d88230fc033f3910f4cb4492fea68535a5760744b53dabe'","scribe":{"application":"scribe"}}
-   {"component":"scribe","instance_uuid":"03c263a0-6e3d-416e-b7f2-0e56b9e34841","timestamp":"2024-01-17T00:04:13.551+0000","level":"INFO","correlation_id":"tbd","description":"Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'","scribe":{"application":"scribe"}}
-   {"component":"scribe","instance_uuid":"03c263a0-6e3d-416e-b7f2-0e56b9e34841","timestamp":"2024-01-17T00:04:13.935+0000","level":"INFO","correlation_id":"tbd","description":"Contract filter inclusive of 1 templates and 0 interfaces","scribe":{"application":"scribe"}}
-   {"component":"scribe","instance_uuid":"03c263a0-6e3d-416e-b7f2-0e56b9e34841","timestamp":"2024-01-17T00:04:14.659+0000","level":"INFO","correlation_id":"tbd","description":"Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'","scribe":{"application":"scribe"}}
+   {"component":"pqs","instance_uuid":"03c263a0-6e3d-416e-b7f2-0e56b9e34841","timestamp":"2024-01-17T00:04:12.537+0000","level":"INFO","correlation_id":"tbd","description":"Starting pipeline on behalf of 'Alice_1::1220f03ed424480ab4487d88230fc033f3910f4cb4492fea68535a5760744b53dabe'","pqs":{"application":"pqs"}}
+   {"component":"pqs","instance_uuid":"03c263a0-6e3d-416e-b7f2-0e56b9e34841","timestamp":"2024-01-17T00:04:13.551+0000","level":"INFO","correlation_id":"tbd","description":"Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'","pqs":{"application":"pqs"}}
+   {"component":"pqs","instance_uuid":"03c263a0-6e3d-416e-b7f2-0e56b9e34841","timestamp":"2024-01-17T00:04:13.935+0000","level":"INFO","correlation_id":"tbd","description":"Contract filter inclusive of 1 templates and 0 interfaces","pqs":{"application":"pqs"}}
+   {"component":"pqs","instance_uuid":"03c263a0-6e3d-416e-b7f2-0e56b9e34841","timestamp":"2024-01-17T00:04:14.659+0000","level":"INFO","correlation_id":"tbd","description":"Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'","pqs":{"application":"pqs"}}
    ```
 
 - `Json` / `Structured`
 
    ```json
-   {"timestamp":"2024-01-17T00:08:25+0000","level":"INFO","thread":"zio-fiber-0","location":"com.digitalasset.scribe.pipeline.pipeline.Impl:34","message":"Starting pipeline on behalf of 'Alice_1::122077c6b00e952ff694e2b25b6f5eb9582f815dfe793e2da668b119481a1dd5acdc'","application":"scribe"}
-   {"timestamp":"2024-01-17T00:08:26+0000","level":"INFO","thread":"zio-fiber-0","location":"com.digitalasset.scribe.pipeline.pipeline.Impl:61","message":"Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'","application":"scribe"}
-   {"timestamp":"2024-01-17T00:08:26+0000","level":"INFO","thread":"zio-fiber-882","location":"com.digitalasset.zio.daml.ledgerapi.package:201","message":"Contract filter inclusive of 1 templates and 0 interfaces","application":"scribe"}
-   {"timestamp":"2024-01-17T00:08:26+0000","level":"INFO","thread":"zio-fiber-0","location":"com.digitalasset.scribe.pipeline.pipeline.Impl:85","message":"Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'","application":"scribe"}
+   {"timestamp":"2024-01-17T00:08:25+0000","level":"INFO","thread":"zio-fiber-0","location":"com.digitalasset.pqs.pipeline.pipeline.Impl:34","message":"Starting pipeline on behalf of 'Alice_1::122077c6b00e952ff694e2b25b6f5eb9582f815dfe793e2da668b119481a1dd5acdc'","application":"pqs"}
+   {"timestamp":"2024-01-17T00:08:26+0000","level":"INFO","thread":"zio-fiber-0","location":"com.digitalasset.pqs.pipeline.pipeline.Impl:61","message":"Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'","application":"pqs"}
+   {"timestamp":"2024-01-17T00:08:26+0000","level":"INFO","thread":"zio-fiber-882","location":"com.digitalasset.zio.daml.ledgerapi.package:201","message":"Contract filter inclusive of 1 templates and 0 interfaces","application":"pqs"}
+   {"timestamp":"2024-01-17T00:08:26+0000","level":"INFO","thread":"zio-fiber-0","location":"com.digitalasset.pqs.pipeline.pipeline.Impl:85","message":"Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'","application":"pqs"}
    ```
 
 - `Json` / `Custom`
 
    ```text
-   --logger-pattern=%label{timestamp}{%timestamp{yyyy-MM-dd'T'HH:mm:ss}} %label{level}{%level} %label{location}{%name:%line} %label{description}{%message} %label{cause}{%cause} %label{scribe}{%kvs}
+   --logger-pattern=%label{timestamp}{%timestamp{yyyy-MM-dd'T'HH:mm:ss}} %label{level}{%level} %label{location}{%name:%line} %label{description}{%message} %label{cause}{%cause} %label{pqs}{%kvs}
    ```
 
    ```json
-   {"timestamp":"2024-01-17T00:16:31","level":"INFO","location":"com.digitalasset.scribe.pipeline.pipeline.Impl:34","description":"Starting pipeline on behalf of 'Alice_1::1220ee13431ac437d454ea59d622cfc76599e0846a3caf166b4306d47b1bf83944a6'","scribe":{"application":"scribe"}}
-   {"timestamp":"2024-01-17T00:16:33","level":"INFO","location":"com.digitalasset.scribe.pipeline.pipeline.Impl:61","description":"Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'","scribe":{"application":"scribe"}}
-   {"timestamp":"2024-01-17T00:16:34","level":"INFO","location":"com.digitalasset.zio.daml.ledgerapi.package:201","description":"Contract filter inclusive of 1 templates and 0 interfaces","scribe":{"application":"scribe"}}
-   {"timestamp":"2024-01-17T00:16:35","level":"INFO","location":"com.digitalasset.scribe.pipeline.pipeline.Impl:85","description":"Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'","scribe":{"application":"scribe"}}
+   {"timestamp":"2024-01-17T00:16:31","level":"INFO","location":"com.digitalasset.pqs.pipeline.pipeline.Impl:34","description":"Starting pipeline on behalf of 'Alice_1::1220ee13431ac437d454ea59d622cfc76599e0846a3caf166b4306d47b1bf83944a6'","pqs":{"application":"pqs"}}
+   {"timestamp":"2024-01-17T00:16:33","level":"INFO","location":"com.digitalasset.pqs.pipeline.pipeline.Impl:61","description":"Last checkpoint is absent. Seeding from ACS before processing transactions with starting offset '00000000000000000b'","pqs":{"application":"pqs"}}
+   {"timestamp":"2024-01-17T00:16:34","level":"INFO","location":"com.digitalasset.zio.daml.ledgerapi.package:201","description":"Contract filter inclusive of 1 templates and 0 interfaces","pqs":{"application":"pqs"}}
+   {"timestamp":"2024-01-17T00:16:35","level":"INFO","location":"com.digitalasset.pqs.pipeline.pipeline.Impl:85","description":"Continuing from offset '00000000000000000b' and index '0' until offset '00000000000000000b'","pqs":{"application":"pqs"}}
    ```
 
    Notice you need to use `%label{your_label}{format}` to describe a Json attribute-value pair.
@@ -717,17 +713,15 @@ $ curl http://localhost:8080/livez
 
 #### Readiness: `/readyz`
 
-{/* DIVERGENCE: `/readyz` is 3.5-only and absent from the source COPIED_START block above (docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/observe.rst, hash 69375e51); split into version tabs per PQS 3.4/3.5 divergence, cf-docs PR #1395 follow-up. */}
-
 <Tabs>
 
-<Tab title="PQS 3.4 (MainNet, TestNet)">
+<Tab title="PQS 3.4">
 
 Not available in PQS 3.4. Use `/livez` for liveness probes; there is no separate readiness endpoint.
 
 </Tab>
 
-<Tab title="PQS 3.5 (DevNet)">
+<Tab title="PQS 3.5+">
 
 Returns HTTP 200 when PQS can reach both the Participant Node (gRPC) and PostgreSQL (JDBC). Returns HTTP 503
 otherwise.
@@ -764,7 +758,7 @@ $ export OTEL_TRACES_EXPORTER=otlp
 $ export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 $ export OTEL_EXPORTER_OTLP_ENDPOINT="http://otel-collector:4317"
 $ export JDK_JAVA_OPTIONS="-javaagent:path/to/opentelemetry-javaagent.jar"
-$ ./scribe.jar pipeline ledger postgres-document ...
+$ ./pqs.jar pipeline ledger postgres-document ...
 ```
 
 The following root spans are emitted by PQS:
@@ -909,7 +903,7 @@ End time       : 2024-11-06 03:16:43.019494 +0000 UTC
 Status code    : Unset
 Status message :
 Attributes:
-     -> scribe.batch.models_count: Int(37)
+     -> pqs.batch.models_count: Int(37)
 Links:
 SpanLink #0
      -> Trace ID: 33736b299a690b885c2314b9b17bde05
@@ -965,11 +959,11 @@ End time       : 2024-11-06 03:16:43.019162 +0000 UTC
 Status code    : Unset
 Status message :
 Attributes:
-     -> scribe.__contracts.rows_count: Int(9)
-     -> scribe.__exercises.rows_count: Int(3)
-     -> scribe.__events.rows_count: Int(12)
-     -> scribe.__archives.rows_count: Int(1)
-     -> scribe.__transactions.rows_count: Int(6)
+     -> pqs.__contracts.rows_count: Int(9)
+     -> pqs.__exercises.rows_count: Int(3)
+     -> pqs.__events.rows_count: Int(12)
+     -> pqs.__archives.rows_count: Int(1)
+     -> pqs.__transactions.rows_count: Int(6)
 
 Span #114
 Trace ID       : 76c58361d46c08761c37ef5821e8fb78
@@ -997,8 +991,8 @@ End time       : 2024-11-06 03:16:43.024872 +0000 UTC
 Status code    : Unset
 Status message :
 Attributes:
-     -> scribe.watermark.offset: Str(000000000000000261)
-     -> scribe.watermark.ix: Int(384)
+     -> pqs.watermark.offset: Str(000000000000000261)
+     -> pqs.watermark.ix: Int(384)
 Links:
 SpanLink #0
      -> Trace ID: 76c58361d46c08761c37ef5821e8fb78
@@ -1022,7 +1016,7 @@ Span #6
 Trace ID       : 71e67e2420deeef36ef3efacea6399dc
 Parent ID      : 161b5911e7a0ec18
 ID             : 1a66240dfd597654
-Name           : UPDATE scribe.__watermark
+Name           : UPDATE pqs.__watermark
 Kind           : Client
 Start time     : 2024-11-06 03:16:43.022737084 +0000 UTC
 End time       : 2024-11-06 03:16:43.023134917 +0000 UTC
@@ -1031,9 +1025,9 @@ Status message :
 Attributes:
      -> db.operation: Str(UPDATE)
      -> db.sql.table: Str(__watermark)
-     -> db.name: Str(scribe)
-     -> db.connection_string: Str(postgresql://postgres-scribe:5432)
-     -> server.address: Str(postgres-scribe)
+     -> db.name: Str(pqs)
+     -> db.connection_string: Str(postgresql://postgres-pqs:5432)
+     -> server.address: Str(postgres-pqs)
      -> server.port: Int(5432)
      -> db.user: Str(pguser)
      -> db.statement: Str(update __watermark set "offset" = ?, ix = ?;)
@@ -1292,26 +1286,26 @@ across the board.
 While PQS recovers, the following log messages are emitted to indicate the progress of the recovery:
 
 ```text
-12:52:26.753 I [zio-fiber-257] com.digitalasset.scribe.appversion.package:14 scribe, version: UNSPECIFIED  application=scribe
-12:52:16.725 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 1, unstable for 0 seconds. Remaining attempts: 42. Remaining time: 10 minutes. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
+12:52:26.753 I [zio-fiber-257] com.digitalasset.pqs.appversion.package:14 pqs, version: UNSPECIFIED  application=pqs
+12:52:16.725 I [zio-fiber-0] com.digitalasset.pqs.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 1, unstable for 0 seconds. Remaining attempts: 42. Remaining time: 10 minutes. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
     Suppressed: io.grpc.StatusException: UNAVAILABLE: io exception
         Suppressed: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/[0:0:0:0:0:0:0:1]:6865
-            Suppressed: java.net.ConnectException: Connection refused application=scribe
-12:52:29.007 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 2, unstable for 12 seconds. Remaining attempts: 41. Remaining time: 9 minutes 47 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
+            Suppressed: java.net.ConnectException: Connection refused application=pqs
+12:52:29.007 I [zio-fiber-0] com.digitalasset.pqs.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 2, unstable for 12 seconds. Remaining attempts: 41. Remaining time: 9 minutes 47 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
     Suppressed: io.grpc.StatusException: UNAVAILABLE: io exception
         Suppressed: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/[0:0:0:0:0:0:0:1]:6865
-            Suppressed: java.net.ConnectException: Connection refused application=scribe
-12:52:51.237 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 3, unstable for 34 seconds. Remaining attempts: 40. Remaining time: 9 minutes 25 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
+            Suppressed: java.net.ConnectException: Connection refused application=pqs
+12:52:51.237 I [zio-fiber-0] com.digitalasset.pqs.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 3, unstable for 34 seconds. Remaining attempts: 40. Remaining time: 9 minutes 25 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
     Suppressed: io.grpc.StatusException: UNAVAILABLE: io exception
         Suppressed: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/[0:0:0:0:0:0:0:1]:6865
-            Suppressed: java.net.ConnectException: Connection refused application=scribe
-12:53:33.473 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 4, unstable for 1 minute 16 seconds. Remaining attempts: 39. Remaining time: 8 minutes 43 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
+            Suppressed: java.net.ConnectException: Connection refused application=pqs
+12:53:33.473 I [zio-fiber-0] com.digitalasset.pqs.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 4, unstable for 1 minute 16 seconds. Remaining attempts: 39. Remaining time: 8 minutes 43 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
     Suppressed: io.grpc.StatusException: UNAVAILABLE: io exception
         Suppressed: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/[0:0:0:0:0:0:0:1]:6865
-            Suppressed: java.net.ConnectException: Connection refused application=scribe
-12:54:36.328 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable JDBC exception. Attempt 5, unstable for 2 minutes 19 seconds. Remaining attempts: 38. Remaining time: 7 minutes 40 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable JDBC exception.
+            Suppressed: java.net.ConnectException: Connection refused application=pqs
+12:54:36.328 I [zio-fiber-0] com.digitalasset.pqs.pipeline.Retry.retryRecoverable:48 Recoverable JDBC exception. Attempt 5, unstable for 2 minutes 19 seconds. Remaining attempts: 38. Remaining time: 7 minutes 40 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable JDBC exception.
     Suppressed: org.postgresql.util.PSQLException: Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
-        Suppressed: java.net.ConnectException: Connection refused application=scribe
+        Suppressed: java.net.ConnectException: Connection refused application=pqs
 ```
 
 #### Metrics
@@ -1410,7 +1404,7 @@ completes.
 The following log message indicates that a reload was triggered:
 
 ```text
-12:34:56.789 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable: unknown Daml package detected. Attempt 1, unstable for 0 seconds. Remaining attempts: 42. Remaining time: 10 minutes. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable: unknown Daml package detected.
+12:34:56.789 I [zio-fiber-0] com.digitalasset.pqs.pipeline.Retry.retryRecoverable:48 Recoverable: unknown Daml package detected. Attempt 1, unstable for 0 seconds. Remaining attempts: 42. Remaining time: 10 minutes. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable: unknown Daml package detected.
     Suppressed: com.digitalasset.zio.daml.ledgerapi.UnknownDamlPackageException: No package for abc123:My.Module:MyTemplate was seen on initialization. Retrying to discover new packages.
 ```
 
@@ -1503,7 +1497,7 @@ for instructions:
 Once configured, use appropriate values for dedicated parameters:
 
 ```text
-$ ./scribe.jar pipeline ledger postgres-document \
+$ ./pqs.jar pipeline ledger postgres-document \
      --source-ledger-tls-cert /path/to/ledger.crt \
      --source-ledger-tls-key /path/to/ledger.pem \
      --source-ledger-tls-cafile /path/to/ledger.crt \
@@ -1519,7 +1513,7 @@ To run PQS with authentication you need to turn it on via `--source-ledger-auth 
 Credentials flow [#]_.
 
 ```text
-$ ./scribe.jar pipeline ledger postgres-document \
+$ ./pqs.jar pipeline ledger postgres-document \
      --source-ledger-auth OAuth \
      --pipeline-oauth-clientid my_client_id \
      --pipeline-oauth-clientsecret deadbeef \
@@ -1530,7 +1524,7 @@ $ ./scribe.jar pipeline ledger postgres-document \
 If your issuer is OIDC compliant, you can specify the issuer instead of the token URL.
 
 ```text
-$ ./scribe.jar pipeline ledger postgres-document \
+$ ./pqs.jar pipeline ledger postgres-document \
      --source-ledger-auth OAuth \
      --pipeline-oauth-clientid my_client_id \
      --pipeline-oauth-clientsecret deadbeef \
@@ -1551,7 +1545,7 @@ accept your client credentials for `grant_type=client_credentials` and `scope=da
 For Audience-Based Tokens use the `--pipeline-oauth-parameters-audience` parameter:
 
 ```text
-$ ./scribe.jar pipeline ledger postgres-document \
+$ ./pqs.jar pipeline ledger postgres-document \
     --source-ledger-auth OAuth \
     --pipeline-oauth-clientid my_client_id \
     --pipeline-oauth-clientsecret deadbeef \
@@ -1566,7 +1560,7 @@ $ ./scribe.jar pipeline ledger postgres-document \
 For Scope-Based Tokens use the `--pipeline-oauth-scope` parameter:
 
 ```text
-$ ./scribe.jar pipeline ledger postgres-document \
+$ ./pqs.jar pipeline ledger postgres-document \
      --source-ledger-auth OAuth \
      --pipeline-oauth-clientid my_client_id \
      --pipeline-oauth-clientsecret deadbeef \
@@ -1592,7 +1586,7 @@ Alternatively, you can configure PQS to use a static access token (meaning it is
 `--pipeline-oauth-accesstoken` parameter:
 
 ```text
-$ ./scribe.jar pipeline ledger postgres-document \
+$ ./pqs.jar pipeline ledger postgres-document \
      --source-ledger-auth OAuth \
      --pipeline-oauth-accesstoken my_access_token
 ```
@@ -1645,7 +1639,7 @@ If PQS runs in a network that requires a forward proxy to reach external OAuth e
 (for example Azure AD or Okta), configure the proxy using CLI flags:
 
 ```text
-$ ./scribe.jar pipeline ledger postgres-document \
+$ ./pqs.jar pipeline ledger postgres-document \
      --source-ledger-auth OAuth \
      --pipeline-oauth-clientid my_client_id \
      --pipeline-oauth-clientsecret deadbeef \
@@ -1658,15 +1652,20 @@ $ ./scribe.jar pipeline ledger postgres-document \
 Or via environment variables:
 
 ```text
-SCRIBE_PIPELINE_OAUTH_PROXY_URL=http://proxy.corp.example.com:8080
-SCRIBE_PIPELINE_OAUTH_PROXY_USER=proxyuser        # optional
-SCRIBE_PIPELINE_OAUTH_PROXY_PASSWORD=proxypass     # optional
+PQS_PIPELINE_OAUTH_PROXY_URL=http://proxy.corp.example.com:8080
+PQS_PIPELINE_OAUTH_PROXY_USER=proxyuser        # optional
+PQS_PIPELINE_OAUTH_PROXY_PASSWORD=proxypass     # optional
 ```
+
+<Note>
+Prior to PQS 3.6.0, the environment variable prefix was `SCRIBE_`. In PQS 3.6.0 and later, the `SCRIBE_` prefix is deprecated.
+</Note>
+
 
 The proxy is used for both OIDC discovery and token acquisition requests. It does not affect
 the gRPC connection to the ledger API or the PostgreSQL connection.
 
-If your infrastructure uses `HTTPS_PROXY` environment variables, set `SCRIBE_PIPELINE_OAUTH_PROXY_URL`
+If your infrastructure uses `HTTPS_PROXY` environment variables, set `PQS_PIPELINE_OAUTH_PROXY_URL`
 to the same value.
 
 <Note>
@@ -1681,7 +1680,7 @@ exclude the proxy port from sidecar interception using the pod annotation
 To authenticate to PostgreSQL, use dedicated parameters when launching the pipeline:
 
 ```text
-$ ./scribe.jar pipeline ledger postgres-document \
+$ ./pqs.jar pipeline ledger postgres-document \
      --target-postgres-password "${YOUR_DB_PASSWORD}" \
      --target-postgres-username "${YOUR_DB_USER}"
 ```
@@ -1786,7 +1785,7 @@ This includes both the PQS software itself and any dependencies it may have.
 
 {/* COPIED_START source="docs-website:docs/replicated/pqs/3.5/component-howtos/pqs/upgrade.rst" hash="1be7a30f" */}
 
-{/* DIVERGENCE: integrated as a section of this page rather than a standalone page; frontmatter and copyright comment dropped, headings demoted one level. Sphinx cross-references resolved to cf-docs anchors: SQL API -> /appdev/reference/pqs-sql-reference; "Manual handling of schema upgrades" and "Logging" -> in-page anchors on this Operate page. The migration-log and schema-dump samples below show version strings (scribe v0.5.8, Flyway 9.22.3, PostgreSQL 15.5) from an earlier PQS release and are illustrative only. "describe" -> "describes" in the first sentence. Upstream source (hash 1be7a30f) is identical for PQS 3.4 and 3.5. */}
+{/* DIVERGENCE: integrated as a section of this page rather than a standalone page; frontmatter and copyright comment dropped, headings demoted one level. Sphinx cross-references resolved to cf-docs anchors: SQL API -> /appdev/reference/pqs-sql-reference; "Manual handling of schema upgrades" and "Logging" -> in-page anchors on this Operate page. The migration-log and schema-dump samples below show version strings (pqs v0.5.8, Flyway 9.22.3, PostgreSQL 15.5) from an earlier PQS release and are illustrative only. "describe" -> "describes" in the first sentence. Upstream source (hash 1be7a30f) is identical for PQS 3.4 and 3.5. */}
 
 This section describes how PQS manages the evolution of its database schema between releases. This is important for
 operators who need to understand what is involved in upgrading PQS to a new version, and how to troubleshoot any
@@ -1808,22 +1807,22 @@ In case automatic schema management is undesirable, see [Manual handling of sche
 The logging output can be observed to monitor the progress of schema migration:
 
 ```text
-com.digitalasset.scribe.postgres.document.Main:53 Applying required datastore schema  application=scribe
-com.digitalasset.scribe.postgres.document.DocumentPostgres:35 Applying schema  application=scribe
-org.flywaydb.core.internal.license.VersionPrinter: Flyway Community Edition 9.22.3 by Redgate  application=scribe
-org.flywaydb.core.internal.license.VersionPrinter: See release notes here: https://rd.gt/416ObMi  application=scribe
-org.flywaydb.core.internal.license.VersionPrinter:   application=scribe
-org.flywaydb.core.FlywayExecutor: Database: jdbc:postgresql://localhost:5432/postgres (PostgreSQL 15.5) application=scribe
-org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory: Schema history table "public"."flyway_schema_history" does not exist yet  application=scribe
-org.flywaydb.core.internal.command.DbValidate: Successfully validated 2 migrations (execution time 00:00.016s) application=scribe
-org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory: Creating Schema History table "public"."flyway_schema_history" ...  application=scribe
-org.flywaydb.core.internal.command.DbMigrate: Current version of schema "public": << Empty Schema >>  application=scribe
-org.flywaydb.core.internal.command.DbMigrate: Migrating schema "public" to version "001 - Create initial schema"  application=scribe
-org.flywaydb.core.internal.command.DbMigrate: Migrating schema "public" to version "002 - Make initializecontractimplements function idempotent"  application=scribe
-org.flywaydb.core.internal.command.DbMigrate: Successfully applied 2 migrations to schema "public", now at version v002 (execution time 00:00.081s)  application=scribe
-com.digitalasset.scribe.postgres.document.DocumentPostgres:55 Applying mappings  application=scribe
-com.digitalasset.scribe.postgres.document.DocumentPostgres:57 Schema and mappings applied  application=scribe
-com.digitalasset.scribe.postgres.document.Main:57 Applied required datastore schema  application=scribe
+com.digitalasset.pqs.postgres.document.Main:53 Applying required datastore schema  application=pqs
+com.digitalasset.pqs.postgres.document.DocumentPostgres:35 Applying schema  application=pqs
+org.flywaydb.core.internal.license.VersionPrinter: Flyway Community Edition 9.22.3 by Redgate  application=pqs
+org.flywaydb.core.internal.license.VersionPrinter: See release notes here: https://rd.gt/416ObMi  application=pqs
+org.flywaydb.core.internal.license.VersionPrinter:   application=pqs
+org.flywaydb.core.FlywayExecutor: Database: jdbc:postgresql://localhost:5432/postgres (PostgreSQL 15.5) application=pqs
+org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory: Schema history table "public"."flyway_schema_history" does not exist yet  application=pqs
+org.flywaydb.core.internal.command.DbValidate: Successfully validated 2 migrations (execution time 00:00.016s) application=pqs
+org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory: Creating Schema History table "public"."flyway_schema_history" ...  application=pqs
+org.flywaydb.core.internal.command.DbMigrate: Current version of schema "public": << Empty Schema >>  application=pqs
+org.flywaydb.core.internal.command.DbMigrate: Migrating schema "public" to version "001 - Create initial schema"  application=pqs
+org.flywaydb.core.internal.command.DbMigrate: Migrating schema "public" to version "002 - Make initializecontractimplements function idempotent"  application=pqs
+org.flywaydb.core.internal.command.DbMigrate: Successfully applied 2 migrations to schema "public", now at version v002 (execution time 00:00.081s)  application=pqs
+com.digitalasset.pqs.postgres.document.DocumentPostgres:55 Applying mappings  application=pqs
+com.digitalasset.pqs.postgres.document.DocumentPostgres:57 Schema and mappings applied  application=pqs
+com.digitalasset.pqs.postgres.document.Main:57 Applied required datastore schema  application=pqs
 ```
 
 More detailed logs can be obtained by setting the log level to `DEBUG` (see [Logging](#logging)).
@@ -1837,7 +1836,7 @@ later be reviewed and applied by authorized operators.
 The following command displays the latest required schema:
 
 ```text
-$ ./scribe.jar datastore postgres-document schema show \
+$ ./pqs.jar datastore postgres-document schema show \
     --ledger-host ...
 ```
 
@@ -1846,7 +1845,7 @@ demarcates each patch's contents:
 
 ```text
 /*********************************************
- * generated by scribe, version: v0.5.8 *
+ * generated by PQS, version: v3.6.1 *
  *********************************************/
 
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> --
@@ -1877,7 +1876,7 @@ When PQS's schema is being managed out-of-band, it is advisable to turn off auto
 launching the pipeline:
 
 ```text
-$ ./scribe.jar pipeline ledger postgres-document \
+$ ./pqs.jar pipeline ledger postgres-document \
     --target-schema-autoapply false ...
 ```
 

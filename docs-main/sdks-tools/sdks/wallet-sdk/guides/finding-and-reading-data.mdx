@@ -9,7 +9,8 @@ The wallet SDK primarily focus on an on-party basis interaction, therefore it is
 
 Reading all available parties to you can easily be done using the wallet SDK as shown in the example below, and the result is paginated. It's worth noting that the call to read all available parties doesn't use the the party and synchronizer fields therefore changing them has no effect on the result.
 
-``` typescript
+{/* include ../../examples/snippets/list-wallets.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -17,6 +18,7 @@ export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
 
     await sdk.party.list()
@@ -38,13 +40,15 @@ Ledger end is used as a default for wallet SDK operations.
 
 Using the above ledger time we can figure out what the current state of all active contracts are. Contracts can be in two states - active and archived - which correlates to the UTXO mode of unspent and spent. Active contracts are contracts that are unspent and thereby can be used in new transactions or to exercise choices.
 
-``` typescript
+{/* include ../../examples/snippets/read-active-contracts.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
     const myParty = global.EXISTING_PARTY_1
     //we use holdings as an example here
@@ -62,13 +66,15 @@ export default async function () {
 
 In order to stream transaction events as they happen on ledger the `listHoldingTransactions` endpoint can be used. This takes two ledger offset and gives an overview of all token standard transactions that have happened between. It also returns a `nextOffset` that can be used when calling the endpoint again. This will allow you to easily ensure you do not receive any transaction twice and you are only querying the transactions that have happened after.
 
-``` typescript
+{/* include ../../examples/snippets/monitor-transaction-holdings.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
         token: global.TOKEN_NAMESPACE_CONFIG,
     })
     const myParty = global.EXISTING_PARTY_1
@@ -79,7 +85,7 @@ export default async function () {
 
 to quickly convert the stream into deposit and withdrawal you can use this function:
 
-``` javascript
+```typescript
 function convertToTransaction(pt: Transaction, associatedParty: string): object[] {
     return pt.events.flatMap((event) => {
         if (event.label.type === 'TransferIn') {
@@ -116,13 +122,15 @@ function convertToTransaction(pt: Transaction, associatedParty: string): object[
 
 Given an update Id, the token namespace has a method for getting a transaction based on the updateId. This will print out the transaction in the same format as `sdk.token.holdings`
 
-``` typescript
+{/* include ../../examples/snippets/transaction-update-by-id.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
         amulet: global.AMULET_NAMESPACE_CONFIG,
         token: global.TOKEN_NAMESPACE_CONFIG,
     })

@@ -179,14 +179,14 @@ In the example above, **Buyer** does not have visibility over the `stockCid`, `p
 
 Then, the **Buyer** attaches the disclosed contract payloads to the command submission that accepts the offer.
 
-These last two steps are executed using the new Daml Script functions supporting explicit disclosure: `queryDisclosure` and `submitWithDisclosures`.
+These last two steps are executed using the new Daml Script functions supporting explicit disclosure: `queryDisclosure` and `submit`'s options `disclose` and `discloseMany`.
 
 ```haskell
 disclosedStock <- fromSome <$> queryDisclosure stockExchange stockCid
 disclosedOffer <- fromSome <$> queryDisclosure seller offerCid
 disclosedPriceQuotation <- fromSome <$> queryDisclosure stockExchange priceQuotationCid
 
-_ <- submitWithDisclosures buyer [disclosedStock, disclosedOffer, disclosedPriceQuotation] do
+_ <- submit (actAs buyer <> discloseMany [disclosedStock, disclosedOffer, disclosedPriceQuotation]) do
   exerciseCmd offerCid Offer_Accept with priceQuotationCid = priceQuotationCid, buyer = buyer, buyerIou = buyerIouCid
 ```
 <Note>

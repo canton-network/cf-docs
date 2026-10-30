@@ -11,7 +11,7 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 
 {/* GENERATED_CANTON_METRICS_START */}
 
-{/* GENERATED_FROM source="digital-asset/canton" ref="v3.6.2" asset="canton-open-source-3.6.2.tar.gz" digest="sha256:b496f0d17c15323f8ba8cfbdaacf34164ff642c8b2d463d1e9170389b16da9ea" participant_metric_count="247" sequencer_metric_count="153" mediator_metric_count="57" */}
+{/* GENERATED_FROM source="digital-asset/canton" ref="v3.7.0" asset="canton-open-source-3.7.0.tar.gz" digest="sha256:9cfe6196a4640ab30844ce61a7974508799a6bf83ce65c2acadffe1f0c95c4a5" participant_metric_count="283" sequencer_metric_count="174" mediator_metric_count="65" */}
 
 ## Participant Metrics
 
@@ -895,6 +895,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
+### daml.participant.api.services.highest_offset_before_or_first_at
+
+> - **Summary**: The time to execute an index service operation.
+> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
+> - **Type**: timer
+> - **Qualification**: Debug
+
 ### daml.participant.api.services.index.in_memory_fan_out_buffer.prune
 
 > - **Summary**: The time to remove all elements from the in-memory fan-out buffer.
@@ -1280,6 +1287,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
+### daml.participant.sync.commitments.counter-participant-latency
+
+> - **Summary**: The latency of commitments outstanding from the given counter-participants measured in micros.
+> - **Description**: Participant nodes compute bilateral commitments at regular intervals and send them. This metric shows the latency of the given counter-participant, measured by subtracting the counter-participant latency from the most recent period processed by the participant. The counter-participant has to send a commitment at least once in order to appear here.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
 ### daml.participant.sync.commitments.digest-processor-health
 
 > - **Summary**: Health of a digest processor (0: not-intialized, 1: starting, 2: started, 3: stopping, 4: stopped, 5: failed)
@@ -1328,6 +1342,20 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Description**: Timestamp of the latest locally completed ACS commitment interval. Crash recovery will start reingesting from this timestamp on or from the latest checkpointed ACS commitment interval on, whichever is later.
 > - **Type**: gauge
 > - **Qualification**: Latency
+
+### daml.participant.sync.commitments.latest-matching-status
+
+> - **Summary**: The matching status of the latest matched period (0: not-determined, 1: mismatched, 2: unexpected, 3: matched)
+> - **Description**: The status of the latest matched period.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.latest-matching-status-period-end
+
+> - **Summary**: The end timestamp of the period corresponding to the latest-matching-status metric.
+> - **Description**: The end timestamp of the period corresponding to the latest-matching-status metric.
+> - **Type**: gauge
+> - **Qualification**: Debug
 
 ### daml.participant.sync.commitments.matcher-health
 
@@ -1504,6 +1532,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: counter
 > - **Qualification**: Debug
 
+### daml.participant.sync.conflict-detection.task-queue
+
+> - **Summary**: Size of conflict detection task queue
+> - **Description**: This metric measures the size of the queue for conflict detection between concurrent transactions. A huge number does not necessarily indicate a bottleneck; it could also mean that a huge number of tasks have not yet arrived at their execution time.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
 ### daml.participant.sync.in-flight-submission-synchronizer-tracker.unsequenced-in-flight-submissions
 
 > - **Summary**: Number of unsequenced submissions in-flight.
@@ -1539,11 +1574,67 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
+### daml.participant.sync.protocol-messages.transaction-view.sub-views
+
+> - **Summary**: The number of sub-views in the transaction view
+> - **Description**: The number of sub-views in the transaction view.
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.sync.protocol-messages.transaction-view.tree-depth
+
+> - **Summary**: The depth of a transaction view tree
+> - **Description**: The parse depth of a transaction view tree
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.sync.reassignments.batch-size
+
+> - **Summary**: Number of contracts per reassignment request
+> - **Description**: Records the number of contracts carried by each unassignment and assignment request. The `type` label tells the two apart.
+> - **Type**: histogram
+> - **Qualification**: Debug
+
+### daml.participant.sync.reassignments.finalized
+
+> - **Summary**: Number of unassignments and assignments finalized
+> - **Description**: Records the unassignments and the assignments this reassigning participant finalizes. The `type` label tells the two apart.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.reassignments.requests
+
+> - **Summary**: Number of unassignment and assignment requests validated
+> - **Description**: Records the unassignment and assignment requests this participant validates. The `type` label tells the two apart.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.reassignments.submitted
+
+> - **Summary**: Number of unassignments and assignments submitted
+> - **Description**: Records the unassignments and the assignments this participant submits, including the assignments submitted automatically on this participant's own initiative. The `type` label tells unassignments and assignments apart. A submission that is retried is recorded once per attempt.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.reassignments.unassignment.local-target-timestamp-lag
+
+> - **Summary**: Lag of the target topology behind the requested target timestamp
+> - **Description**: Milliseconds by which this participant's view of the target synchronizer's topology lags behind the target timestamp of an unassignment request, measured during validation. Zero means there is no lag.
+> - **Type**: histogram
+> - **Qualification**: Latency
+
 ### daml.participant.sync.request-tracker.sequencer-counter-queue
 
 > - **Summary**: Size of record order publisher sequencer counter queue
 > - **Description**: Same as for conflict-detection, but measuring the sequencer counter queues for the publishing to the ledger api server according to record time.
 > - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.request-tracker.task-queue
+
+> - **Summary**: Size of record order publisher task queue
+> - **Description**: The task scheduler will schedule tasks to run at a given timestamp. This metric exposes the number of tasks that are waiting in the task queue for the right time to pass.
+> - **Type**: gauge
 > - **Qualification**: Debug
 
 ### daml.participant.traffic-enforcement.decisions\*
@@ -1576,6 +1667,113 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Description**: The consumed timestamp of the traffic enforcement projection, indicating how far the system has processed traffic enforcement events.
 > - **Type**: gauge
 > - **Qualification**: Latency
+
+### daml.participant.traffic-enforcement.pruned-rows\*
+
+> - **Summary**: Number of traffic enforcement rows pruned
+> - **Description**: The number of traffic enforcement rows pruned, labeled by table.
+> - **Type**: meter
+> - **Qualification**: Traffic
+> - **Labels**:
+>   - **table**: The pruned table.
+
+### daml.participant.transaction-node.acting-parties
+
+> - **Summary**: The number of acting parties in a transaction node
+> - **Description**: The number of acting parties in a transaction exercise node or fetch node
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.choice-authorizers
+
+> - **Summary**: The number of choice authorizers in a transaction exercise node
+> - **Description**: The number of choice authorizers in a transaction exercise node
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.choice-observers
+
+> - **Summary**: The number of choice observers in a transaction exercise node
+> - **Description**: The number of choice observers in a transaction exercise node
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.external-call-result-size
+
+> - **Summary**: The byte size of an external call result in a transaction exercise node
+> - **Description**: The maximal byte size of an external call result in a transaction exercise node
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.external-call-results
+
+> - **Summary**: The number of external call results in a transaction exercise node
+> - **Description**: The number of external call results in a transaction exercise node
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.input-contract-count
+
+> - **Summary**: The number of input contracts
+> - **Description**: The number of input contracts
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.key-maintainers
+
+> - **Summary**: The number of contract key maintainers in a transaction node or input contract
+> - **Description**: The maximal number of contract key maintainers in a transaction create node, exercise node, fetch node, query by key node or input contract
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.lf-value
+
+> - **Summary**: The byte size of an LF value in a transaction node or input contract
+> - **Description**: The maximal byte size of an LF value create argument, create key, exercise choice argument, exercise choice result, exercise contract key, fetch contract key, query by key contract key, input contract create argument or input contract contract key
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.node-children-size
+
+> - **Summary**: The number child nodes to a transaction exercise node
+> - **Description**: The number child nodes to a transaction exercise node
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.node-count
+
+> - **Summary**: The total number of nodes in the transaction tree
+> - **Description**: The total number of nodes in the transaction tree
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.root-node-count
+
+> - **Summary**: The number of root nodes in the transaction tree
+> - **Description**: The number of root nodes in the transaction tree
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.signatories
+
+> - **Summary**: The number of signatories in a transaction node or input contract
+> - **Description**: The number of signatories in a transaction create node, exercise node, fetch node or input contract
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.stakeholders
+
+> - **Summary**: The number of stakeholders in a transaction node or input contract
+> - **Description**: The number of stakeholders in a transaction create node, exercise node, fetch node or input contract
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
+### daml.participant.transaction-node.total-informees
+
+> - **Summary**: The number informees for a transaction tree
+> - **Description**: The number informees for a transaction tree
+> - **Type**: gauge
+> - **Qualification**: Saturation
 
 ### daml.pruning
 
@@ -1612,10 +1810,24 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Debug
 
+### daml.sequencer-client.handler.delay-per-connection
+
+> - **Summary**: The delay on receiving an event over the given sequencer connection in milliseconds
+> - **Description**: Every message received from the sequencer carries a timestamp that was assigned by the sequencers when they sequenced the message. This timestamp is called the sequencing timestamp. The component receiving the message on the participant or mediator is the sequencer client. Upon receiving the message, the sequencer client compares the time difference between the sequencing time and the computers local clock and exposes this difference as the given metric. The difference will include the clock-skew and the processing latency between assigning the timestamp on the sequencer and receiving the message by the recipient. If the difference is large compared to the usual latencies and if clock skew can be ruled out, then it means that either the sequencer is slow in delivering the messages or the node is still trying to catch up with events that the sequencers sequenced a while ago. This can happen after having been offline for a while or if the node is too slow to keep up with the messaging load.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
 ### daml.sequencer-client.handler.last-sequencing-time-micros
 
 > - **Summary**: The sequencing time of the last processed event in microseconds since unix epoch
 > - **Description**: Every message received from the sequencer carries a timestamp that was assigned by the sequencer when it sequenced the message. This timestamp is called the sequencing timestamp. The component receiving the message on the participant or mediator is the sequencer client, while on the block sequencer itself, it's the block update generator. Upon having received the same message from enough sequencers (as configured by the trust threshold), this metric is updated with the sequencing time of that message.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.sequencer-client.handler.last-sequencing-time-micros-per-connection
+
+> - **Summary**: The sequencing time of the last processed event in microseconds
+> - **Description**: Every message received from the sequencer carries a timestamp that was assigned by the sequencers when they sequenced the message. This timestamp is called the sequencing timestamp. The component receiving the message on the participant or mediator is the sequencer client. Upon receiving the message, this metric is updated.
 > - **Type**: gauge
 > - **Qualification**: Debug
 
@@ -1640,11 +1852,25 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Saturation
 
+### daml.sequencer-client.sequencer-connection-pool.connection-health
+
+> - **Summary**: Health of a connection
+> - **Description**: Health of a connection (0: fatal, 1: failed, 2: validated) A failed connection is periodically retried for availability. A fatal connection is considered invalid and will never be retried.
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
 ### daml.sequencer-client.sequencer-connection-pool.grpc-requests
 
 > - **Summary**: Number of gRPC requests sent on this connection
 > - **Description**: This metric indicates the number of gRPC requests that have been sent on this connection.
 > - **Type**: counter
+> - **Qualification**: Saturation
+
+### daml.sequencer-client.sequencer-connection-pool.subscription-health
+
+> - **Summary**: Health of a subscription
+> - **Description**: Health of a subscription (0: down, 1: active) A subscription can be down either because there are no more connections available, or because there are already enough subscriptions active (according to the trust threshold and liveness margin parameters)
+> - **Type**: gauge
 > - **Qualification**: Saturation
 
 ### daml.sequencer-client.sequencer-connection-pool.subscription-threshold
@@ -1738,6 +1964,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Latency
 
+### daml.sequencer-client.traffic-control.base-traffic-remainder
+
+> - **Summary**: Base traffic remainder
+> - **Description**: Base traffic remainder available.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
 ### daml.sequencer-client.traffic-control.event-delivered
 
 > - **Summary**: Number of events that were sequenced and delivered.
@@ -1764,6 +1997,27 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Summary**: Cost of events that were sequenced but no delivered successfully.
 > - **Description**: Cost of events for which the sender received confirmation that the events will not be delivered. The reason for non-delivery is labeled on the metric, if available.
 > - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer-client.traffic-control.extra-traffic-consumed
+
+> - **Summary**: Extra traffic consumed.
+> - **Description**: Total extra traffic consumed.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
+### daml.sequencer-client.traffic-control.extra-traffic-purchased
+
+> - **Summary**: Extra traffic purchased.
+> - **Description**: Total extra traffic purchased.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
+### daml.sequencer-client.traffic-control.last-traffic-update
+
+> - **Summary**: Timestamp of the last event that update the traffic state of a member.
+> - **Description**: When a member sends or receives an event, its traffic state is updated. This metrics is the timestamp (seconds since epoch) of the last update received.
+> - **Type**: gauge
 > - **Qualification**: Traffic
 
 ### daml.sequencer-client.traffic-control.submitted-event-cost
@@ -1975,10 +2229,24 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Debug
 
+### daml.sequencer-client.handler.delay-per-connection
+
+> - **Summary**: The delay on receiving an event over the given sequencer connection in milliseconds
+> - **Description**: Every message received from the sequencer carries a timestamp that was assigned by the sequencers when they sequenced the message. This timestamp is called the sequencing timestamp. The component receiving the message on the participant or mediator is the sequencer client. Upon receiving the message, the sequencer client compares the time difference between the sequencing time and the computers local clock and exposes this difference as the given metric. The difference will include the clock-skew and the processing latency between assigning the timestamp on the sequencer and receiving the message by the recipient. If the difference is large compared to the usual latencies and if clock skew can be ruled out, then it means that either the sequencer is slow in delivering the messages or the node is still trying to catch up with events that the sequencers sequenced a while ago. This can happen after having been offline for a while or if the node is too slow to keep up with the messaging load.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
 ### daml.sequencer-client.handler.last-sequencing-time-micros
 
 > - **Summary**: The sequencing time of the last processed event in microseconds since unix epoch
 > - **Description**: Every message received from the sequencer carries a timestamp that was assigned by the sequencer when it sequenced the message. This timestamp is called the sequencing timestamp. The component receiving the message on the participant or mediator is the sequencer client, while on the block sequencer itself, it's the block update generator. Upon having received the same message from enough sequencers (as configured by the trust threshold), this metric is updated with the sequencing time of that message.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.sequencer-client.handler.last-sequencing-time-micros-per-connection
+
+> - **Summary**: The sequencing time of the last processed event in microseconds
+> - **Description**: Every message received from the sequencer carries a timestamp that was assigned by the sequencers when they sequenced the message. This timestamp is called the sequencing timestamp. The component receiving the message on the participant or mediator is the sequencer client. Upon receiving the message, this metric is updated.
 > - **Type**: gauge
 > - **Qualification**: Debug
 
@@ -2003,11 +2271,25 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Saturation
 
+### daml.sequencer-client.sequencer-connection-pool.connection-health
+
+> - **Summary**: Health of a connection
+> - **Description**: Health of a connection (0: fatal, 1: failed, 2: validated) A failed connection is periodically retried for availability. A fatal connection is considered invalid and will never be retried.
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
 ### daml.sequencer-client.sequencer-connection-pool.grpc-requests
 
 > - **Summary**: Number of gRPC requests sent on this connection
 > - **Description**: This metric indicates the number of gRPC requests that have been sent on this connection.
 > - **Type**: counter
+> - **Qualification**: Saturation
+
+### daml.sequencer-client.sequencer-connection-pool.subscription-health
+
+> - **Summary**: Health of a subscription
+> - **Description**: Health of a subscription (0: down, 1: active) A subscription can be down either because there are no more connections available, or because there are already enough subscriptions active (according to the trust threshold and liveness margin parameters)
+> - **Type**: gauge
 > - **Qualification**: Saturation
 
 ### daml.sequencer-client.sequencer-connection-pool.subscription-threshold
@@ -2101,6 +2383,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Latency
 
+### daml.sequencer-client.traffic-control.base-traffic-remainder
+
+> - **Summary**: Base traffic remainder
+> - **Description**: Base traffic remainder available.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
 ### daml.sequencer-client.traffic-control.event-delivered
 
 > - **Summary**: Number of events that were sequenced and delivered.
@@ -2129,10 +2418,38 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: meter
 > - **Qualification**: Traffic
 
+### daml.sequencer-client.traffic-control.extra-traffic-consumed
+
+> - **Summary**: Extra traffic consumed.
+> - **Description**: Total extra traffic consumed.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
+### daml.sequencer-client.traffic-control.extra-traffic-purchased
+
+> - **Summary**: Extra traffic purchased.
+> - **Description**: Total extra traffic purchased.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
+### daml.sequencer-client.traffic-control.last-traffic-update
+
+> - **Summary**: Timestamp of the last event that update the traffic state of a member.
+> - **Description**: When a member sends or receives an event, its traffic state is updated. This metrics is the timestamp (seconds since epoch) of the last update received.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
 ### daml.sequencer-client.traffic-control.submitted-event-cost
 
 > - **Summary**: Cost of event submitted from the sequencer client.
 > - **Description**: When the sequencer client sends an event to the sequencer to be sequenced, it will record on this metric the cost of the event. Note that the event may or may not end up being sequenced. So this metric may not exactly match the actual consumed traffic.
+> - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer.bftordering.consensus.accepted-retransmitted-pre-prepares
+
+> - **Summary**: Accepted retransmitted pre-prepares
+> - **Description**: Accepted retransmitted pre-prepares that were missing and got successfully processed due to retransmissions
 > - **Type**: meter
 > - **Qualification**: Traffic
 
@@ -2430,6 +2747,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: meter
 > - **Qualification**: Traffic
 
+### daml.sequencer.bftordering.p2p.receive.received-message-size
+
+> - **Summary**: Received message size
+> - **Description**: Records the distribution of serialized gRPC message sizes (in bytes) received from each peer.
+> - **Type**: histogram
+> - **Qualification**: Traffic
+
 ### daml.sequencer.bftordering.p2p.receive.received-messages
 
 > - **Summary**: Messages received
@@ -2479,10 +2803,87 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: meter
 > - **Qualification**: Traffic
 
+### daml.sequencer.bftordering.p2p.send.sent-message-size
+
+> - **Summary**: Sent message size
+> - **Description**: Records the distribution of serialized gRPC message sizes (in bytes) sent to each peer.
+> - **Type**: histogram
+> - **Qualification**: Traffic
+
 ### daml.sequencer.bftordering.p2p.send.sent-messages
 
 > - **Summary**: Messages sent
 > - **Description**: Total P2P messages sent.
+> - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer.bftordering.p2p.stream-teardowns
+
+> - **Summary**: P2P stream teardowns
+> - **Description**: Count of P2P gRPC stream teardowns observed as errors, labeled by peer, connection direction and gRPC status code. Useful to diagnose remote- or infrastructure-initiated resets (e.g. a proxy GOAWAY/RST_STREAM surfaced as UNAVAILABLE). This is a gRPC/networking-level signal, always emitted regardless of whether transport metrics are enabled.
+> - **Type**: meter
+> - **Qualification**: Errors
+
+### daml.sequencer.bftordering.p2p.stream.round-trip-latency
+
+> - **Summary**: P2P application-level round-trip time
+> - **Description**: Records the distribution of the application-level round-trip time to each peer, measured by periodically sending a low-frequency `ConnectionOpened` echo probe that the peer reflects back. Unlike the TCP-level RTT (see the transport metrics), this is connection-direction- and transport-independent, so it is always available, but it also includes application-level queuing and processing time.
+> - **Type**: timer
+> - **Qualification**: Latency
+
+### daml.sequencer.bftordering.p2p.transport.grpc-messages-received
+
+> - **Summary**: gRPC messages received
+> - **Description**: Count of gRPC messages received from a peer on the P2P connection (from Channelz message counts). Note that a single gRPC message may be split across multiple HTTP/2 DATA frames, so this is not a raw frame count.
+> - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer.bftordering.p2p.transport.grpc-messages-sent
+
+> - **Summary**: gRPC messages sent
+> - **Description**: Count of gRPC messages sent to a peer on the P2P connection (from Channelz message counts). Note that a single gRPC message may be split across multiple HTTP/2 DATA frames, so this is not a raw frame count.
+> - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer.bftordering.p2p.transport.http2-flow-control-stalls
+
+> - **Summary**: HTTP/2 flow control stalls
+> - **Description**: Count of samples where the HTTP/2 flow control window to a peer was observed to be exhausted (zero or negative).
+> - **Type**: meter
+> - **Qualification**: Saturation
+
+### daml.sequencer.bftordering.p2p.transport.http2-keepalive-pings
+
+> - **Summary**: HTTP/2 keepalive pings
+> - **Description**: Count of HTTP/2 keepalive PING frames sent on the P2P connection to a peer.
+> - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer.bftordering.p2p.transport.http2-streams-closed
+
+> - **Summary**: HTTP/2 streams closed
+> - **Description**: Rate at which HTTP/2 streams are closed (succeeded or failed) on the P2P connection to a peer.
+> - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer.bftordering.p2p.transport.http2-streams-opened
+
+> - **Summary**: HTTP/2 streams opened
+> - **Description**: Rate at which HTTP/2 streams are opened on the P2P connection to a peer.
+> - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer.bftordering.p2p.transport.tcp-wire-bytes-received
+
+> - **Summary**: TCP wire bytes received
+> - **Description**: Total wire-level bytes received on the P2P TCP connection from a peer (including TLS and framing overhead). Wire-byte counting only works on the client (dialer/outgoing) side, so this is labeled by peer only (no connection-direction label).
+> - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer.bftordering.p2p.transport.tcp-wire-bytes-sent
+
+> - **Summary**: TCP wire bytes sent
+> - **Description**: Total wire-level bytes sent on the P2P TCP connection to a peer (including TLS and framing overhead). Wire-byte counting only works on the client (dialer/outgoing) side, so this is labeled by peer only (no connection-direction label).
 > - **Type**: meter
 > - **Qualification**: Traffic
 
@@ -3117,10 +3518,24 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Debug
 
+### daml.sequencer-client.handler.delay-per-connection
+
+> - **Summary**: The delay on receiving an event over the given sequencer connection in milliseconds
+> - **Description**: Every message received from the sequencer carries a timestamp that was assigned by the sequencers when they sequenced the message. This timestamp is called the sequencing timestamp. The component receiving the message on the participant or mediator is the sequencer client. Upon receiving the message, the sequencer client compares the time difference between the sequencing time and the computers local clock and exposes this difference as the given metric. The difference will include the clock-skew and the processing latency between assigning the timestamp on the sequencer and receiving the message by the recipient. If the difference is large compared to the usual latencies and if clock skew can be ruled out, then it means that either the sequencer is slow in delivering the messages or the node is still trying to catch up with events that the sequencers sequenced a while ago. This can happen after having been offline for a while or if the node is too slow to keep up with the messaging load.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
 ### daml.sequencer-client.handler.last-sequencing-time-micros
 
 > - **Summary**: The sequencing time of the last processed event in microseconds since unix epoch
 > - **Description**: Every message received from the sequencer carries a timestamp that was assigned by the sequencer when it sequenced the message. This timestamp is called the sequencing timestamp. The component receiving the message on the participant or mediator is the sequencer client, while on the block sequencer itself, it's the block update generator. Upon having received the same message from enough sequencers (as configured by the trust threshold), this metric is updated with the sequencing time of that message.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.sequencer-client.handler.last-sequencing-time-micros-per-connection
+
+> - **Summary**: The sequencing time of the last processed event in microseconds
+> - **Description**: Every message received from the sequencer carries a timestamp that was assigned by the sequencers when they sequenced the message. This timestamp is called the sequencing timestamp. The component receiving the message on the participant or mediator is the sequencer client. Upon receiving the message, this metric is updated.
 > - **Type**: gauge
 > - **Qualification**: Debug
 
@@ -3145,11 +3560,25 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Saturation
 
+### daml.sequencer-client.sequencer-connection-pool.connection-health
+
+> - **Summary**: Health of a connection
+> - **Description**: Health of a connection (0: fatal, 1: failed, 2: validated) A failed connection is periodically retried for availability. A fatal connection is considered invalid and will never be retried.
+> - **Type**: gauge
+> - **Qualification**: Saturation
+
 ### daml.sequencer-client.sequencer-connection-pool.grpc-requests
 
 > - **Summary**: Number of gRPC requests sent on this connection
 > - **Description**: This metric indicates the number of gRPC requests that have been sent on this connection.
 > - **Type**: counter
+> - **Qualification**: Saturation
+
+### daml.sequencer-client.sequencer-connection-pool.subscription-health
+
+> - **Summary**: Health of a subscription
+> - **Description**: Health of a subscription (0: down, 1: active) A subscription can be down either because there are no more connections available, or because there are already enough subscriptions active (according to the trust threshold and liveness margin parameters)
+> - **Type**: gauge
 > - **Qualification**: Saturation
 
 ### daml.sequencer-client.sequencer-connection-pool.subscription-threshold
@@ -3243,6 +3672,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Latency
 
+### daml.sequencer-client.traffic-control.base-traffic-remainder
+
+> - **Summary**: Base traffic remainder
+> - **Description**: Base traffic remainder available.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
 ### daml.sequencer-client.traffic-control.event-delivered
 
 > - **Summary**: Number of events that were sequenced and delivered.
@@ -3269,6 +3705,27 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Summary**: Cost of events that were sequenced but no delivered successfully.
 > - **Description**: Cost of events for which the sender received confirmation that the events will not be delivered. The reason for non-delivery is labeled on the metric, if available.
 > - **Type**: meter
+> - **Qualification**: Traffic
+
+### daml.sequencer-client.traffic-control.extra-traffic-consumed
+
+> - **Summary**: Extra traffic consumed.
+> - **Description**: Total extra traffic consumed.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
+### daml.sequencer-client.traffic-control.extra-traffic-purchased
+
+> - **Summary**: Extra traffic purchased.
+> - **Description**: Total extra traffic purchased.
+> - **Type**: gauge
+> - **Qualification**: Traffic
+
+### daml.sequencer-client.traffic-control.last-traffic-update
+
+> - **Summary**: Timestamp of the last event that update the traffic state of a member.
+> - **Description**: When a member sends or receives an event, its traffic state is updated. This metrics is the timestamp (seconds since epoch) of the last update received.
+> - **Type**: gauge
 > - **Qualification**: Traffic
 
 ### daml.sequencer-client.traffic-control.submitted-event-cost
@@ -3310,7 +3767,7 @@ The following metrics are exposed for all components.
 The following metrics are exposed for all gRPC endpoints. These metrics have the following common labels attached:
 
 - **grpc_service_name**:
-fully qualified name of the gRPC service (e.g. `com.daml.ledger.api.v1.ActiveContractsService`)
+fully qualified name of the gRPC service (e.g. `com.daml.ledger.api.v2.StateService`)
 
 - **grpc_method_name**:
 name of the gRPC method (e.g. `GetActiveContracts`)

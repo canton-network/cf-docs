@@ -519,3 +519,18 @@ def test_generate_output_docs_reports_extraction_errors(tmp_path: Path) -> None:
     assert not (output_dir / "missing-marker.mdx").exists()
     assert not (output_dir / "oob-lines.mdx").exists()
     assert not (output_dir / "invalid-json-index.mdx").exists()
+
+
+def test_discover_repos_derives_one_repo_per_remote_manifest(tmp_path: Path) -> None:
+    for name in ("canton", "dpm"):
+        (tmp_path / f"{name}-snippet-list-remote.json").write_text('{"snippets": []}', encoding="utf-8")
+    (tmp_path / "snippet-list-local.json").write_text('{"snippets": []}', encoding="utf-8")
+
+    repos = generator.discover_repos(tmp_path)
+
+    assert sorted(repos) == ["canton", "dpm"]
+    assert repos["dpm"] == generator.SnippetRepo(
+        name="dpm", config_name="dpm-snippet-list-remote.json", aliases=("dpm",)
+    )
+    assert repos["canton"].prepare == generator.REPO_PREPARATION["canton"].prepare
+    assert repos["canton"].needs_docker

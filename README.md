@@ -55,17 +55,30 @@ Edit pages, navigation, and images in `docs-main/`, either directly or through
 the Mintlify editor. Ordinary content has no separate source copy and is not
 rewritten by documentation generation.
 
-Network-dependent sections use templates in `docs-main/snippets/networkvars/`.
-Edit those templates, then run `npm run generate:network-variable-tabs` to update
-the marked `NETWORKVARS_START` / `NETWORKVARS_END` regions. Generation preserves
-content outside those regions. Edit generated reference pages through their
-owning generators, as before.
+Pages with network-dependent sections are generated from page templates in
+`docs-main/src/`. Each template sits at the same relative path as the page it
+renders, so `docs-main/src/global-synchronizer/deployment/kubernetes-deployment.mdx`
+renders `docs-main/global-synchronizer/deployment/kubernetes-deployment.mdx`.
+Generated pages start with a `Generated from /src/...` comment; edit the
+template, not the generated page. Templates are hidden pages (`hidden: true`,
+listed under the hidden "Page templates" product in `docs.json`) so the Mintlify
+editor can open them without publishing them in navigation, search, or the sitemap.
+
+Inside a template, wrap network-dependent content in a single tab,
+`<Tabs>` / `<Tab title="All networks">`, which the Mintlify editor can edit. Use
+`|token|` placeholders for values from the version dashboard data and
+`<div data-network-only="devnet,testnet">` for network-specific content. Run
+`npm run generate:network-variable-tabs` to render one tab per network into the
+generated page. To add a template, copy the page into `docs-main/src/`, add
+`hidden: true` to its frontmatter, and add it to the "Page templates" product.
+Edit generated reference pages through their owning generators, as before.
 
 For generated API lifecycle settings, see the [examples and accepted values](config/x2mdx/lifecycle.md).
 
-Run `npm run validate:network-variable-tabs` to check generated regions without
-modifying files. Direct edits inside those regions fail validation; edit the
-referenced template instead. Ordinary page edits and new images do not require
+Run `npm run validate:network-variable-tabs` to check generated pages without
+modifying files. Direct edits to a generated page fail validation; edit its
+template instead. On pull requests, CI also posts a comment naming the template
+to edit and quoting lines that exist only in the generated page. Ordinary page edits and new images do not require
 regeneration.
 
 ### Running the dev server
