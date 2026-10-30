@@ -54,6 +54,12 @@ def load_protobuf_sources(
             isinstance(key, str) and isinstance(value, str) for key, value in import_to_repo_path.items()
         ):
             raise ValueError(f"Manifest entry for protobuf version {version} must define string import_to_repo_path")
+        import_to_source_path = entry.get("import_to_source_path")
+        if import_to_source_path is not None and (
+            not isinstance(import_to_source_path, dict)
+            or not all(isinstance(key, str) and isinstance(value, str) for key, value in import_to_source_path.items())
+        ):
+            raise ValueError(f"Manifest entry for protobuf version {version} has a non-string import_to_source_path")
 
         image_path = Path(raw_image_path)
         if not image_path.is_absolute():
@@ -65,6 +71,7 @@ def load_protobuf_sources(
                 date=entry.get("date") if isinstance(entry.get("date"), str) else None,
                 descriptor_image_path=str(image_path.resolve()),
                 import_to_repo_path=dict(import_to_repo_path),
+                import_to_source_path=dict(import_to_source_path) if import_to_source_path is not None else None,
             )
         )
 
