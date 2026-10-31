@@ -378,6 +378,16 @@ This allows implementation of [Delivery versus Payment (DVP) Transfer Workflows]
 
 {/* COPIED_END */}
 
+## Burning and minting tokens
+
+The Token Standard does not define a mint or burn operation. Neither [CIP-0056](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md) nor [CIP-0112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md) has a factory or choice that issues new holdings or destroys existing ones. Whether a token can be minted or burned, who has to authorize it, and how that authorization is gathered are decisions for the token's implementation, so mint and burn workflows are app-specific.
+
+V2 does give implementations a uniform way to show mints and burns to wallets. A token that lets users request a mint or burn as part of an allocation flow should represent it as a transfer from or to a special account with no `owner` or `provider` and the account ID `cip-112/mint` or `cip-112/burn` ([CIP-0112, section 4.3.2.1](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md#4321-special-account-identifiers-for-mint-and-burn)). This lets wallets display mints and burns consistently and lets apps include mint and burn legs in `Allocation`-based settlement, for example in delivery-versus-mint trades. The convention only covers how the operation is represented; the token still decides whether to allow it.
+
+Splice also ships a [`BurnMintFactory`](/sdks-tools/api-reference/splice-daml/splice-api-token-burn-mint-v1/splice-api-token-burnmintv1) interface (`splice-api-token-burn-mint-v1`) that registries can implement to expose burn and mint in a generic way, for bridges to call and for wallets to parse. It is part of Splice but not part of the Token Standard. `BurnMintFactory_BurnMint` is jointly authorized by the instrument admin and any `extraActors` the implementation requires, and the interface has no offer or request flow for collecting those authorizations. If your app needs one, build it in your own Daml models and have them call the factory.
+
+If your app only transfers tokens, it doesn't need to depend on any registry's implementation packages. If it mints or burns through a specific registry, it has to depend either on that registry's implementation or on `BurnMintFactory` through your own Daml models.
+
 ## Common pitfall: unresolved registry token packages
 
 Your validator must have a registry token's DAR packages installed before it can interpret contracts and transactions involving that token. This is separate from having the Wallet SDK or CLI code that talks to the registry's off-ledger API. If a transfer involving a registry-issued token fails to resolve with an error like `UNRESOLVED_PACKAGE_NAME`, check that the relevant DARs are uploaded and vetted on your validator.
