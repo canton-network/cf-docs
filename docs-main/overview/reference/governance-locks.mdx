@@ -1,0 +1,319 @@
+---
+title: "Governance Locks"
+description: "How Super Validators and Featured Apps create and manage governance locks of Canton Coin using any token standard wallet"
+---
+
+A governance lock is a Canton Coin (CC) holding that is locked to fulfill the locking requirements for Super Validators (SVs) and Featured Apps (FAs). This page explains why governance locks exist, and how lock owners create and manage them with any wallet that supports [CIP-0056](/overview/reference/cip-0056) two-step transfers. The screenshots on this page show [Splice Portfolio](/global-synchronizer/deployment/validator-docker-compose#wallet-gateway-and-splice-portfolio), but the same steps work in any token standard compliant wallet.
+
+<Note>
+The screenshots below were taken of an earlier version of Splice Portfolio that had a character limit on descriptions. Later versions remove this limit.
+</Note>
+
+Governance locks are available from Splice 0.10.0 onwards. The first two increments described in the [incremental delivery plan](https://github.com/canton-foundation/cips/blob/main/cip-0127/cip-0127.md#incremental-delivery-plan) -- compatibility mode for SV and FA locks, and support for provisional FA locks -- are included in 0.10.0, while future releases will build on this to implement additional increments.
+
+## Why Governance Locks Exist
+
+Two CIPs define locking requirements, and a third specifies how they are enforced on-chain:
+
+- [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) (SV Locking) requires SVs to lock a percentage of their aggregate lifetime SV rewards to keep their SV weight.
+- [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md) (FA Locking) requires each featured app provider party to lock a minimum amount of CC to get and keep its featured app status.
+- [CIP-0127](https://github.com/canton-foundation/cips/blob/main/cip-0127/cip-0127.md) (On-Chain Enforcement of FA and SV Locking) is the functional specification of governance locks. It defines the lock lifecycle and the wallet workflows described on this page.
+
+## Concepts
+
+- **Lock owner:** the party that owns the CC in a lock. The lock owner is the party that sends the lock requests described below.
+- **Lock subject:** the SV or FA whose locking requirement the lock contributes to. See [Choose the Lock Subject](#choose-the-lock-subject).
+- **Lock kind:** the purpose of the lock: `sv-lock`, `fa-lock`, or `provisional-fa-lock`. See [Lock Kinds and Vesting Periods](#lock-kinds-and-vesting-periods).
+- **Locked and vesting:** a lock is either locked, or vesting after an unlock. Only locked CC counts toward locking requirements. Vested CC is returned to the lock owner when the owner withdraws it. See [Withdraw Vested Funds](#withdraw-vested-funds).
+- **Minimum lock amount:** every lock must hold at least 10,000 CC. The minimum applies to every action that produces an additional lock, such as a new lock, a partial unlock, or a partial substitution: each resulting lock must hold at least the minimum. An action on the full amount of a lock is always allowed. Lock amounts that are multiples of the minimum make partial unlocks and substitutions easier.
+- **Automatic merging:** a new lock with the same owner, kind, subject, and vesting state as an existing lock merges into the existing lock. Use this to top up a lock.
+
+### Lock Kinds and Vesting Periods
+
+| Lock kind | Purpose | Vesting period after an unlock |
+|---|---|---|
+| `sv-lock` | Counts toward the SV locking requirement of its subject ([CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md)). | 365.25 days: 1/365.25 of the unlocked amount becomes liquid each day. |
+| `fa-lock` | Counts toward the FA locking requirement of its subject ([CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md)). | 60 days: 1/60 of the unlocked amount becomes liquid each day. |
+| `provisional-fa-lock` | Proves that an applicant has sufficient funds before it applies for featured app status. | None: an unlock returns the CC to the lock owner immediately. |
+
+<Note>
+The vesting periods and the minimum lock amount are network configuration parameters. SVs can change them by vote. The values on this page are the defaults.
+</Note>
+
+### How Locked Funds Are Aggregated
+
+The amount that counts toward a locking requirement is the sum of all locks with the same `lock-subject` and `lock-kind`, and with `lock-status=locked`. The sum includes the locks of all lock owners, so several parties, wallets, or custodians can contribute to the same SV or featured app. Vesting locks do not count. Provisional FA locks are summed separately from FA locks, so they do not count toward the requirement of an existing featured app.
+
+## How Wallets Show Governance Locks
+
+CIP-0127 defines a compatibility mode that works with any wallet that supports token standard two-step transfers. In compatibility mode:
+
+- Each lock request is a two-step transfer to the lock manager address:
+
+  ```
+  cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd
+  ```
+
+  This address is a fixed placeholder party ID. The Splice Daml code recognizes transfers to this address and interprets their memo as a lock request.
+- The transfer memo (the **Description** field in Splice Portfolio) says what to do. A memo always starts with `cip-127/memo:` and continues with `key=value` pairs separated by `&` (without any spaces ` `).
+- Each lock shows in the wallet as a pending transfer offer from the lock owner to the lock manager address. In Splice Portfolio, locks are on the **Offers** page, under **Transfers**:
+  - A **locked** lock has the expiration `9999-12-31 23:59`.
+  - A **vesting** lock has the end of its vesting period as its expiration.
+- To see the details of a lock, click its row on the **Offers** page. The **Description** of a lock lists its parameters, for example `cip-127/memo:lock-kind=sv-lock&lock-subject=Example-SV-1&lock-status=locked`. A vesting lock also lists `lock-vesting-duration-micros`, `lock-vesting-end-time-micros`, and a human-readable `lock-vesting-info`.
+
+Compatibility mode has these limitations:
+
+- It manages only owner-controlled locks. CIP-0127 also specifies locks with custom controllers for unlock, substitution, and withdrawal, for example for staking apps. These need a wallet or app with a full-feature integration.
+- It does not support minting SV rewards directly into a lock.
+- Locks show as long-lived transfer offers in the wallet.
+
+## Send a Lock Request
+
+All lock actions on this page use the same transfer form. In Splice Portfolio:
+
+1. On the **Dashboard**, click **Transfer** to open the **Make a transfer** dialog.
+2. Fill in the form:
+   - **Recipient Address:** the lock manager address, `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`.
+   - **Select Asset:** Canton Coin. The screenshots on this page come from a local test network, where the asset shows as `Amulet` (`AMT`).
+   - **Amount:** the value given in the section for the action.
+   - **Expiration Date:** leave the default. This date applies to the transfer request only. It is not the duration or the expiration of the lock.
+   - **Description:** the memo given in the section for the action.
+3. Click **Make Transfer**.
+4. Approve the transaction in your wallet provider. With the Wallet Gateway, click **Approve** in the **Activity Details** popup.
+5. Close the **Transfer Summary** dialog.
+6. Click **Offers** in the left navigation to see the result.
+
+## Choose the Lock Subject
+
+The `lock-subject` in every memo says whose locking requirement the lock counts toward:
+
+- **SV locks:** the SV name exactly as it appears in the `name` field of [`approved-sv-id-values.yaml`](https://github.com/canton-foundation/configs/blob/main/configs/MainNet/approved-sv-id-values.yaml), for example `Global-Synchronizer-Foundation`. The examples on this page use the fictional name `Example-SV-1`. Replace it with your SV name.
+- **FA locks and provisional FA locks:** the full party ID of the featured app provider party.
+
+<Warning>
+Check the lock subject before you send a lock request. The Splice Daml code checks only that an SV name consists of letters, digits, and hyphens, and that an FA party is a party registered on the Global Synchronizer. A lock with a wrong subject is created and does not count toward your locking requirement. To recover the CC, you must unlock the lock and wait for the full vesting period.
+</Warning>
+
+## Create a Lock
+
+Send a lock request with:
+
+- **Amount:** the amount of CC to lock, at least the minimum lock amount.
+- **Description:**
+
+  ```
+  cip-127/memo:request=create-lock&lock-kind=sv-lock&lock-subject=Example-SV-1
+  ```
+
+![Make a transfer dialog with a request to create an SV lock of 15,000](/images/governance-locks/create-lock-form.png)
+
+After submitting the transfer, the **Offers** page shows the new lock as a pending transfer offer to the lock manager address, with the expiration `9999-12-31 23:59`:
+
+![Offers page with one locked lock of 15,000](/images/governance-locks/create-lock-offers.png)
+
+## Top Up a Lock
+
+To add CC to an existing lock, send another create request with the same `lock-kind` and `lock-subject`. The new lock merges automatically into the existing lock. For example, a second create request for 15,000 CC with the memo from [Create a Lock](#create-a-lock) results in one lock of 30,000:
+
+![Offers page with one merged lock of 30,000](/images/governance-locks/merge-lock-offers.png)
+
+<Note>
+Merging is best-effort. Concurrent create requests can produce separate locks with the same parameters, and one request merges at most 20 locks. To merge the remaining locks, send a create request with an amount of `0`.
+</Note>
+
+## Unlock a Lock
+
+An unlock converts all or part of a locked lock into a vesting lock. Send a lock request with:
+
+- **Amount:** `0`. The transfer amount is ignored; `unlock-amount` in the memo sets the amount to unlock.
+- **Description:**
+
+  ```
+  cip-127/memo:request=unlock-and-start-vesting&unlock-amount=10000&vesting-start-time=2026-10-24T00:00:00Z&lock-kind=sv-lock&lock-subject=Example-SV-1
+  ```
+
+  - `unlock-amount`: the amount to unlock. To unlock the full lock, use the full lock amount.
+  - `vesting-start-time`: the start of the vesting period, in ISO 8601 format in UTC. It must still be in the future when the network processes the request, and it must be at most 24 hours in the future. Allow enough time for the approval in your wallet; for example, use the next midnight UTC.
+
+![Make a transfer dialog with a request to unlock 10,000 from an SV lock](/images/governance-locks/partial-unlock-form.png)
+
+After a partial unlock of 10,000 from the lock of 30,000, the **Offers** page shows two locks:
+
+- a vesting lock of 10,000, whose expiration is the end of the vesting period (the vesting start plus 365.25 days);
+- a locked lock of 20,000, with the expiration `9999-12-31 23:59`.
+
+![Offers page with a vesting lock of 10,000 and a locked lock of 20,000](/images/governance-locks/partial-unlock-offers.png)
+
+If you then unlock the remaining 20,000 with the same vesting start time, you get a second vesting lock with the same expiration. Vesting locks that come from separate unlock requests do not merge immediately, but are merged on withdraw, so you can withdraw from multiple locks in one request.
+
+![Offers page with two vesting locks of 10,000 and 20,000](/images/governance-locks/full-unlock-offers.png)
+
+## Withdraw Vested Funds
+
+Vested CC stays in the vesting lock until you withdraw it. To withdraw the CC that vested up to a given time, send a lock request with:
+
+- **Amount:** `0`. The transfer amount is ignored.
+- **Description:**
+
+  ```
+  cip-127/memo:request=withdraw-vested-funds&vested-until-time=<time>&lock-kind=sv-lock&lock-subject=Example-SV-1&lock-status=vesting&lock-vesting-duration-micros=<duration>&lock-vesting-end-time-micros=<end time>
+  ```
+
+  - `vested-until-time`: the time up to which vested CC is withdrawn, in ISO 8601 format in UTC. It must be in the past, and later than the time of any earlier withdrawal from the same lock.
+  - `lock-status`, `lock-vesting-duration-micros`, and `lock-vesting-end-time-micros` identify the vesting lock. Copy them from the **Description** of the vesting lock: click the lock's row on the **Offers** page.
+
+<Note>
+After a withdrawal, the vesting lock holds the remaining amount, and its `lock-vesting-duration-micros` changes to the remaining vesting period. Copy the current values from the lock's **Description** before each withdrawal.
+</Note>
+
+<Note>
+The withdrawal screenshots come from a test network with a vesting period of 120 seconds (`lock-vesting-duration-micros=120000000`), so the times are minutes apart. With the default SV vesting period of 365.25 days, the duration is `31557600000000`.
+</Note>
+
+![Make a transfer dialog with a request to withdraw vested funds](/images/governance-locks/withdraw-vested-form.png)
+
+In this example, a quarter of a 10,000 vesting lock vested before the withdrawal. The withdrawal returns 2,500 CC to the lock owner, and the vesting lock keeps the remaining 7,500 with the same end of the vesting period:
+
+![Offers page with a vesting lock of 7,500 after the withdrawal](/images/governance-locks/withdraw-vested-offers.png)
+
+When the vesting period ends, the remaining CC in a vesting lock becomes available as liquid CC without a withdrawal, as the time lock on the holding expires. SVs run automation that archives fully vested vesting locks, which removes them from the Offers page.
+
+## Substitute a Lock
+
+In a substitution, a funds owner (the *proposer*) offers to replace part or all of an existing lock of another party (the *target owner*) with their own CC. If the target owner accepts:
+
+- the substituted amount is returned to the target owner as liquid CC;
+- the target lock is reduced by that amount;
+- the proposer gets a new lock of that amount, with the same kind and subject as the target lock.
+
+Apart from unlocking a [provisional FA lock](#fa-locks-and-provisional-fa-locks), substitution is the only way to return locked CC to its owner as liquid CC without vesting.
+
+### Propose a Substitution
+
+The proposer sends a lock request with:
+
+- **Amount:** the amount to substitute. This amount of the proposer's CC is reserved until the proposal is accepted, rejected, withdrawn, or expires.
+- **Description:**
+
+  ```
+  cip-127/memo:request=substitute-lock&target-lock-owner=<target owner party ID>&lock-kind=sv-lock&lock-subject=Example-SV-1&lock-status=locked
+  ```
+
+  - `target-lock-owner`: the full party ID of the target owner.
+  - `lock-status`: `locked` to substitute a locked lock, or `vesting` to substitute a vesting lock. For a vesting lock, also add `&lock-vesting-duration-micros=<duration>&lock-vesting-end-time-micros=<end time>`, copied from the **Description** of the target lock.
+
+  The memo identifies the target lock by its owner, kind, subject, and vesting state, not by its amount. After a partial substitution, the rest of the target lock must still hold at least the minimum lock amount.
+
+![Make a transfer dialog with a substitution proposal for 10,000](/images/governance-locks/substitution-propose-form.png)
+
+The proposal is a pending transfer offer from the proposer to the target owner, with the memo `request=accept-to-substitute-lock`. Both parties see it on their **Offers** page. The proposal expires after 90 days.
+
+![Offers page of the target owner with the substitution proposal and the target lock](/images/governance-locks/substitution-owner-offers.png)
+
+### Accept or Reject a Substitution
+
+The target owner clicks the proposal on the **Offers** page. The **Transfer Offer** dialog shows the amount, the proposer as the sender, and the memo:
+
+![Transfer Offer dialog of the target owner with Reject and Accept](/images/governance-locks/substitution-owner-dialog.png)
+
+- Click **Accept** to accept the substitution.
+- Click **Reject** to reject it. The reserved CC is returned to the proposer, and the target lock does not change.
+
+After an accepted substitution of 10,000 from a lock of 30,000, the target owner has a lock of 20,000 and 10,000 more liquid CC:
+
+![Offers page of the target owner with a lock of 20,000 after the substitution](/images/governance-locks/substitution-owner-offers-after.png)
+
+The proposer has a new lock of 10,000 with the same kind and subject:
+
+![Offers page of the proposer with a new lock of 10,000](/images/governance-locks/substitution-proposer-offers-after.png)
+
+### Withdraw a Substitution Proposal
+
+Until the target owner accepts, the proposer can withdraw the proposal. The proposer clicks the proposal on the **Offers** page and clicks **Withdraw**. The reserved CC is returned to the proposer.
+
+![Transfer Offer dialog of the proposer with Withdraw](/images/governance-locks/substitution-proposer-dialog.png)
+
+## Transfer a Lock
+
+A lock transfer moves all or part of a lock to a new owner, without vesting and without new funds. It keeps the lock kind, subject, and vesting state. Use it, for example, to move a lock to a different custodian. Unlike a substitution, the current lock owner starts the transfer, and no CC is paid out: the locked CC moves from the current owner to the new owner. The total balance of the current owner decreases by the transferred amount, and the total balance of the new owner increases by the same amount.
+
+### Propose a Lock Transfer
+
+The current lock owner sends a lock request with:
+
+- **Amount:** `0`. The transfer amount is ignored; `transfer-amount` in the memo sets the amount to transfer.
+- **Description:**
+
+  ```
+  cip-127/memo:request=transfer-lock&new-lock-owner=<new owner party ID>&transfer-amount=<amount>&lock-kind=sv-lock&lock-subject=Example-SV-1&lock-status=locked
+  ```
+
+  - `new-lock-owner`: the full party ID of the new owner.
+  - `transfer-amount`: the amount to transfer. After a partial transfer, both resulting locks must hold at least the minimum lock amount.
+  - `lock-status`: `locked` or `vesting`. For a vesting lock, also add `&lock-vesting-duration-micros=<duration>&lock-vesting-end-time-micros=<end time>`, copied from the **Description** of the lock.
+
+  The memo identifies the lock by its owner, kind, subject, and vesting state, not by its amount.
+
+For example, this request proposes to transfer 10,000 of a lock of 30,000:
+
+![Make a transfer dialog with a proposal to transfer 10,000 of an SV lock](/images/governance-locks/transfer-propose-form.png)
+
+The proposal is a pending transfer offer from the current owner to the new owner, for the transferred amount, with the memo `request=accept-to-transfer-lock`. Both parties see it on their **Offers** page. The proposal expires after 90 days.
+
+![Offers page of the new owner with the lock transfer proposal](/images/governance-locks/transfer-new-owner-offers.png)
+
+### Accept or Reject a Lock Transfer
+
+The new owner clicks the proposal on the **Offers** page. The **Transfer Offer** dialog shows the amount, the current owner as the sender, and the memo:
+
+![Transfer Offer dialog of the new owner with Reject and Accept](/images/governance-locks/transfer-new-owner-dialog.png)
+
+- Click **Accept** to accept the lock transfer.
+- Click **Reject** to reject it. The lock does not change.
+
+After an accepted transfer of 10,000 from a lock of 30,000, the current owner has a lock of 20,000:
+
+![Offers page of the current owner with a lock of 20,000 after the transfer](/images/governance-locks/transfer-owner-offers-after.png)
+
+The new owner has an owner-controlled lock of 10,000 with the same kind and subject:
+
+![Offers page of the new owner with a new lock of 10,000](/images/governance-locks/transfer-new-owner-offers-after.png)
+
+### Withdraw a Lock Transfer Proposal
+
+Until the new owner accepts, the current owner can withdraw the proposal. The current owner clicks the proposal on the **Offers** page and clicks **Withdraw**. The lock does not change.
+
+![Transfer Offer dialog of the current owner with Withdraw](/images/governance-locks/transfer-owner-dialog.png)
+
+## FA Locks and Provisional FA Locks
+
+FA locks work like SV locks, with these differences:
+
+- **Lock kind:** `lock-kind=fa-lock`.
+- **Lock subject:** the full party ID of the featured app provider party, not a name.
+- **Vesting period:** 60 days, so `lock-vesting-duration-micros` of a freshly unlocked FA lock is `5184000000000`.
+- **Aggregation:** the amounts of all locked FA locks with the same subject are added up, so several lock owners can contribute to one featured app. See [How Locked Funds Are Aggregated](#how-locked-funds-are-aggregated).
+
+For example, this memo creates an FA lock:
+
+```
+cip-127/memo:request=create-lock&lock-kind=fa-lock&lock-subject=<featured app provider party ID>
+```
+
+A *provisional FA lock* (`lock-kind=provisional-fa-lock`) proves that an applicant has sufficient funds before it applies for featured app status. It works like an FA lock, with these differences:
+
+- It does not count toward the locking requirement of an existing featured app.
+- An unlock returns the CC to the lock owner immediately, without vesting. The unlock request does not need `vesting-start-time`:
+
+  ```
+  cip-127/memo:request=unlock-and-start-vesting&unlock-amount=<amount>&lock-kind=provisional-fa-lock&lock-subject=<featured app provider party ID>
+  ```
+
+- It will be automatically converted to an FA lock by SV automation once the featured app right for the subject is created.
+
+## Further Reading
+
+- [CIP-0105: Super Validator Locking & Long-Term Commitment Framework](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md)
+- [CIP-0116: Featured App Locking](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md)
+- [CIP-0127: On-Chain Enforcement of FA and SV Locking](https://github.com/canton-foundation/cips/blob/main/cip-0127/cip-0127.md)
+- [Splice Portfolio transfers](/sdks-tools/development-tools/splice-portfolio/transfers)
