@@ -76,11 +76,15 @@ paths:
   /v0/dso:
     get:
       summary: "GET /v0/dso"
+      deprecated: true
       tags:
-        - external
-        - scan
+        - deprecated
       x-jvm-package: scan
       operationId: getDsoInfo
+      description: |
+        Deprecated. Please use /v1/dso instead, and /v0/sv-info for the `sv_user` and
+        `sv_party_id` fields. These fields differ between Scan instances, so responses
+        cannot be compared across SVs.
       responses:
         '200':
           description: ok
@@ -88,6 +92,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetDsoInfoResponse'
+  /v1/dso:
+    get:
+      summary: "GET /v1/dso"
+      tags:
+        - external
+        - scan
+      x-jvm-package: scan
+      operationId: getDsoInfoV1
+      description: |
+        Returns information about the DSO. Can be used in BFT reads.
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetDsoInfoResponseV1'
+  /v0/sv-info:
+    get:
+      summary: "GET /v0/sv-info"
+      tags:
+        - external
+        - scan
+      x-jvm-package: scan
+      operationId: getSvInfo
+      description: |
+        Returns the SV operating this Scan instance. The response differs between
+        Scan instances, so it cannot be used in BFT reads.
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetSvInfoResponse'
   /v0/validators/validator-faucets:
     get:
       summary: "GET /v0/validators/validator-faucets"
@@ -111,6 +150,7 @@ paths:
             type: array
             items:
               type: string
+            maxItems: 1000
       responses:
         '200':
           description: ok
@@ -438,9 +478,8 @@ paths:
         order of events in the transaction, for this you should rely on the order of `root_event_ids` and `child_event_ids`.
         Updates are ordered lexicographically by `(migration id, record time)`.
         For a given migration id, each update has a unique record time.
-        The record time ranges of different migrations may overlap, i.e.,
-        it is not guaranteed that the maximum record time of one migration is smaller than the minimum record time of the next migration,
-        and there may be two updates with the same record time but different migration ids.
+        Record times also increase across migrations: every update of a migration has a greater record time
+        than all updates of earlier migrations.
       requestBody:
         required: true
         content:
@@ -510,9 +549,8 @@ paths:
 
         Updates are ordered lexicographically by `(migration id, record time)`.
         For a given migration id, each update has a unique record time.
-        The record time ranges of different migrations may overlap, i.e.,
-        it is not guaranteed that the maximum record time of one migration is smaller than the minimum record time of the next migration,
-        and there may be two updates with the same record time but different migration ids.
+        Record times also increase across migrations: every update of a migration has a greater record time
+        than all updates of earlier migrations.
         The order of items in events_by_id is not defined.
       requestBody:
         required: true
@@ -1611,9 +1649,8 @@ paths:
         An event bears some combination of a transaction, a contract reassignment, and a verdict.
         Events are ordered lexicographically by `(migration id, record time)`.
         For a given migration id, each event has a unique record time.
-        The record time ranges of different migrations may overlap, i.e.,
-        it is not guaranteed that the maximum record time of one migration is smaller than the minimum record time of the next migration,
-        and there may be two updates with the same record time but different migration ids.
+        Record times also increase across migrations: every event of a migration has a greater record time
+        than all events of earlier migrations.
       requestBody:
         required: true
         content:
@@ -1831,6 +1868,10 @@ paths:
           schema:
             type: string
             format: date-time
+        - name: daml_value_encoding
+          in: query
+          schema:
+            $ref: '#/components/schemas/DamlValueEncoding'
       responses:
         '200':
           description: ok
@@ -1919,6 +1960,16 @@ paths:
           schema:
             type: string
             format: date-time
+        - name: bucket
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/BulkStorageBucket'
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/BulkObjectKind'
       responses:
         '200':
           description: ok
@@ -1965,6 +2016,18 @@ components:
       properties:
         dso_party_id:
           type: string
+    GetSvInfoResponse:
+      type: object
+      required:
+        - sv_user
+        - sv_party_id
+      properties:
+        sv_user:
+          description: User ID representing the SV
+          type: string
+        sv_party_id:
+          description: Party representing the SV
+          type: string
     GetClosedRoundsResponse:
       type: object
       required:
@@ -1990,6 +2053,7 @@ components:
             knows about. If unsure, an empty array is fine; only a performance
             penalty is incurred.
           type: array
+          maxItems: 1000
           items:
             $ref: '#/components/schemas/ContractId'
         cached_issuing_round_contract_ids:
@@ -1998,6 +2062,7 @@ components:
             caller knows about. If unsure, an empty array is fine; only a
             performance penalty is incurred.
           type: array
+          maxItems: 1000
           items:
             $ref: '#/components/schemas/ContractId'
     GetOpenAndIssuingMiningRoundsResponse:
@@ -2974,12 +3039,14 @@ components:
           type: array
           items:
             type: string
+          maxItems: 1000
           description: |
             Filters the ACS by contracts in which these party IDs are stakeholders.
         templates:
           type: array
           items:
             type: string
+          maxItems: 1000
           description: |
             Filters the ACS by contracts with these template IDs, specified as "PACKAGE_NAME:MODULE_NAME:ENTITY_NAME".
     HoldingsStateRequestV2:
@@ -3027,6 +3094,7 @@ components:
           items:
             type: string
           minItems: 1
+          maxItems: 1000
           description: |
             Filters by contracts in which these party_ids are the owners of the amulets.
     HoldingsSummaryRequest:
@@ -3063,6 +3131,7 @@ components:
           items:
             type: string
           minItems: 1
+          maxItems: 1000
           description: |
             The owners for which to compute the summary.
         as_of_round:
@@ -3104,6 +3173,7 @@ components:
           items:
             type: string
           minItems: 1
+          maxItems: 1000
           description: |
             The owners for which to compute the summary.
     ForceAcsSnapshotResponse:
@@ -4201,6 +4271,8 @@ components:
           format: int32
           minimum: 1
           maximum: 1000
+        daml_value_encoding:
+          $ref: '#/components/schemas/DamlValueEncoding'
     ListBulkUpdateHistoryObjectsResponse:
       type: object
       required:
@@ -4227,6 +4299,7 @@ components:
           description: |
             The list of keys of the bulk storage objects for which checksums are requested.
           type: array
+          maxItems: 1000
           items:
             type: string
     GetBulkObjectChecksumsResponse:
@@ -4261,10 +4334,42 @@ components:
     GetBulkObjectsProgressResponse:
       type: object
       required:
-        - beyond_requested_record_time
+        - availability
       properties:
-        beyond_requested_record_time:
-          type: boolean
+        availability:
+          $ref: '#/components/schemas/BulkObjectsAvailability'
+    BulkStorageBucket:
+      type: string
+      description: |
+        The bulk storage bucket a progress query refers to: "staging" holds the objects this Scan has written or
+        copied but not yet verified against its peers, "committed" the objects that passed that check.
+      enum:
+        - staging
+        - committed
+    BulkObjectKind:
+      type: string
+      description: |
+        The kind of bulk storage objects a progress query refers to: "updates" for update segments, "snapshots" for
+        ACS snapshots. Without a kind, the query refers to both.
+      enum:
+        - updates
+        - snapshots
+    BulkObjectsAvailability:
+      type: string
+      description: |
+        Whether the requested bucket of this Scan holds all bulk storage objects of the requested kind (update
+        segments, ACS snapshots, or both when no kind is given) up to the requested record time.
+        "available": it does.
+        "processing": it does not yet. The record time lies within this Scan's own history, so it produces the
+        objects itself from its own data; they appear once its dump (staging) or its check against the peers
+        (committed) has reached the record time.
+        "backfilling": it does not, and will not produce them itself, because the record time lies before this
+        Scan's own history (it joined after the network started). It copies these objects from its peers instead,
+        and answers "available" once that copy has reached the record time.
+      enum:
+        - available
+        - processing
+        - backfilling
     GetRewardAccountingEarliestAvailableRoundResponse:
       type: object
       required:
@@ -4599,6 +4704,60 @@ components:
           description: |
             Initial round from which the network bootstraps
           type: string
+    GetDsoInfoResponseV1:
+      type: object
+      required:
+        - dso_party_id
+        - voting_threshold
+        - latest_mining_round
+        - amulet_rules
+        - dso_rules
+        - sv_node_states
+      properties:
+        dso_party_id:
+          description: |
+            Party representing the whole DSO; for Scan only, also returned by
+            `/v0/dso-party-id`
+          type: string
+        voting_threshold:
+          description: |
+            Threshold required to pass vote requests; also known as the
+            "governance threshold", it is always derived from the number of
+            `svs` in `dso_rules`
+          type: integer
+        latest_mining_round:
+          description: |
+            Contract of the Daml template `Splice.Round.OpenMiningRound`, the
+            one with the highest round number on the ledger that has been signed
+            by `dso_party_id`. The round may not be usable as it may not be
+            opened yet, in accordance with its `opensAt` template field
+          $ref: '#/components/schemas/ContractWithState'
+        amulet_rules:
+          description: |
+            Contract of the Daml template `Splice.AmuletRules.AmuletRules`,
+            including the full schedule of `AmuletConfig` changes approved by
+            the DSO. Callers should not assume that `initialValue` is up-to-date,
+            and should instead search `futureValues` for the latest configuration
+            valid as of now
+          $ref: '#/components/schemas/ContractWithState'
+        dso_rules:
+          description: |
+            Contract of the Daml template `Splice.DsoRules.DsoRules`, listing
+            the governance rules approved by the DSO governing this Splice network.
+          $ref: '#/components/schemas/ContractWithState'
+        sv_node_states:
+          description: |
+            For every one of `svs` listed in `dso_rules`, a contract of the Daml
+            template `Splice.DSO.SvState.SvNodeState`. This does not include
+            states for offboarded SVs, though they may still have an on-ledger
+            state contract
+          type: array
+          items:
+            $ref: '#/components/schemas/ContractWithState'
+        initial_round:
+          description: |
+            Initial round from which the network bootstraps
+          type: string
     ListValidatorLicensesResponse:
       type: object
       required:
@@ -4654,6 +4813,7 @@ components:
         vote_request_contract_ids:
           description: Contract IDs of Daml template `Splice.DsoRules:VoteRequest`.
           type: array
+          maxItems: 1000
           items:
             type: string
     ListVoteRequestByTrackingCidResponse:
