@@ -15,7 +15,9 @@ description: "Release notes and version history for Global Synchronizer software
 
     - Breaking API Changes:
 
-      - Various Scan endpoints now have a `maxItems` bound of 1000; requests exceeding it are rejected with a 400 status code (full list below).
+      - Various Scan and SV App endpoints now have a `maxItems` bound of 1000; requests exceeding it are rejected with a 400 status code (full list below).
+      - Downloading a participant's private keys via its admin API is now disabled by default. This affects, among other things, taking identity dumps through the validator app.
+      - The repair service of participants (`canton.features.enable-repair-commands`) is now disabled by default. This affects, among other things, ACS imports.
 
     - Protocol Changes:
 
@@ -101,22 +103,22 @@ description: "Release notes and version history for Global Synchronizer software
 
   - Validator
 
-    - **Behavior change** When auth is disabled, setting `allowedOrigins` in the `splice-validator` Helm chart is mandatory.
+    - **Breaking** When auth is disabled, setting `allowedOrigins` in the `splice-validator` Helm chart is mandatory.
       The Docker Compose validator deployment sets it automatically.
 
-     - Add `/v1/scan-proxy/dso`, which serves the DSO information from Scan's `/v1/dso`.
-       `/v0/scan-proxy/dso` is deprecated: it fails when the validator is connected to more than one Scan
-       instance, as the `sv_user` and `sv_party_id` fields differ between Scan instances.
+    - Add `/v1/scan-proxy/dso`, which serves the DSO information from Scan's `/v1/dso`.
+      `/v0/scan-proxy/dso` is deprecated: it fails when the validator is connected to more than one Scan
+      instance, as the `sv_user` and `sv_party_id` fields differ between Scan instances.
 
-     - The validator now starts automation for external parties with keys embedded in a
-       `PartyToParticipant` mapping by default. The prior behavior can
-       be restored with the
-       `canton.validator-apps.validator_backend.support-embedded-party-signing-keys = false` but it is recommended to instead make sure that the
-       `ValidatorRight` contracts are [configured such that they won't start automation](https://docs.canton.network/global-synchronizer/production-operations/scalability#bypassing-the-limit).
+    - The validator now starts automation for external parties with keys embedded in a
+      `PartyToParticipant` mapping by default. The prior behavior can
+      be restored with the
+      `canton.validator-apps.validator_backend.support-embedded-party-signing-keys = false` but it is recommended to instead make sure that the
+      `ValidatorRight` contracts are [configured such that they won't start automation](https://docs.canton.network/global-synchronizer/production-operations/scalability#bypassing-the-limit).
 
   - Health checks of Canton nodes
 
-    - **Behavior change** The health checks of all Canton nodes (participant, sequencer and mediator) now use Canton's HTTP health endpoints
+    - The health checks of all Canton nodes (participant, sequencer and mediator) now use Canton's HTTP health endpoints
       (`/health/live` and `/health/ready`) instead of the gRPC health service. This affects:
 
       - Helm charts: the liveness and readiness probes of `splice-participant` and `splice-global-domain`.
@@ -156,7 +158,7 @@ description: "Release notes and version history for Global Synchronizer software
       The published host ports are unchanged. If you use a custom `nginx.conf`, update its `listen` ports to 8080
       and set `pid /tmp/nginx.pid;` so the unprivileged user can write the pid file.
 
-    - **Behavior change** All host ports published by LocalNet (Postgres, the participant Ledger, Admin and JSON APIs,
+    - **Breaking** All host ports published by LocalNet (Postgres, the participant Ledger, Admin and JSON APIs,
       the validator admin APIs and the Swagger UI) are now bound to `127.0.0.1` instead of all interfaces.
       These services use default credentials or no authentication, so they must not be reachable from the network.
       To expose them on another interface, set `HOST_BIND_IP` (as already supported for the web UIs), for example `HOST_BIND_IP=0.0.0.0`.
@@ -214,14 +216,14 @@ description: "Release notes and version history for Global Synchronizer software
 
   - Token standard
 
-    - **Behavior change** `requestedAt` must now be within 24 hours of submission, where
+    - **Breaking** `requestedAt` must now be within 24 hours of submission, where
       previously it only had to be in the past. This applies to the Amulet transfer and
       allocation factories and to governance lock requests, and matches the 24 hour signing
       delay introduced in CIP-107.
 
   - Deployment
 
-    - Added the `splice-topology-key-monitor` Helm chart, which logs a warning for every topology transaction that is signed by any key configured in the chart.
+    - Added the [`splice-topology-key-monitor` Helm chart](/global-synchronizer/production-operations/topology-key-monitor), which logs a warning for every topology transaction that is signed by any key configured in the chart.
 
 ## 0.9.4
 
