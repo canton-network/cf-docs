@@ -2,9 +2,11 @@ import io.circe.syntax._
 import com.digitalasset.canton.topology.transaction.TopologyTransaction
 import com.digitalasset.canton.version.ProtocolVersion
 
-val rows = ProtocolVersion.supported.filterNot(_.isDev).map { protocolVersion =>
+val rows = ProtocolVersion.supported.filterNot(pv => pv.isDev || pv.isAlpha).map { protocolVersion =>
   protocolVersion.v.toString -> List(
-    TopologyTransaction.protoVersionFor(protocolVersion).v.toString
+    TopologyTransaction
+      .protoVersionFor(protocolVersion)
+      .fold(error => sys.error(error), _.v.toString)
   )
 }
 
