@@ -96,6 +96,34 @@ The site will be available at http://localhost:3000.
 mintlify broken-links
 ```
 
+## Update generated docs
+
+The [Update generated docs](.github/workflows/update-version-dashboard.yml) workflow
+runs every two hours. It regenerates each target in turn and opens or updates one
+PR per target that changed.
+
+To run it outside the schedule, use **Run workflow** on the workflow's Actions page,
+or:
+
+```bash
+gh workflow run "Update generated docs" -R canton-network/cf-docs --ref main
+gh workflow run "Update generated docs" -R canton-network/cf-docs --ref main \
+  -f targets="canton-metrics-reference daml-script"
+```
+
+`targets` defaults to `all`; otherwise pass space-separated target keys. Set
+`-f dry_run=true` to list the selected commands without generating or opening PRs.
+To list target keys locally:
+
+```bash
+python3 scripts/update_generated_reference_prs.py --targets all --print-targets-json
+```
+
+Only one run executes at a time. A dispatch made while a run is in progress waits
+for it, and a newer waiting run replaces an older waiting one. To restart instead,
+cancel the in-progress run first (`gh run cancel <run-id> -R canton-network/cf-docs`).
+Cancellation can take several minutes to stop the remaining matrix jobs.
+
 ## Generate external snippets
 
 External snippet extraction from source repositories is documented in [config/snippet-config/update-workflows.md](config/snippet-config/update-workflows.md). Use that workflow when updating snippet configs under `config/snippet-config/` or regenerating checked-in snippets under `docs-main/snippets/external/`.

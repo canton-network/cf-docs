@@ -15,12 +15,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from generate_external_snippets import REPOS, SnippetRepo, find_source_dir
+from generate_external_snippets import MANIFEST_SUFFIX, REPOS, SnippetRepo, find_source_dir
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = REPO_ROOT / "config" / "snippet-config"
-REMOTE_LISTS_FILE = "remote-snippet-lists.json"
 ERROR_LOG_NAME = "snippet-source-errors.log"
 
 
@@ -48,7 +47,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "repo",
         nargs="?",
         help="Only validate this remote snippet repo (e.g. daml, canton, splice). "
-        "Omit to check every repo in remote-snippet-lists.json.",
+        "Omit to check every repo with a *-snippet-list-remote.json manifest.",
     )
     parser.add_argument(
         "--quiet",
@@ -76,19 +75,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def repo_name_from_config_filename(filename: str) -> str:
-    suffix = "-snippet-list-remote.json"
-    if filename.endswith(suffix):
-        return filename[: -len(suffix)]
+    if filename.endswith(MANIFEST_SUFFIX):
+        return filename.removesuffix(MANIFEST_SUFFIX)
     return Path(filename).stem
 
 
 def load_remote_list_files(config_dir: Path = CONFIG_DIR) -> list[str]:
-    path = config_dir / REMOTE_LISTS_FILE
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    lists = payload.get("snippetLists")
-    if not isinstance(lists, list) or not lists:
-        raise SystemExit(f"No snippetLists found in {path}")
-    return [str(name) for name in lists]
+    names = sorted(path.name for path in config_dir.glob(f"*{MANIFEST_SUFFIX}"))
+    if not names:
+        raise SystemExit(f"No *{MANIFEST_SUFFIX} manifests found in {config_dir}")
+    return names
 
 
 def load_snippets(config_path: Path) -> list[dict]:
