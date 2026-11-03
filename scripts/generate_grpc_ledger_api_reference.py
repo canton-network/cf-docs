@@ -681,6 +681,9 @@ def write_manifest(
                 "date": canton_protobuf_history.release_date(repo_dir, tag),
                 "descriptor_image_path": str(image_path.resolve()),
                 "import_to_repo_path": import_to_repo_path,
+                "import_to_source_path": canton_protobuf_history.import_to_source_path_at_tag(
+                    repo_dir, tag, import_to_repo_path
+                ),
             }
         )
     if not releases:
