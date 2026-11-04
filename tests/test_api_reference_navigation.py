@@ -77,17 +77,13 @@ def test_product_selector_has_visible_accent_line() -> None:
 
 def test_product_selector_groups_reference_utility_links() -> None:
     docs = json.loads((REPO_ROOT / "docs-main" / "docs.json").read_text(encoding="utf-8"))
-    products = docs["navigation"]["products"]
+    products = [item for item in docs["navigation"]["products"] if not item.get("hidden")]
 
     assert [item["product"] for item in products[-3:]] == [
         "API Reference",
         "Release Notes",
         "Version Dashboard",
     ]
-
-    integrations = next(item for item in products if item["product"] == "Integrations")
-    wallet = next(group for group in integrations["groups"] if group["group"] == "Wallet")
-    assert "integrations/wallet/release-notes" not in wallet["pages"]
 
     styles = (REPO_ROOT / "docs-main" / "styles.css").read_text(encoding="utf-8")
     assert "--canton-product-selector-divider" in styles

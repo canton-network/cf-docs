@@ -3,22 +3,21 @@ title: "User Namespace"
 description: "Migrate user management and rights from Wallet SDK v0 to v1."
 ---
 
-{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/wallet-sdk-v1-migration-guide/user.rst" hash="7cf5184f" */}
-
-
 The user namespace provides methods for user management on the Canton Network.
 
 ## Availability
 
 The user namespace is always available as part of the basic SDK interface. It's initialized automatically when you create an SDK instance and doesn't require additional configuration via `extend()`.
 
-``` typescript
+{/* include ../../examples/snippets/user.ts */}
+```typescript
 import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
 
 export default async function () {
     const sdk = await SDK.create({
         auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
 
     const primaryParty = EXISTING_PARTY_1
@@ -31,19 +30,19 @@ export default async function () {
 
 ## Key changes from v0 to v1
 
-The distinction betwen the user ledger and admin ledger have been removed. Instead, the token is used to determine whether a user has admin rights.
+The distinction between the user ledger and admin ledger have been removed. Instead, the token is used to determine whether a user has admin rights.
 
 **Creating users**
 
 <div className="before-after">
 
-``` javascript
+```typescript
 await sdk.adminLedger.createUser('userId', primaryParty)
 ```
 
 ---
 
-``` javascript
+```typescript
 const result = await sdk.user
     .create({
       userId: 'userId',
@@ -58,18 +57,18 @@ const result = await sdk.user
 
 <div className="before-after">
 
-``` javascript
+```typescript
 await sdk.userLedger.grantRights([actAsRights], [readAsRights])
 ```
 
 ---
 
-``` javascript
+```typescript
 const result = await sdk.rights
     .grant({
       userRights: {...},
-      userId: {'userId'}, //optional parameter
-      idp: {'idp'} //optional parameter otherwise will use default IDP
+      userId: 'userId', //optional parameter
+      idp: 'idp' //optional parameter otherwise will use default IDP
     })
 ```
 
@@ -77,10 +76,14 @@ const result = await sdk.rights
 
 The below example demonstrates the full usage of the feature:
 
-``` javascript title="Full example: multi-user setup and rights" expandable
+{/* include ../../examples/scripts/09-multi-user-setup.ts */}
+```typescript title="Full example: multi-user setup and rights" expandable
 import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
 import { pino } from 'pino'
-import { TOKEN_PROVIDER_CONFIG_DEFAULT } from './utils/index.js'
+import {
+    TOKEN_PROVIDER_CONFIG_DEFAULT,
+    localNetGlobalSynchronizer,
+} from './utils/index.js'
 const logger = pino({ name: 'v1-multi-user-setup', level: 'info' })
 
 logger.info('Operator sets up users and primary parties')
@@ -88,6 +91,7 @@ logger.info('Operator sets up users and primary parties')
 const operatorSdk = await SDK.create({
     auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
     ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    synchronizerId: localNetGlobalSynchronizer,
 })
 
 const aliceInternal = await operatorSdk.party.internal.allocate({
@@ -164,6 +168,7 @@ const aliceSdk = await SDK.create({
         },
     },
     ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    synchronizerId: localNetGlobalSynchronizer,
 })
 
 const aliceKeyPair = aliceSdk.keys.generate()
@@ -188,6 +193,7 @@ const bobSdk = await SDK.create({
         },
     },
     ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    synchronizerId: localNetGlobalSynchronizer,
 })
 
 const bobKeyPair = bobSdk.keys.generate()
@@ -211,6 +217,7 @@ const masterUserSdk = await SDK.create({
         },
     },
     ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    synchronizerId: localNetGlobalSynchronizer,
 })
 
 const masterWalletView = await masterUserSdk.party.list()
@@ -267,6 +274,9 @@ const bobWalletViewAfterRevokeRights = await bobSdk.party.list()
 if (bobWalletViewAfterRevokeRights?.find((p) => p === aliceExternal.partyId)) {
     throw new Error('bob user can see alice party even after revoking rights')
 }
+
+// Forcefully exit to prevent floating ledger retries from crashing the event loop
+process.exit(0)
 ```
 
 ## Migration reference
@@ -283,5 +293,3 @@ if (bobWalletViewAfterRevokeRights?.find((p) => p === aliceExternal.partyId)) {
 - [Migration cheat sheet](/sdks-tools/sdks/wallet-sdk/using-the-sdk/v0-to-v1-migration/migration-cheat-sheet)
 - [Configuration](/sdks-tools/sdks/wallet-sdk/using-the-sdk/configuration) — SDK configuration
 - [User management](/sdks-tools/sdks/wallet-sdk/guides/user-management) — User management overview
-
-{/* COPIED_END */}

@@ -49,7 +49,7 @@ STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
 SECTION_TO_REPO_PREFIX = {
     "admin-api": "community/admin-api/src/main/protobuf",
     "community": "community/base/src/main/protobuf",
-    "ledger-api": "community/ledger-api/src/main/protobuf",
+    "ledger-api": "community/ledger-api-proto/src/main/protobuf",
     "ledger-api-value": "community/daml-lf/ledger-api-value-proto/src/main/protobuf",
     "participant": "community/participant/src/main/protobuf",
     "synchronizer": "community/synchronizer/src/main/protobuf",
@@ -410,6 +410,37 @@ def import_to_repo_path_from_bundle(
     return mapping
 
 
+def import_to_source_path_at_tag(
+    repo_dir: Path,
+    tag: str,
+    import_to_repo_path: dict[str, str],
+) -> dict[str, str]:
+    """Map each import path to the file's actual repository path at `tag`.
+
+    `import_to_repo_path` uses the current repository layout so history can match
+    files across releases, but Canton has moved protobuf roots between releases
+    (for example, `community/ledger-api` became `community/ledger-api-proto` in
+    3.4.10). Source links need the path that exists at the tag. Files that are not
+    in the repository at that tag, or that match more than one path, are left out
+    and render without a source link.
+    """
+    tree = git(["ls-tree", "-r", "--name-only", tag], cwd=repo_dir, capture=True).splitlines()
+    tree_paths = set(tree)
+    paths_by_import: dict[str, list[str]] = {}
+    for path in tree:
+        if path.endswith(".proto") and "/protobuf/" in path:
+            paths_by_import.setdefault(path.split("/protobuf/", 1)[1], []).append(path)
+    mapping: dict[str, str] = {}
+    for import_path, repo_path in import_to_repo_path.items():
+        if repo_path in tree_paths:
+            mapping[import_path] = repo_path
+            continue
+        candidates = paths_by_import.get(import_path, [])
+        if len(candidates) == 1:
+            mapping[import_path] = candidates[0]
+    return mapping
+
+
 def replace_text(path: Path, replacements: list[tuple[str, str]]) -> None:
     text = path.read_text(encoding="utf-8")
     updated = text
@@ -632,6 +663,7 @@ def materialize_releases(
                 "date": release_date(repo_dir, tag),
                 "descriptor_image_path": str(image_path.resolve()),
                 "import_to_repo_path": import_to_repo_path,
+                "import_to_source_path": import_to_source_path_at_tag(repo_dir, tag, import_to_repo_path),
             }
         )
     return releases
