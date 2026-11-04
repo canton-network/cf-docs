@@ -211,13 +211,11 @@ To buy traffic, create a CC transfer with these values:
   - `migration-id` (required): the current migration ID of the synchronizer.
   - `forfeit-validator-reward-coupon` (optional): `true` or `false`. The default is `false`. See [the execution window](#execution-window).
 
-  The memo must start with `splice/memo:` and contain the three required keys (in any order). Unknown or duplicate keys are rejected.
+  The memo must start with `splice/memo:` and contain the three required keys (in any order).
 
-  Regular transfers to other receivers must not use a memo that starts with `splice/memo` or `cip-<number>/memo`.
+The transfer completes immediately. It burns the full amount and adds the purchased traffic to the member's traffic balance.
 
-The transfer completes immediately. It burns the full amount, including any sub-byte remainder, and adds the purchased traffic to the member's traffic balance.
-
-The transfer uses the CC price and the traffic price from the `ExternalPartyConfigState` contract that is referenced in the choice context. These values follow the current CC price in USD and the `extraTrafficPrice` in USD per MB, which you can get with the Scan commands in [traffic parameters](#traffic-parameters). The CC amount to spend for a number of bytes is:
+To calculate the amount, get the current CC price in USD and the `extraTrafficPrice` in USD per MB with the Scan commands in [traffic parameters](#traffic-parameters). The CC amount to spend for a number of bytes is:
 
 ```text
 CC amount = bytes × extraTrafficPrice / 1,000,000 / CC price
@@ -245,7 +243,7 @@ splice/memo:purchased-traffic-bytes=250000&member-id=PAR::...&synchronizer-id=..
 
 #### Execution window
 
-By default, the purchase creates a validator reward coupon for the validator that hosts the sending party. The coupon depends on the `OpenMiningRound` contract of the current round, which must be passed in the choice context under the `open-round` key. The transfer must therefore be executed within about 10 minutes after it is prepared. If you sign the transaction long before it is executed, add `&forfeit-validator-reward-coupon=true` to the memo to skip the reward coupon.
+By default, the purchase creates a validator reward coupon for the validator that hosts the sending party. The coupon depends on the current round, so the transfer must be executed within about 10 minutes after it is prepared. If you sign the transaction long before it is executed (up to 24h before), add `&forfeit-validator-reward-coupon=true` to the memo to skip the reward coupon.
 
 ## Wasted traffic
 
