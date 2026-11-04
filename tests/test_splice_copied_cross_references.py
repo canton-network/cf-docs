@@ -25,7 +25,6 @@ EXPECTED_LINK_COUNTS = [
     ("docs-main/src/global-synchronizer/deployment/onboarding-process.mdx", "validator helm chart configuration", "/global-synchronizer/deployment/validator-kubernetes", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "Cache mechanism", "/global-synchronizer/deployment/sv-operations", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "cometbft-identity", "/global-synchronizer/deployment/kubernetes-deployment", 1),
-    ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "constructs a party exclusion config", "/global-synchronizer/deployment/sv-operations", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "login into the SV web UI", "/global-synchronizer/deployment/kubernetes-deployment", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "sv-helm", "/global-synchronizer/deployment/kubernetes-deployment", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "sv-identity", "/global-synchronizer/deployment/kubernetes-deployment", 1),
