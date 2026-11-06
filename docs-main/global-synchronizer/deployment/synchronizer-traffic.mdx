@@ -213,16 +213,34 @@ To buy traffic, create a CC transfer with these values:
 
   The memo must start with `splice/memo:` and contain the three required keys (in any order).
 
-<Note>
-To get the synchronizer ID and migration ID (requires [jq](https://jqlang.org/)):
+The transfer completes immediately.
+It burns the full amount and records the purchased traffic for the specified member and migration.
+
+<Warning>
+  There is no protection against typos in `member-id` or an incorrect `migration-id`.
+  The transfer can succeed and burn the full CC amount without providing usable traffic to the intended member.
+  Double-check the member ID and the current migration ID before submitting.
+
+  If unsure, consider a test transfer that buys only `minTopupAmount` bytes, and verify that the intended member's traffic balance increases before making a larger purchase.
+</Warning>
+
+#### Determining traffic amount, synchronizer-id and migration-id
 
 <Tabs>
 
 <Tab title="DevNet (0.9.4)">
 
+To get the synchronizer ID, the migration ID, and the parameters used to calculate the amount:
+
 ```bash
-# synchronizer ID
-curl -s https://docs.dev.global.canton.network.sync.global/dso | jq -r ".dso_rules.contract.payload.config.decentralizedSynchronizer.activeSynchronizerId"
+# synchronizer ID, extraTrafficPrice (USD/MB), minTopupAmount (bytes), and CC price (USD/CC)
+curl -s https://docs.dev.global.canton.network.sync.global/dso | jq '
+  .amulet_rules.contract.payload.configSchedule.initialValue.decentralizedSynchronizer as $sync | {
+    synchronizerId: $sync.activeSynchronizer,
+    extraTrafficPrice: $sync.fees.extraTrafficPrice,
+    minTopupAmount: $sync.fees.minTopupAmount,
+    amuletPrice: .latest_mining_round.contract.payload.amuletPrice
+  }'
 # migration ID
 curl -s https://docs.dev.global.canton.network.sync.global/info | jq ".sv.migration_id"
 ```
@@ -231,9 +249,17 @@ curl -s https://docs.dev.global.canton.network.sync.global/info | jq ".sv.migrat
 
 <Tab title="TestNet (0.9.4)">
 
+To get the synchronizer ID, the migration ID, and the parameters used to calculate the amount:
+
 ```bash
-# synchronizer ID
-curl -s https://docs.test.global.canton.network.sync.global/dso | jq -r ".dso_rules.contract.payload.config.decentralizedSynchronizer.activeSynchronizerId"
+# synchronizer ID, extraTrafficPrice (USD/MB), minTopupAmount (bytes), and CC price (USD/CC)
+curl -s https://docs.test.global.canton.network.sync.global/dso | jq '
+  .amulet_rules.contract.payload.configSchedule.initialValue.decentralizedSynchronizer as $sync | {
+    synchronizerId: $sync.activeSynchronizer,
+    extraTrafficPrice: $sync.fees.extraTrafficPrice,
+    minTopupAmount: $sync.fees.minTopupAmount,
+    amuletPrice: .latest_mining_round.contract.payload.amuletPrice
+  }'
 # migration ID
 curl -s https://docs.test.global.canton.network.sync.global/info | jq ".sv.migration_id"
 ```
@@ -242,9 +268,17 @@ curl -s https://docs.test.global.canton.network.sync.global/info | jq ".sv.migra
 
 <Tab title="MainNet (0.9.3)">
 
+To get the synchronizer ID, the migration ID, and the parameters used to calculate the amount:
+
 ```bash
-# synchronizer ID
-curl -s https://docs.global.canton.network.sync.global/dso | jq -r ".dso_rules.contract.payload.config.decentralizedSynchronizer.activeSynchronizerId"
+# synchronizer ID, extraTrafficPrice (USD/MB), minTopupAmount (bytes), and CC price (USD/CC)
+curl -s https://docs.global.canton.network.sync.global/dso | jq '
+  .amulet_rules.contract.payload.configSchedule.initialValue.decentralizedSynchronizer as $sync | {
+    synchronizerId: $sync.activeSynchronizer,
+    extraTrafficPrice: $sync.fees.extraTrafficPrice,
+    minTopupAmount: $sync.fees.minTopupAmount,
+    amuletPrice: .latest_mining_round.contract.payload.amuletPrice
+  }'
 # migration ID
 curl -s https://docs.global.canton.network.sync.global/info | jq ".sv.migration_id"
 ```
@@ -252,12 +286,8 @@ curl -s https://docs.global.canton.network.sync.global/info | jq ".sv.migration_
 </Tab>
 
 </Tabs>
-</Note>
 
-The transfer completes immediately.
-It burns the full amount and records the purchased traffic for the specified member and migration.
-
-To calculate the amount, get the current CC price in USD and the `extraTrafficPrice` in USD per MB with the Scan commands in [traffic parameters](#traffic-parameters). The CC amount to spend for a number of bytes is:
+The CC amount to spend for a number of bytes is:
 
 ```text
 CC amount = bytes × extraTrafficPrice / 1,000,000 / CC price
@@ -270,6 +300,7 @@ bytes = floor(CC amount × CC price × 1,000,000 / extraTrafficPrice)
 ```
 
 The purchased traffic must be at least `minTopupAmount` bytes. For example, at a CC price of 0.15 USD and an `extraTrafficPrice` of 60 USD/MB, a transfer of 100 CC buys 250,000 bytes.
+Note that the CC price (`amuletPrice`) can change from round to round, so the purchased traffic can differ slightly from the calculated amount.
 
 The transfer fails, and burns no CC, if:
 
@@ -283,13 +314,6 @@ The `splice.lfdecentralizedtrust.org/reason` metadata of the transfer result and
 splice/memo:purchased-traffic-bytes=250000&member-id=PAR::...&synchronizer-id=...&migration-id=0
 ```
 
-<Warning>
-  There is no protection against typos in `member-id` or an incorrect `migration-id`.
-  The transfer can succeed and burn the full CC amount without providing usable traffic to the intended member.
-  Double-check the member ID and the current migration ID before submitting.
-
-  If unsure, consider a test transfer that buys only `minTopupAmount` bytes, and verify that the intended member's traffic balance increases before making a larger purchase.
-</Warning>
 
 #### Execution window
 
