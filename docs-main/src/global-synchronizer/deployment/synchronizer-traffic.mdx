@@ -127,7 +127,21 @@ To buy traffic, create a CC transfer with these values:
 
   The memo must start with `splice/memo:` and contain the three required keys (in any order).
 
-The transfer completes immediately. It burns the full amount and adds the purchased traffic to the member's traffic balance.
+<Note>
+  To get the synchronizer ID and migration ID, for example on MainNet (requires [jq](https://jqlang.org/)):
+
+  ```bash
+  # synchronizer ID
+  curl -s https://docs.global.canton.network.sync.global/dso | jq -r ".dso_rules.contract.payload.config.decentralizedSynchronizer.activeSynchronizerId"
+  # migration ID
+  curl -s https://docs.global.canton.network.sync.global/info | jq ".sv.migration_id"
+  ```
+
+  For TestNet or DevNet, replace `docs.global` in the URLs with `docs.test.global` or `docs.dev.global`.
+</Note>
+
+The transfer completes immediately.
+It burns the full amount and records the purchased traffic for the specified member and migration.
 
 To calculate the amount, get the current CC price in USD and the `extraTrafficPrice` in USD per MB with the Scan commands in [traffic parameters](#traffic-parameters). The CC amount to spend for a number of bytes is:
 
@@ -154,6 +168,14 @@ The `splice.lfdecentralizedtrust.org/reason` metadata of the transfer result and
 ```text
 splice/memo:purchased-traffic-bytes=250000&member-id=PAR::...&synchronizer-id=...&migration-id=0
 ```
+
+<Warning>
+  There is no protection against typos in `member-id` or an incorrect `migration-id`.
+  The transfer can succeed and burn the full CC amount without providing usable traffic to the intended member.
+  Double-check the member ID and the current migration ID before submitting.
+
+  If unsure, consider a test transfer that buys only `minTopupAmount` bytes, and verify that the intended member's traffic balance increases before making a larger purchase.
+</Warning>
 
 #### Execution window
 
