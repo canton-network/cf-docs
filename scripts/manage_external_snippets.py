@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from scripts.generate_external_snippets import MANIFEST_SUFFIX, SnippetRepo, discover_repos
+from scripts.snippet_repos import MANIFEST_SUFFIX, SnippetRepo, discover_repos
 
 
 CF_DOCS_ROOT = Path(__file__).resolve().parents[1]

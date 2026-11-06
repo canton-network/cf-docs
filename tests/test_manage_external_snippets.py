@@ -348,11 +348,9 @@ def test_edit_without_a_name_lists_missing_sources_and_writes_nothing(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from scripts import generate_external_snippets as generator
+    from scripts import snippet_repos
 
-    monkeypatch.setitem(
-        generator.REPO_PREPARATION, "splice", generator.RepoPreparation(prepare=("make docs",))
-    )
+    monkeypatch.setitem(snippet_repos.REPO_PREPARATION, "splice", ("make docs",))
     root, manifest, source_dir = authoring_fixture
     (source_dir / "aaa.py").write_text("a = 1\n", encoding="utf-8")
 
