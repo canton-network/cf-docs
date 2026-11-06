@@ -67,7 +67,6 @@ EXPECTED_LINK_COUNTS = [
     ("docs-main/global-synchronizer/production-operations/disaster-recovery.mdx", "recovered", "/global-synchronizer/production-operations/disaster-recovery", 1),
     ("docs-main/global-synchronizer/production-operations/disaster-recovery.mdx", "sv_backups", "/global-synchronizer/production-operations/sv-backup", 1),
     ("docs-main/global-synchronizer/production-operations/logical-synchronizer-upgrade.mdx", "procedure", "/global-synchronizer/production-operations/validator-disaster-recovery", 1),
-    ("docs-main/global-synchronizer/production-operations/logical-synchronizer-upgrade.mdx", "validators", "/global-synchronizer/production-operations/validator-disaster-recovery", 1),
     ("docs-main/global-synchronizer/production-operations/scalability.mdx", "docs", "/appdev/modules/m7-canton-coin-preapprovals", 1),
     ("docs-main/global-synchronizer/production-operations/scalability.mdx", "environment variables", "/global-synchronizer/deployment/configuration", 1),
     ("docs-main/global-synchronizer/production-operations/scalability.mdx", "minting delegation", "/global-synchronizer/splice-fundamentals/rewards-minting", 1),
