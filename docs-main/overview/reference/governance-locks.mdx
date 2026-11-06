@@ -572,6 +572,38 @@ cip-127/memo:request=unlock-and-start-vesting&unlock-amount=<amount>&lock-kind=p
 cip-127/memo:request=unlock-and-start-vesting&unlock-amount=15000&lock-kind=provisional-fa-lock&lock-subject=example-app-provider::1220d5bef46570772b73448a710e0160035982683f2bc07d89de1fe8f05df877f4c1
 ```
 
+## Integrate Governance Locks
+
+This section is for developers of wallets and explorers. Wallets and explorers read governance locks from different sources, so they integrate in different ways.
+
+### Wallets
+
+Wallets work with both the locks and the requests that change them. All of them are [CIP-0056](/overview/reference/cip-0056) token standard transfers, and the memo of each transfer says what it is. The memo is in the `splice.lfdecentralizedtrust.org/reason` metadata key, and it starts with `cip-127/memo:`. Its keys and values are the ones described in [Build the Memo](#build-the-memo).
+
+- **Locks:** each lock implements the `TransferInstruction` interface (V1 and V2) as a pending transfer:
+  - The sender is the lock owner, and the receiver is the lock manager address.
+  - The memo lists `lock-kind`, `lock-subject`, and `lock-status`. A vesting lock also lists `lock-vesting-duration-micros`, `lock-vesting-end-time-micros`, and `lock-vesting-info`.
+  - The V1 status is `TransferPendingInternalWorkflow`.
+  - The expiration (`executeBefore` in V1) is the maximum time for a locked lock, and the end of the vesting period for a vesting lock. In V2, `expiresAt` is empty for a locked lock.
+  - Show locks as in-flight or pending transfers. Do not offer to accept, reject, or withdraw a lock: the lock contract rejects these choices.
+- **Proposals:** substitution and lock transfer proposals also implement the `TransferInstruction` interface. Their memos start with `cip-127/memo:request=accept-to-substitute-lock` or `cip-127/memo:request=accept-to-transfer-lock`. The receiver can accept or reject a proposal with the standard token standard choices, and the sender can withdraw it.
+- **Requests:** a wallet sends a lock request as a standard two-step transfer, with the `TransferFactory_Transfer` choice, to the lock manager address. Put the memo in the `splice.lfdecentralizedtrust.org/reason` metadata key. The Splice Daml code reads the lock request only from this memo, and checks that the receiver is the lock manager address.
+
+### Explorers
+
+Explorers work from the `/v2/updates` stream of the Ledger API and the corresponding active contract set (ACS) endpoint. These sources do not give interface views, so explorers cannot read locks as token standard transfers. Instead, they read the underlying `Splice.GovernanceLock:GovernanceLock` template directly.
+
+To compute the locked amounts:
+
+1. Select the `GovernanceLock` contracts whose `specification` is `GLS_FullLock`. Contracts with `GLS_VestingLock` are vesting locks, and do not count toward locking requirements.
+2. Group the contracts by `specification.kind`. The kind is one of:
+    - `GLK_SuperValidatorRightsOwner`, with the SV name in `svName`
+    - `GLK_FeaturedApp`, with the featured app provider party in `provider`
+    - `GLK_ProvisionalFeaturedApp`, with the featured app provider party in `provider`
+3. Sum the `amount` field of each group, across all values of `owner`.
+
+Provisional FA locks form their own groups, separate from FA locks with the same provider. See [How Locked Funds Are Aggregated](#how-locked-funds-are-aggregated).
+
 ## Further Reading
 
 - [CIP-0105: Super Validator Locking & Long-Term Commitment Framework](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md)
