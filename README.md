@@ -126,16 +126,7 @@ Cancellation can take several minutes to stop the remaining matrix jobs.
 
 ## Generate external snippets
 
-To add, edit, move, or delete individual snippets, use the [snippet commands](config/snippet-config/snippet-commands.md).
-
-To refresh every snippet from one source repository at once, for example after an upstream release, run the bulk extraction against a local checkout and copy the output into `docs-main/snippets/external/<repo>/<version>/`:
-
-```bash
-npm run generate:external-snippets -- --list
-npm run generate:external-snippets -- canton --source-dir ../canton --copy-output --version main
-```
-
-For Canton, this first runs the sbt `docs-open / reset` and `docs-open / generateSphinxSnippets` steps. Pass `--skip-prepare` if those generated inputs already exist.
+To add, edit, move, or delete snippets, or to refresh every snippet from a source repository, use the [snippet commands](config/snippet-config/snippet-commands.md).
 
 ## License
 
