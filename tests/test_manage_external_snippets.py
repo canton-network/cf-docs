@@ -312,6 +312,89 @@ def test_edit_reports_an_up_to_date_snippet_and_writes_nothing(
     assert "already up to date" in capsys.readouterr().out
 
 
+def edit_all_args(source_dir: Path, *extra: str) -> list[str]:
+    return ["edit", "splice", "--source-dir", str(source_dir), *extra]
+
+
+def test_edit_without_a_name_rerenders_every_snippet_and_writes_only_changes(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.py").write_text("a = 1\n", encoding="utf-8")
+    (source_dir / "zzz.py").write_text("z = 1\n", encoding="utf-8")
+    assert author.main(edit_all_args(source_dir)) == 0
+    aaa = output_for(root, "splice-literal-full-aaa")
+    zzz = output_for(root, "splice-literal-full-zzz")
+    assert aaa.read_text(encoding="utf-8") == "```python\na = 1\n```"
+    assert zzz.read_text(encoding="utf-8") == "```python\nz = 1\n```"
+    stamp = aaa.stat().st_mtime_ns
+    capsys.readouterr()
+
+    (source_dir / "zzz.py").write_text("z = 2\n", encoding="utf-8")
+    assert author.main(edit_all_args(source_dir)) == 0
+
+    out = capsys.readouterr().out
+    assert "Edited 1 of 2 splice snippets" in out
+    assert aaa.stat().st_mtime_ns == stamp
+    assert zzz.read_text(encoding="utf-8") == "```python\nz = 2\n```"
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+
+    assert author.main(edit_all_args(source_dir)) == 0
+    assert "All 2 splice snippets are already up to date" in capsys.readouterr().out
+
+
+def test_edit_without_a_name_lists_missing_sources_and_writes_nothing(
+    authoring_fixture: tuple[Path, Path, Path],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import snippet_repos
+
+    monkeypatch.setitem(snippet_repos.REPO_PREPARATION, "splice", ("make docs",))
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.py").write_text("a = 1\n", encoding="utf-8")
+
+    assert author.main(edit_all_args(source_dir)) == 1
+
+    err = capsys.readouterr().err
+    assert "1 of 2 snippet sources are unusable" in err
+    assert "splice-literal-full-zzz" in err
+    assert "make docs" in err
+    assert not output_for(root, "splice-literal-full-aaa").exists()
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+
+
+@pytest.mark.parametrize("flag", [["--marker", "X"], ["--full-file"], ["--language", "text"]])
+def test_edit_without_a_name_refuses_selector_and_language_flags(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str], flag: list[str]
+) -> None:
+    _, _, source_dir = authoring_fixture
+    assert author.main(edit_all_args(source_dir, *flag)) == 1
+    assert "need a snippet name" in capsys.readouterr().err
+
+
+def test_edit_without_a_name_dry_run_writes_nothing(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.py").write_text("a = 1\n", encoding="utf-8")
+    (source_dir / "zzz.py").write_text("z = 1\n", encoding="utf-8")
+
+    assert author.main(edit_all_args(source_dir, "--dry-run")) == 0
+
+    out = capsys.readouterr().out
+    assert "would edit 2 splice snippets" in out
+    assert "+z = 1" in out
+    assert not (root / "docs-main").exists()
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+
+
+def test_move_still_requires_a_snippet_name(authoring_fixture: tuple[Path, Path, Path]) -> None:
+    _, _, source_dir = authoring_fixture
+    with pytest.raises(SystemExit):
+        author.parse_args(["move", "splice", "--source-dir", str(source_dir), "--source", "x.py"])
+
+
 def test_edit_marker_keeps_the_name_and_preserves_other_manifest_bytes(
     authoring_fixture: tuple[Path, Path, Path]
 ) -> None:
