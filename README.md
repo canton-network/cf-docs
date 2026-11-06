@@ -126,7 +126,7 @@ Cancellation can take several minutes to stop the remaining matrix jobs.
 
 ## Generate external snippets
 
-External snippet extraction from source repositories is documented in [config/snippet-config/update-workflows.md](config/snippet-config/update-workflows.md). Use that workflow when updating snippet configs under `config/snippet-config/` or regenerating checked-in snippets under `docs-main/snippets/external/`.
+To add, edit, move, or delete individual snippets, use the [snippet commands](config/snippet-config/snippet-commands.md).
 
 Run this whenever you add, remove, or update a snippet source in `config/snippet-config/`, or when you need to pull in changes from an upstream repo (such as Canton or Splice) that are referenced by existing snippets.
 
