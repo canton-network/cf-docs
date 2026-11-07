@@ -107,6 +107,30 @@ The reward computation is split across two components on each SV node:
    Scan, creating `Splice.Amulet.RewardCouponV2` contracts for each eligible
    party at the leaf nodes.
 
+## Reward computation formula
+
+[CIP-0104](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0104/cip-0104.md#app-reward-computation-details)
+specifies the exact computation Scan performs each round:
+
+```
+total_featured_app_burn_CC = (total_featured_app_traffic / 1,000,000) * traffic_price_in_CC_per_MB
+
+per_app_minting_allowance0 =
+  (total_app_traffic / 1,000,000) * traffic_price_in_CC_per_MB * issuance_per_featured_app_weight
+
+per_app_minting_allowance =
+  if per_app_minting_allowance0 >= app_reward_coupon_threshold_CC
+    then per_app_minting_allowance0
+    else 0
+```
+
+- `total_app_traffic` is the sum of a party's activity record weights for the round (in bytes) -- see [Activity Record Computation Details](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0104/cip-0104.md#activity-record-computation-details) for how traffic is attributed across apps when multiple app confirmers share a confirmation request.
+- `traffic_price_in_CC_per_MB` is `extraTrafficPrice` (see [Synchronizer Traffic](/global-synchronizer/deployment/synchronizer-traffic#calculating-traffic-cost)) converted to CC at the round's `amuletPrice`.
+- `issuance_per_featured_app_weight` is the CC-issuance-per-activity-weight for the round, computed by Scan each round from the Canton Coin whitepaper's issuance curve (see [Issuance Curve and Minting Schedule](/overview/reference/tokenomics-of-gs#issuance-curve-and-minting-schedule)), using the open mining round's issuance config and `total_featured_app_burn_CC`.
+- `app_reward_coupon_threshold_CC` is `appRewardCouponThreshold` (from [RewardConfig](#rewardconfig) below) converted to CC at the round's conversion rate. A party whose allowance falls below it gets no coupon for that round; the reward is burned, not carried forward.
+
+A party's `activityWeight` on its `FeaturedAppRight` (default `1.0`) multiplies its share of `total_app_traffic` before this computation, so featured apps with a higher weight earn proportionally more per byte of traffic their users burn.
+
 ## Activation
 
 Traffic-based app rewards are controlled by the `rewardConfig` field in the
