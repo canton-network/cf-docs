@@ -39,6 +39,29 @@ If you see authorization errors right after onboarding, verify that your party I
 
 Compare the output against the party ID in your application configuration. Party IDs are case-sensitive and include a fingerprint suffix (e.g., `validator::1220abcd...`).
 
+### No Synchronizer on Which All Submitters Can Submit
+
+```
+NOT_FOUND: NO_SYNCHRONIZER_ON_WHICH_ALL_SUBMITTERS_CAN_SUBMIT
+```
+
+The participant that received the command could not find a connected synchronizer on which it hosts every party in `actAs` with `Submission` permission. The check runs on the submitting participant only. A party hosted with submission rights on a different participant does not count, so a multi-party `actAs` command only routes if you send it to a participant that hosts all of those parties.
+
+Check the following on the participant you submit to:
+
+1. **The participant is connected to the synchronizer you expect.** Run `participant.synchronizers.list_connected()` in the Canton Console.
+1. **Each `actAs` party is hosted on this participant.** Call `GET /v2/parties` on the participant's JSON Ledger API. `isLocal` is `true` for parties the participant hosts according to the authorized topology state. A party that shows `isLocal: false` cannot submit through this participant.
+1. **The hosting has `Submission` permission.** `isLocal` doesn't show the permission level. In the console, run `participant.topology.party_to_participant_mappings.list(synchronizerId, filterParty = "<party>")` and check that this participant appears with `Submission`, not `Confirmation` or `Observation`.
+1. **The hosting change isn't stuck as a proposal.** Adding a participant to an existing party needs signatures from both the party's namespace and the new participant. Until all of them are present, the change is a proposal and doesn't take effect. List pending proposals with `participant.topology.party_to_participant_mappings.list(synchronizerId, proposals = true, filterParty = "<party>")` or `participant.topology.party_to_participant_mappings.list_hosting_proposals(synchronizerId, participant.id)`, then authorize the missing side.
+
+Common causes:
+
+- **A hosting proposal was never fully authorized.** The party looks set up on the participant that proposed it, but the authorized topology state doesn't include the new hosting. The proposals query in step 4 shows it.
+- **The `actAs` parties are hosted on different participants.** For example, a `create` whose signatories are three parties on three participants, with no participant hosting all three, fails wherever you submit it. Either host all submitting parties on one participant or change the workflow so that each participant submits for its own parties, for example with a propose-and-accept pattern, or by making parties that only need visibility observers instead of signatories.
+- **The party isn't hosted on any participant.** `party_to_participant_mappings.list` returns nothing for the party. On a validator, this shows up as the validator app looping on wallet installation during initialization, for example after restoring from an identities backup. If allocating the party fails with [`TOPOLOGY_PARTY_ID_CONFLICT_WITH_ADMIN_PARTY`](/global-synchronizer/reference/error-codes#error-code-topology_party_id_conflict_with_admin_party), the party ID is identical to a participant's admin party, for example because the validator's party hint and the participant identifier are the same and both use the same namespace.
+
+See [`NO_SYNCHRONIZER_ON_WHICH_ALL_SUBMITTERS_CAN_SUBMIT`](/global-synchronizer/reference/error-codes#error-code-no_synchronizer_on_which_all_submitters_can_submit) in the error code reference.
+
 ## Package Vetting Issues
 
 Package vetting ensures that all validators involved in a transaction agree on the Daml code being executed.
