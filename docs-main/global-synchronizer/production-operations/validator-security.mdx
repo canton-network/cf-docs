@@ -44,3 +44,33 @@ Also recall that you need to deploy a **fresh** participant in order for KMS to 
 
 
 {/* COPIED_END */}
+
+## Hosting third-party Daml apps
+
+A validator node can host the parties of many apps at the same time. Before you upload the DAR of an app you did not write, check the three points below. SV operators should not install third-party apps on their SV node at all; see the notice in [SV operations](/global-synchronizer/deployment/sv-operations).
+
+### Vetting a package trusts its future versions
+
+Uploading a DAR vets its packages by default. Vetting a package lets the parties on your node use it for every contract with the same package name, including contracts created with earlier versions (see [package selection](/appdev/modules/m6-package-selection)). An upgrade may add new choices to existing templates. A new version can therefore give another party a choice over contracts that your parties signed under an earlier version, and a malicious or compromised app provider can use such a choice to move your parties' assets.
+
+Until your node vets the new version, a choice that exists only in that version cannot be exercised on your parties' contracts. A command that names the package by its name is interpreted with a version your node has vetted, and one that names the new package id is rejected because your node has not vetted it. Vetting is the point where you accept the new code.
+
+<Warning>
+Vet packages only from app providers you trust. Review each new version of an app before you vet it, as you would a first install.
+</Warning>
+
+To review a DAR before it takes effect, upload it without vetting, then vet it once you have reviewed it:
+
+1. Upload without vetting: [`POST /v2/dars?vetAllPackages=false`](/reference/json-api-reference/post-v2dars) on the JSON Ledger API, or `dars.upload("app.dar", vetAllPackages = false)` in the console. If you deploy DARs with [darsyncer](/sdks-tools/development-tools/darsyncer), pass `--vet-dars=false`.
+2. Check what your node vets: [`POST /v2/package-vetting/list`](/reference/json-api-reference/post-v2package-vettinglist) with your participant id in `topologyStateFilter.participantIds`, or `topology.vetted_packages.list()` in the console.
+3. Vet the reviewed package: [`POST /v2/package-vetting/update`](/reference/json-api-reference/post-v2package-vettingupdate) with a `Vet` change, or `dars.vetting.enable(mainPackageId)` in the console.
+
+For the console commands and unvetting, see [Manage Daml packages](/global-synchronizer/production-operations/manage-packages).
+
+### One package name, one instance of an app
+
+Upgrades are managed per package name. A node therefore cannot connect to both the test instance and the production instance of an app when both use the same package names. Connect to test instances from a separate validator on TestNet, or ask the app provider to use different package names for each instance (see [package naming](/appdev/modules/m6-package-naming)).
+
+### Resources
+
+Each app adds to the active contracts your node stores and to the transactions it submits and confirms. Ask each app provider for its expected number of contracts and transaction rate, and size the node for all apps together.
