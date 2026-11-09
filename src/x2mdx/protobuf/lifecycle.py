@@ -232,7 +232,13 @@ class DescriptorSnapshotBuilder:
         return self.import_to_repo_path[import_path]
 
     def file_source_url(self, import_path: str, line: int | None) -> str | None:
-        return source_url(self.repo_web_url, self.source.tag, self.repo_path(import_path), line)
+        source_paths = self.source.import_to_source_path
+        if source_paths is None:
+            return source_url(self.repo_web_url, self.source.tag, self.repo_path(import_path), line)
+        source_path = source_paths.get(import_path)
+        if source_path is None:
+            return None
+        return source_url(self.repo_web_url, self.source.tag, source_path, line)
 
     def file_locmap(self, import_path: str) -> dict[tuple[int, ...], Any]:
         return self.location_maps[import_path]

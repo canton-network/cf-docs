@@ -207,6 +207,37 @@ class ProtobufTests(unittest.TestCase):
         self.assertNotIn("current_only", page)
         self.assertIn("getfoo", package)
 
+    def test_source_links_use_per_tag_paths_without_changing_file_identity(self) -> None:
+        manifest_path = self._write_manifest()
+        manifest = json.loads(manifest_path.read_text())
+        base_import = "com/example/service.proto"
+        repo_path = manifest["versions"][0]["import_to_repo_path"][base_import]
+        legacy_path = "community/legacy/src/main/protobuf/com/example/service.proto"
+        manifest["versions"][0]["import_to_source_path"] = {base_import: legacy_path}
+        manifest["versions"][1]["import_to_source_path"] = {base_import: repo_path}
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        report = build_protobuf_history_report_from_sources(
+            load_protobuf_sources(manifest_path), source_name="unit", version_filter="all"
+        )
+        first, latest = report["releases"]
+        self.assertEqual(
+            first["snapshot"]["files"][repo_path]["sourceUrl"],
+            f"https://github.com/example/repo/blob/v1.0.0/{legacy_path}",
+        )
+        self.assertEqual(
+            latest["snapshot"]["endpoints"]["com.example.v1.ExampleService/GetBar"]["sourceUrl"],
+            f"https://github.com/example/repo/blob/v1.1.0/{repo_path}",
+        )
+        self.assertEqual(latest["changes"]["counts"]["files"], {"added": 0, "removed": 0, "modified": 1})
+
+        manifest["versions"][1]["import_to_source_path"] = {}
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        report = build_protobuf_history_report_from_sources(
+            load_protobuf_sources(manifest_path), source_name="unit", version_filter="all"
+        )
+        self.assertIsNone(report["latestSnapshot"]["files"][repo_path]["sourceUrl"])
+
     def test_build_report_tracks_endpoint_lifecycle(self) -> None:
         manifest_path = self._write_manifest()
         sources = load_protobuf_sources(manifest_path)
