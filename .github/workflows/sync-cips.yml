@@ -6,6 +6,7 @@ on:
   
 permissions:
   contents: write
+  pull-requests: write
   
 concurrency:
   group: sync-cips
@@ -416,14 +417,28 @@ jobs:
           JS
           node validate.mjs "$GITHUB_WORKSPACE/$CIP_PAGE"
 
-      - name: Commit if changed
+      - name: Open/update PR if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: bot/cip-registry-sync
         run: |
-          git add "$CIP_PAGE"
-          if git diff --cached --quiet; then
-            echo "CIP page unchanged."
+          if git diff --quiet -- "$CIP_PAGE"; then
+            echo "CIP page unchanged; nothing to do."
             exit 0
           fi
+
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git switch -C "$BRANCH"
+          git add "$CIP_PAGE"
           git commit -m "docs(cips): sync CIP registry with canton-foundation/cips@${CIPS_SHA:0:7}"
-          git push
+          git push --force-with-lease origin "$BRANCH"
+
+          if gh pr view "$BRANCH" --json state --jq .state 2>/dev/null | grep -q OPEN; then
+            echo "PR already open for $BRANCH; updated it with the latest sync."
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --title "docs(cips): sync CIP registry" \
+              --body "Automated CIP registry sync from canton-foundation/cips@${CIPS_SHA:0:7} (${CIPS_DATE%%T*}). Review the \`mintlify validate\` check, then merge."
+          fi
