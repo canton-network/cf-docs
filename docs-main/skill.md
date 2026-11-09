@@ -179,52 +179,61 @@ exposed-modules:
 
 ### Typical Development Cycle
 
-1. **Set up project**
+1. **Get a local network**
+   - Clone [cn-quickstart](https://github.com/digital-asset/cn-quickstart) and start only LocalNet, without building the demo app: see [Start LocalNet without the QuickStart application](https://docs.canton.network/sdks-tools/development-tools/localnet#start-localnet-without-the-quickstart-application). It needs only Docker.
+   - Run the full QuickStart demo (`make setup`, `make build`, `make start`) only if you want to study the reference application. `make start` always runs `make build` first.
+   - Authenticate to each validator's JSON Ledger API (ports 2975, 3975, 4975) with an HS256 JWT: secret `unsafe`, audience `https://canton.network.global`, subject `ledger-api-user`. See [Authenticating to the Ledger API](https://docs.canton.network/sdks-tools/development-tools/localnet#authenticating-to-the-ledger-api).
+   - Use `dpm sandbox` for fast single-participant tests of contract logic.
+
+2. **Set up project**
    - Run `dpm new my-project`
    - Review generated `daml.yaml`
-   - Verify SDK version matches your environment
+   - Verify the SDK version matches your environment; check current versions on the [Version Compatibility Dashboard](https://docs.canton.network/shared/version-compatibility-dashboard)
 
-2. **Write smart contracts**
+3. **Write smart contracts**
    - Create templates in `daml/Main.daml`
    - Define signatories, observers, controllers
    - Implement choices (consuming and non-consuming)
    - Use explicit authorization patterns (propose-accept, delegation)
+   - Define interfaces in their own package, separate from the templates that implement them, and build both with a `multi-package.yaml` and `dpm build --all`. A package that defines an interface and implements it fails to compile. See [Interfaces](https://docs.canton.network/appdev/modules/m3-interfaces)
 
-3. **Write unit tests**
+4. **Write unit tests**
    - Create separate test package in `daml-test/`
    - Write Daml Script tests allocating parties and submitting commands
    - Run `dpm test` to verify logic
 
-4. **Build and package**
+5. **Build and package**
    - Run `dpm build` to generate DAR file in `.daml/dist/`
    - DAR file is self-contained with all dependencies
 
-5. **Deploy to ledger**
-   - Upload DAR via Canton Console: `participant.dars.upload("path.dar")` -- this vets the packages automatically if the participant is connected to only one synchronizer
+6. **Deploy to ledger**
+   - Via JSON Ledger API: `POST /v2/dars?vetAllPackages=true` with the DAR as the request body (`Content-Type: application/octet-stream`)
+   - Or via Canton Console: `participant.dars.upload("path.dar")` -- this vets the packages automatically if the participant is connected to only one synchronizer
    - For explicit control, or on a multi-synchronizer participant, vet manually: `participant.topology.vetted_packages.propose_delta(participant.id, adds = Seq(...))`
    - Verify with `participant.packages.list()`
 
-6. **Allocate parties**
-   - Use Canton Console: `participant.parties.enable("alice")`
-   - Or via Ledger API: `POST /v2/parties`
+7. **Allocate parties**
+   - Via JSON Ledger API: `POST /v2/parties` with `"userId": "<your-user>"`, which grants that user `CanActAs` for the new party in the same call. Without it, the user can't submit or read as the party, even with `ParticipantAdmin`, and requests fail with HTTP 403 (`grpcCodeValue` 7)
+   - Or via Canton Console: `participant.parties.enable("alice")`
    - Verify mapping: `participant.topology.party_to_participant_mappings.list_from_all()`
 
-7. **Submit commands**
+8. **Submit commands**
    - Via Ledger API (gRPC or JSON)
    - Via backend service using generated Java/TypeScript bindings
    - Include the acting party (`actAs`), a `commandId`, and the `userId`
+   - Write template and interface IDs in package-name form (`#<package-name>:<Module>:<Entity>`). Query filters reject the package-ID form that responses return. See [Identifier Formats](https://docs.canton.network/sdks-tools/api-reference/json-api#identifier-formats)
 
-8. **Query and monitor**
+9. **Query and monitor**
    - Use PQS for production queries
    - Use Ledger API for transaction streams
    - Use Canton Console for debugging
 
-9. **Test end-to-end**
-   - Run LocalNet with `make start` (cn-quickstart)
+10. **Test end-to-end**
+   - Run multi-validator tests on LocalNet (step 1): App Provider, App User and Super Validator are separate validators
    - Submit commands through backend or JSON API
    - Verify multi-party workflows across validators
 
-10. **Deploy to production**
+11. **Deploy to production**
     - Promote through TestNet → MainNet progression
     - Configure environment-specific settings in `daml.yaml` or `.env`
     - Monitor via observability stack (metrics, logs, traces)
@@ -242,6 +251,7 @@ exposed-modules:
    - Verify vetting status if required
 
 3. **Check authorization**
+   - `A security-sensitive error has been received` with HTTP 401 (`grpcCodeValue` 16) means the JWT was rejected: check signature, audience and expiry. With HTTP 403 (`grpcCodeValue` 7), the token is valid but the user lacks `CanActAs` or `CanReadAs` for a party in the request
    - Confirm signatory is the submitting party
    - Confirm controller has permission to exercise choice
    - Review Daml template for authorization rules
@@ -319,7 +329,7 @@ Before submitting work:
 **Comprehensive navigation:** https://docs.canton.network/llms.txt
 
 **Critical documentation pages:**
-1. [Canton Network QuickStart](https://docs.canton.network/appdev/quickstart) — Run a complete full-stack app locally; the fastest path to a first working app
+1. [Canton Network QuickStart](https://docs.canton.network/appdev/quickstart) — Reference application and LocalNet: run the full-stack demo to learn, or start only LocalNet to build and test your own app
 2. [What is Canton Network](https://docs.canton.network/overview/understand/what-is-canton) — Overview and use cases
 3. [Core Concepts](https://docs.canton.network/overview/understand/core-concepts) — Parties, validators, synchronizers, templates
 4. [Module 3: Language Fundamentals](https://docs.canton.network/appdev/modules/m3-language-fundamentals) — Daml language fundamentals and contract development
