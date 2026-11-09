@@ -65,7 +65,7 @@ Until those custom controls are available, all Featured Application providers an
 
 Compatibility mode has these limitations:
 
-- It manages only owner-controlled locks. CIP-0127 also specifies locks with custom controllers for unlock, substitution, and withdrawal, for example for staking apps. These need a wallet or app with a full-feature integration, relying on custom controllers.
+- It manages only owner-controlled locks. CIP-0127 also specifies locks with custom controllers for unlock, substitution, and withdrawal, for example for staking apps. These need a wallet or app with a full-feature integration.
 - It does not support minting SV rewards directly into a lock.
 - Locks are recorded as long-lived transfer offers, so they should appear as **in-flight** or **pending** in wallet UIs.
 
@@ -374,7 +374,7 @@ In the screenshots, a quarter of a 10,000 vesting lock vested before the withdra
 
 ![Offers page with a vesting lock of 7,500 after the withdrawal](/images/governance-locks/withdraw-vested-offers.png)
 
-When the vesting period ends, the remaining CC in a vesting lock becomes available as liquid CC without a withdrawal, as the time lock on the holding expires. SVs run automation that archives fully vested vesting locks, which removes them from the Offers page.
+When the vesting period ends, the remaining CC in a vesting lock becomes available as liquid CC without a withdrawal, as the time lock on the holding expires. SVs run automation that archives fully vested vesting locks, which removes them from the Offers page and returns all locked funds.
 
 ## Substitute a Lock
 
@@ -546,7 +546,6 @@ FA locks work like SV locks, and every memo template on this page applies to the
 - **Lock kind:** `lock-kind=fa-lock`.
 - **Lock subject:** the full party ID of the featured app provider party, not a name. See [FA Locks and Provisional FA Lock Subjects](#fa-locks-and-provisional-fa-lock-subjects).
 - **Vesting period:** 60 days, so `lock-vesting-duration-micros` of a freshly unlocked FA lock is `5184000000000`.
-- **Aggregation:** the amounts of all locked FA locks with the same subject are added up, so several lock owners can contribute to one featured app. See [How Locked Funds Are Aggregated](#how-locked-funds-are-aggregated).
 
 A *provisional FA lock* (`lock-kind=provisional-fa-lock`) proves that an applicant has sufficient funds before it applies for featured app status. Create it with the [Create a Lock](#create-a-lock) template. For example, to provisionally lock 15,000 CC for `example-app-provider::1220d5be…f4c1`, enter `15000` in **Amount** and this **Description**:
 
@@ -589,9 +588,13 @@ Wallets work with both the locks and the requests that change them. All of them 
 - **Proposals:** substitution and lock transfer proposals also implement the `TransferInstruction` interface. Their memos start with `cip-127/memo:request=accept-to-substitute-lock` or `cip-127/memo:request=accept-to-transfer-lock`. The receiver can accept or reject a proposal with the standard token standard choices, and the sender can withdraw it.
 - **Requests:** a wallet sends a lock request as a standard two-step transfer, with the `TransferFactory_Transfer` choice, to the lock manager address. Put the memo in the `splice.lfdecentralizedtrust.org/reason` metadata key. The Splice Daml code reads the lock request only from this memo, and checks that the receiver is the lock manager address.
 
+We recommend that wallets list governance locks and their multi-step workflows (transfers and substitutions) separately from token standard transfer offers. We also recommend that wallets build custom forms for creating lock requests, and support their users with extra validation (e.g., SV right owner name validation).
+
 ### Explorers
 
-Explorers work from the `/v2/updates` stream of the Ledger API and the corresponding active contract set (ACS) endpoint. These sources do not give interface views, so explorers cannot read locks as token standard transfers. Instead, they read the underlying `Splice.GovernanceLock:GovernanceLock` template directly.
+We recommend that explorers use the `/v2/updates` stream of the Scan API and the corresponding active contract set (ACS) endpoint as their data source. These endpoints do not serve interface views. Explorers should thus read the locksusing the underlying `Splice.GovernanceLock:GovernanceLock` template directly.
+
+We recommend explorer developers to consult the corresponding [Daml code](https://github.com/canton-network/splice/blob/main/daml/splice-amulet/daml/Splice/GovernanceLock.daml) to understand the structure.
 
 To compute the locked amounts:
 
