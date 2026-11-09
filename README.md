@@ -96,16 +96,37 @@ The site will be available at http://localhost:3000.
 mintlify broken-links
 ```
 
-## Generate external snippets
+## Update generated docs
 
-External snippet extraction from source repositories is documented in [config/snippet-config/update-workflows.md](config/snippet-config/update-workflows.md). Use that workflow when updating snippet configs under `config/snippet-config/` or regenerating checked-in snippets under `docs-main/snippets/external/`.
+The [Update generated docs](.github/workflows/update-version-dashboard.yml) workflow
+runs every two hours. It regenerates each target in turn and opens or updates one
+PR per target that changed.
 
-Run this whenever you add, remove, or update a snippet source in `config/snippet-config/`, or when you need to pull in changes from an upstream repo (such as Canton or Splice) that are referenced by existing snippets.
+To run it outside the schedule, use **Run workflow** on the workflow's Actions page,
+or:
 
 ```bash
-npm run generate:external-snippets -- --list
-npm run generate:external-snippets -- canton --source-dir ../canton
+gh workflow run "Update generated docs" -R canton-network/cf-docs --ref main
+gh workflow run "Update generated docs" -R canton-network/cf-docs --ref main \
+  -f targets="canton-metrics-reference daml-script"
 ```
+
+`targets` defaults to `all`; otherwise pass space-separated target keys. Set
+`-f dry_run=true` to list the selected commands without generating or opening PRs.
+To list target keys locally:
+
+```bash
+python3 scripts/update_generated_reference_prs.py --targets all --print-targets-json
+```
+
+Only one run executes at a time. A dispatch made while a run is in progress waits
+for it, and a newer waiting run replaces an older waiting one. To restart instead,
+cancel the in-progress run first (`gh run cancel <run-id> -R canton-network/cf-docs`).
+Cancellation can take several minutes to stop the remaining matrix jobs.
+
+## Generate external snippets
+
+To add, edit, move, or delete snippets, or to refresh every snippet from a source repository, use the [snippet commands](config/snippet-config/snippet-commands.md).
 
 ## License
 

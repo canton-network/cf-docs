@@ -23,6 +23,8 @@ sidebarTitle: "/v0/history/bulk/progress"
 
   <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-0-9-0">Added 0.9.0</a>
 
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-0-10-0">Updated 0.10.0</a>
+
 </div>
 
 
@@ -121,7 +123,7 @@ puts response.body
 
 ```json 200
 {
-  "beyond_requested_record_time": false
+  "availability": "available"
 }
 ```
 
@@ -158,6 +160,42 @@ OpenAPI type: <code>string (date-time)</code>.
 
 
 
+<ParamField query="bucket" type="object" required>
+OpenAPI type: <code>BulkStorageBucket</code>.
+
+
+
+The bulk storage bucket a progress query refers to: &quot;staging&quot; holds the objects this Scan has written or copied but not yet verified against its peers, &quot;committed&quot; the objects that passed that check.
+
+
+Allowed values: <code>staging</code>, <code>committed</code>.
+
+
+
+
+
+</ParamField>
+
+
+
+<ParamField query="kind" type="object">
+OpenAPI type: <code>BulkObjectKind</code>.
+
+
+
+The kind of bulk storage objects a progress query refers to: &quot;updates&quot; for update segments, &quot;snapshots&quot; for ACS snapshots. Without a kind, the query refers to both.
+
+
+Allowed values: <code>updates</code>, <code>snapshots</code>.
+
+
+
+
+
+</ParamField>
+
+
+
 
 
 
@@ -182,8 +220,12 @@ ok
 
 
 
-<ResponseField name="beyond_requested_record_time" type="boolean" required>
+<ResponseField name="availability" type="BulkObjectsAvailability" required>
 
+Whether the requested bucket of this Scan holds all bulk storage objects of the requested kind (update segments, ACS snapshots, or both when no kind is given) up to the requested record time. &quot;available&quot;: it does. &quot;processing&quot;: it does not yet. The record time lies within this Scan&#x27;s own history, so it produces the objects itself from its own data; they appear once its dump (staging) or its check against the peers (committed) has reached the record time. &quot;backfilling&quot;: it does not, and will not produce them itself, because the record time lies before this Scan&#x27;s own history (it joined after the network started). It copies these objects from its peers instead, and answers &quot;available&quot; once that copy has reached the record time.
+
+
+Allowed values: <code>available</code>, <code>processing</code>, <code>backfilling</code>.
 
 
 
@@ -232,6 +274,16 @@ not implemented
 ## History
 
 <div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-0-10-0">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Updated</span>
+      <code class="x2mdx-ref-history-event-version">0.10.0</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The GET /v0/history/bulk/progress operation changed in this snapshot.</p>
+
+  </div>
 
   <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-0-9-0">
     <div class="x2mdx-ref-history-event-head">

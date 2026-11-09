@@ -203,7 +203,7 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
             ledger_mapping,
             {
                 "com/daml/ledger/api/v2/command_service.proto": (
-                    "community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/command_service.proto"
+                    "community/ledger-api-proto/src/main/protobuf/com/daml/ledger/api/v2/command_service.proto"
                 ),
                 "com/daml/ledger/api/v2/value.proto": (
                     "community/daml-lf/ledger-api-value-proto/src/main/protobuf/com/daml/ledger/api/v2/value.proto"
@@ -228,6 +228,49 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         self.assertNotIn("com/digitalasset/canton/participant/foo.proto", admin_mapping)
         self.assertNotIn(
             "com/digitalasset/canton/tea/scalapb/package.proto", ledger_mapping
+        )
+
+    def test_source_paths_follow_the_repository_layout_at_each_tag(self) -> None:
+        repo_dir = self.root / "canton"
+        repo_dir.mkdir()
+
+        def git(*args: str) -> None:
+            subprocess.run(["git", *args], cwd=repo_dir, check=True, capture_output=True)
+
+        git("init", "-q")
+        git("config", "user.email", "test@example.com")
+        git("config", "user.name", "Test")
+        command_service = "com/daml/ledger/api/v2/command_service.proto"
+        value = "com/daml/ledger/api/v2/value.proto"
+        legacy_root = repo_dir / "community/ledger-api/src/main/protobuf"
+        self.write_proto(legacy_root, command_service)
+        self.write_proto(legacy_root, value)
+        self.write_proto(repo_dir / "community/other/src/main/protobuf", value)
+        git("add", "-A")
+        git("commit", "-q", "-m", "old layout")
+        git("tag", "v3.4.9")
+        git("mv", "community/ledger-api", "community/ledger-api-proto")
+        git("commit", "-q", "-m", "new layout")
+        git("tag", "v3.4.10")
+
+        current_root = generator.SECTION_TO_REPO_PREFIX["ledger-api"]
+        import_to_repo_path = {
+            command_service: f"{current_root}/{command_service}",
+            value: f"{current_root}/{value}",
+            "com/daml/ledger/api/v2/missing.proto": f"{current_root}/com/daml/ledger/api/v2/missing.proto",
+        }
+
+        self.assertEqual(
+            generator.import_to_source_path_at_tag(repo_dir, "v3.4.9", import_to_repo_path),
+            {command_service: f"community/ledger-api/src/main/protobuf/{command_service}"},
+            "legacy paths resolve by import path; ambiguous and missing files get no source path",
+        )
+        self.assertEqual(
+            generator.import_to_source_path_at_tag(repo_dir, "v3.4.10", import_to_repo_path),
+            {
+                command_service: f"{current_root}/{command_service}",
+                value: f"{current_root}/{value}",
+            },
         )
 
     def test_split_protobuf_navigation_flattens_admin_packages_under_grpc(self) -> None:
