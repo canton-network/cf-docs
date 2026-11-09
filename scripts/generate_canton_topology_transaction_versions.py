@@ -13,6 +13,7 @@ from canton_release_reference import (
     ReleaseAsset,
     ensure_release_archive,
     extract_release,
+    latest_patch_tags_by_release_line,
     resolve_release_asset,
     run_reference_script,
 )
@@ -63,6 +64,30 @@ def load_rows(payload: object) -> list[tuple[str, list[str]]]:
     return rows
 
 
+def load_page_rows(page: str) -> list[tuple[str, list[str]]]:
+    if TABLE_HEADER not in page:
+        return []
+    lines = page[page.index(TABLE_HEADER) :].splitlines()[2:]
+    rows: list[tuple[str, list[str]]] = []
+    for line in lines:
+        if not line.startswith("|"):
+            break
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 2 or not cells[0].isdigit() or not cells[1]:
+            raise ValueError(f"Existing topology-version row is invalid: {line!r}")
+        rows.append((cells[0], [value.strip() for value in cells[1].split(",")]))
+    return rows
+
+
+def merge_rows(
+    existing: list[tuple[str, list[str]]], current: list[tuple[str, list[str]]]
+) -> list[tuple[str, list[str]]]:
+    # Older releases drop protocol versions they no longer support; keep those rows.
+    merged = dict(existing)
+    merged.update(current)
+    return sorted(merged.items(), key=lambda row: int(row[0]))
+
+
 def render_table(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset) -> str:
     lines = [
         GENERATED_START,
@@ -106,7 +131,10 @@ def main() -> int:
         repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:]
     )
     args = parse_args()
-    asset = resolve_release_asset(release_repo=args.release_repo, tag=args.canton_tag)
+    tag = args.canton_tag or latest_patch_tags_by_release_line(
+        release_repo=args.release_repo, line_count=1
+    )[0]
+    asset = resolve_release_asset(release_repo=args.release_repo, tag=tag)
     if args.reference_json:
         payload = json.loads(args.reference_json.read_text(encoding="utf-8"))
     else:
@@ -128,13 +156,15 @@ def main() -> int:
             force_refresh=args.force_refresh,
         )
 
-    rows = load_rows(payload)
     page = args.output.read_text(encoding="utf-8")
+    current_rows = load_rows(payload)
+    rows = merge_rows(load_page_rows(page), current_rows)
     args.output.write_text(
         replace_table(page, render_table(rows, asset=asset)), encoding="utf-8"
     )
     print(
-        f"Generated {len(rows)} topology/protobuf mappings from {asset.tag} in {args.output}"
+        f"Generated {len(current_rows)} topology/protobuf mappings from {asset.tag} "
+        f"({len(rows)} total) in {args.output}"
     )
     return 0
 
