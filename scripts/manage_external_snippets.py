@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from scripts.generate_external_snippets import MANIFEST_SUFFIX, SnippetRepo, discover_repos
+from scripts.snippet_repos import MANIFEST_SUFFIX, SnippetRepo, discover_repos
 
 
 CF_DOCS_ROOT = Path(__file__).resolve().parents[1]
@@ -197,18 +197,27 @@ def same_source(entry: dict[str, Any], source: str, location: dict[str, Any]) ->
 
 
 def render_one_snippet(*, source_dir: Path, manifest: dict[str, Any], entry: dict[str, Any]) -> bytes:
+    return render_snippets(source_dir=source_dir, manifest=manifest, entries=[entry])[
+        entry["snippetName"]
+    ]
+
+
+def render_snippets(
+    *, source_dir: Path, manifest: dict[str, Any], entries: list[dict[str, Any]]
+) -> dict[str, bytes]:
+    """Render ``entries`` in one helper run and return each snippetName's MDX."""
     helper = helper_path()
     if not helper.is_file():
         raise SnippetAuthoringError(f"Snippet extraction helper does not exist: {helper}")
 
-    single_manifest = {key: value for key, value in manifest.items() if key != "snippets"}
-    single_manifest["snippets"] = [entry]
+    subset = {key: value for key, value in manifest.items() if key != "snippets"}
+    subset["snippets"] = entries
     with tempfile.TemporaryDirectory(prefix="cf-docs-snippet-") as temp_name:
         temp = Path(temp_name)
         config = temp / "exportConfig.json"
         output = temp / "output"
         config.write_text(
-            json.dumps(single_manifest, indent=2, ensure_ascii=False) + "\n",
+            json.dumps(subset, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
         result = subprocess.run(
@@ -225,12 +234,15 @@ def render_one_snippet(*, source_dir: Path, manifest: dict[str, Any], entry: dic
         if result.returncode != 0:
             details = (result.stderr or result.stdout).strip()
             raise SnippetAuthoringError(f"Snippet extraction failed:\n{details}")
-        generated = output / f"{entry['snippetName']}.mdx"
-        if not generated.is_file():
-            raise SnippetAuthoringError(
-                f"Snippet extraction did not create expected output: {generated}"
-            )
-        return generated.read_bytes()
+        rendered: dict[str, bytes] = {}
+        for entry in entries:
+            generated = output / f"{entry['snippetName']}.mdx"
+            if not generated.is_file():
+                raise SnippetAuthoringError(
+                    f"Snippet extraction did not create expected output: {generated}"
+                )
+            rendered[entry["snippetName"]] = generated.read_bytes()
+        return rendered
 
 
 _WS = re.compile(r"\s*")
@@ -489,6 +501,68 @@ def requested_selector(args: argparse.Namespace) -> dict[str, Any] | None:
     return None
 
 
+MISSING_SOURCES_SHOWN = 10
+
+
+def edit_all(args: argparse.Namespace, repo: SnippetRepo) -> int:
+    """Re-render every snippet in the repository's manifest from its recorded source.
+
+    The manifest is never changed; only generated MDX that differs is written.
+    """
+    if args.marker is not None or args.full_file or args.language:
+        raise SnippetAuthoringError(
+            "--marker, --full-file, and --language need a snippet name"
+        )
+    source_dir = validate_source_dir(args.source_dir)
+    manifest_file = manifest_path(repo)
+    manifest = load_manifest(manifest_file)
+    entries = manifest["snippets"]
+    if not entries:
+        print(f"{repo.name} has no snippets")
+        return 0
+
+    missing: list[str] = []
+    for entry in entries:
+        try:
+            validate_source_file(
+                source_dir, normalized_source_path(str(entry.get("sourceFilepath", "")))
+            )
+        except SnippetAuthoringError as error:
+            missing.append(f"{entry.get('snippetName')}: {error}")
+    if missing:
+        shown = "\n  ".join(missing[:MISSING_SOURCES_SHOWN])
+        more = len(missing) - MISSING_SOURCES_SHOWN
+        message = f"{len(missing)} of {len(entries)} snippet sources are unusable:\n  {shown}"
+        if more > 0:
+            message += f"\n  ... and {more} more"
+        if repo.prepare:
+            steps = "\n  ".join(repo.prepare)
+            message += f"\nSome {repo.name} sources are generated. In {source_dir}, run:\n  {steps}"
+        raise SnippetAuthoringError(message)
+
+    rendered = render_snippets(source_dir=source_dir, manifest=manifest, entries=entries)
+    changes = []
+    for name, content in rendered.items():
+        generated_file = output_path(repo, name)
+        if not generated_file.exists() or generated_file.read_bytes() != content:
+            changes.append(FileChange(f"Generated MDX diff ({name})", generated_file, content))
+
+    if not changes:
+        print(f"All {len(entries)} {repo.name} snippets are already up to date")
+        return 0
+    if args.dry_run:
+        print_change_preview(
+            action="edit", snippet_name=f"{len(changes)} {repo.name} snippets", changes=changes
+        )
+        return 0
+    commit_changes(changes)
+
+    print(f"Edited {len(changes)} of {len(entries)} {repo.name} snippets; import paths are unchanged")
+    for change in changes:
+        print(f"Wrote {change.path.relative_to(CF_DOCS_ROOT)}")
+    return 0
+
+
 def edit(args: argparse.Namespace, repo: SnippetRepo) -> int:
     """Re-render one snippet, optionally changing its source, selector, or language.
 
@@ -496,6 +570,8 @@ def edit(args: argparse.Namespace, repo: SnippetRepo) -> int:
     The snippet name, and therefore the page import path, never changes. Only the
     manifest entry and the generated MDX are written, and only when they differ.
     """
+    if args.snippet_name is None:
+        return edit_all(args, repo)
     moving = args.command == "move"
     source_dir = validate_source_dir(args.source_dir)
     manifest_file = manifest_path(repo)
@@ -674,7 +750,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
 
     for command, help_text in (
-        ("edit", "Re-render one snippet from its current source, keeping its name and import path"),
+        ("edit", "Re-render one snippet, or all of a repository's snippets, from current sources"),
         ("move", "Point one snippet at a new source path, keeping its name and import path"),
     ):
         update_parser = subparsers.add_parser(command, help=help_text)
@@ -682,7 +758,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "repo", metavar="repo", choices=repos,
             help=f"Source repository key: {', '.join(repos)}",
         )
-        update_parser.add_argument("snippet_name", help="Existing stable snippetName")
+        if command == "edit":
+            update_parser.add_argument(
+                "snippet_name", nargs="?",
+                help="Existing stable snippetName; omit to re-render every snippet in the repository",
+            )
+        else:
+            update_parser.add_argument("snippet_name", help="Existing stable snippetName")
         update_parser.add_argument(
             "--source-dir", type=Path, required=True,
             help="Local checkout of the source repository (required; never inferred)",
