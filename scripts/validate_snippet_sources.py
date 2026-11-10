@@ -15,7 +15,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from generate_external_snippets import MANIFEST_SUFFIX, REPOS, SnippetRepo, find_source_dir
+from snippet_repos import MANIFEST_SUFFIX, REPOS, SnippetRepo, find_source_dir
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

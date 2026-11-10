@@ -38,6 +38,18 @@ The snippet name and page imports stay unchanged. Use `--marker NAME` or
 `--full-file` to change the selection, and `--language LANG` to change the fence.
 For existing snippets, use the name recorded in the repository's manifest.
 
+To re-render every snippet from a repository, for example after an upstream
+release, omit the snippet name:
+
+```bash
+npm run snippets:edit -- canton --source-dir ../canton
+```
+
+Only generated MDX that changed is written; the manifest is left alone. If any
+source is missing, the command lists the missing files and writes nothing. Canton
+snippets read generated files, so first run
+`sbt "docs-open / reset" "docs-open / generateSphinxSnippets"` in the Canton checkout.
+
 ## Move a snippet's source
 
 Rename the source file, then update its mapping:

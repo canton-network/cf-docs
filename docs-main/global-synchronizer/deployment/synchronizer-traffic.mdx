@@ -117,7 +117,7 @@ Like all parts of the `AmuletRulesConfig`, the `SynchronizerFeesConfig` is set b
 
 </Tab>
 
-<Tab title="MainNet (0.9.3)">
+<Tab title="MainNet (0.9.4)">
 
 The current synchronizer traffic parameters are recorded on the global `AmuletRules` contract and can be obtained from Scan. You can obtain them via the Scan UI or by querying the Scan API using, for example, this command (requires installing [jq](https://jqlang.org/)):
 
@@ -179,6 +179,8 @@ A successful sequencing does not necessarily mean the transaction is fully accep
 1.  On-ledger `MemberTraffic` contracts ([Daml API docs](/sdks-tools/api-reference/splice-daml/splice-amulet/splice-decentralizedsynchronizer#type-splice-decentralizedsynchronizer-membertraffic-74049)) that track each validator's traffic state and are updated (atomically) whenever CC is spent for buying traffic. Most importantly, on-ledger `MemberTraffic` contracts track the total amount of extra traffic purchased for that validator.
 2.  In-sequencer traffic state that tracks both available and spent traffic. SVs update the in-sequencer traffic state based on the `MemberTraffic` state they observe on ledger, thereby ensuring that paid traffic fees are translated into actual traffic balance increases. Sequencers also update the in-sequencer traffic state themselves, whenever traffic is consumed (see [traffic accounting](#traffic-accounting-what-counts-as-traffic)).
 
+### Buying traffic with the validator app's top-up automation
+
 The validator app contains built-in top-up automation that automatically buys traffic to meet preconfigured throughput needs. Operators configure a target throughput (bytes per second) and a minimum top-up interval (seconds); the automation buys `target throughput × minimum top-up interval` bytes whenever both of the following conditions are met:
 
 - the extra traffic balance has fallen below that total top-up amount, and
@@ -188,7 +190,146 @@ The latter condition is a safeguard: it gives the operator a chance to intervene
 
 Additionally, to prevent top-up transactions from failing due to an already depleted traffic balance, the validator app will [abort ledger submissions if the balance has fallen below a predefined amount](/global-synchronizer/troubleshooting-guide/troubleshooting-methodology#traffic-balance-below-reserved-amount).
 
-For configuring the built-in top-up automation, please refer to the [Kubernetes validator deployment guide](/global-synchronizer/deployment/validator-kubernetes#configuring-automatic-traffic-purchases) or the corresponding [Docker-compose one](/global-synchronizer/deployment/validator-docker-compose#configuring-automatic-traffic-purchases). Configuring alternative methods for buying traffic, e.g., using third-party services, exceeds the scope of this documentation.
+For configuring the built-in top-up automation, please refer to the [Kubernetes validator deployment guide](/global-synchronizer/deployment/validator-kubernetes#configuring-automatic-traffic-purchases) or the corresponding [Docker-compose one](/global-synchronizer/deployment/validator-docker-compose#configuring-automatic-traffic-purchases).
+
+### Buying traffic with a token standard transfer
+
+Starting from `splice-amulet-0.1.25` (part of Splice 0.10.0), any party that holds CC can buy extra traffic for any synchronizer member with a token standard (V1 or V2) CC transfer.
+
+To buy traffic, create a CC transfer with these values:
+
+- **Receiver:** the traffic purchase party `splice_traffic-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`.
+- **Amount:** the total amount of CC that you want to spend on traffic.
+- **Memo:** the `splice.lfdecentralizedtrust.org/reason` metadata value, in this format:
+
+  ```text
+  splice/memo:member-id=<member>&synchronizer-id=<synchronizer>&migration-id=<int>
+  ```
+
+  - `member-id` (required): the ID of the synchronizer member that receives the traffic, for example `PAR::...`.
+  - `synchronizer-id` (required): the ID of the synchronizer.
+  - `migration-id` (required): the current migration ID of the synchronizer.
+  - `forfeit-validator-reward-coupon` (optional): `true` or `false`. The default is `false`. See [the execution window](#execution-window).
+
+  The memo must start with `splice/memo:` and contain the three required keys (in any order).
+
+The transfer completes immediately.
+It burns the full amount and records the purchased traffic for the specified member and migration.
+
+<Warning>
+  There is no protection against typos in `member-id` or an incorrect `migration-id`.
+  The transfer can succeed and burn the full CC amount without providing usable traffic to the intended member.
+  Double-check the member ID and the current migration ID before submitting.
+
+  If unsure, consider a test transfer that buys only `minTopupAmount` bytes, and verify that the intended member's traffic balance increases before making a larger purchase.
+</Warning>
+
+#### Determining traffic amount, synchronizer-id and migration-id
+
+<Tabs>
+
+<Tab title="DevNet (0.9.4)">
+
+To get the synchronizer ID and the parameters used to calculate the amount:
+
+```bash
+# synchronizer ID, extraTrafficPrice (USD/MB), minTopupAmount (bytes), and CC price (USD/CC)
+curl -s https://docs.dev.global.canton.network.sync.global/dso | jq '
+  .amulet_rules.contract.payload.configSchedule.initialValue.decentralizedSynchronizer as $sync | {
+    synchronizerId: $sync.activeSynchronizer,
+    extraTrafficPrice: $sync.fees.extraTrafficPrice,
+    minTopupAmount: $sync.fees.minTopupAmount,
+    amuletPrice: .latest_mining_round.contract.payload.amuletPrice
+  }'
+```
+
+To get the migration ID:
+
+```bash
+curl -s https://docs.dev.global.canton.network.sync.global/info | jq ".sv.migration_id"
+```
+
+</Tab>
+
+<Tab title="TestNet (0.9.4)">
+
+To get the synchronizer ID and the parameters used to calculate the amount:
+
+```bash
+# synchronizer ID, extraTrafficPrice (USD/MB), minTopupAmount (bytes), and CC price (USD/CC)
+curl -s https://docs.test.global.canton.network.sync.global/dso | jq '
+  .amulet_rules.contract.payload.configSchedule.initialValue.decentralizedSynchronizer as $sync | {
+    synchronizerId: $sync.activeSynchronizer,
+    extraTrafficPrice: $sync.fees.extraTrafficPrice,
+    minTopupAmount: $sync.fees.minTopupAmount,
+    amuletPrice: .latest_mining_round.contract.payload.amuletPrice
+  }'
+```
+
+To get the migration ID:
+
+```bash
+curl -s https://docs.test.global.canton.network.sync.global/info | jq ".sv.migration_id"
+```
+
+</Tab>
+
+<Tab title="MainNet (0.9.4)">
+
+To get the synchronizer ID and the parameters used to calculate the amount:
+
+```bash
+# synchronizer ID, extraTrafficPrice (USD/MB), minTopupAmount (bytes), and CC price (USD/CC)
+curl -s https://docs.global.canton.network.sync.global/dso | jq '
+  .amulet_rules.contract.payload.configSchedule.initialValue.decentralizedSynchronizer as $sync | {
+    synchronizerId: $sync.activeSynchronizer,
+    extraTrafficPrice: $sync.fees.extraTrafficPrice,
+    minTopupAmount: $sync.fees.minTopupAmount,
+    amuletPrice: .latest_mining_round.contract.payload.amuletPrice
+  }'
+```
+
+To get the migration ID:
+
+```bash
+curl -s https://docs.global.canton.network.sync.global/info | jq ".sv.migration_id"
+```
+
+</Tab>
+
+</Tabs>
+
+The CC amount to spend for a number of bytes is:
+
+```text
+CC amount = bytes × extraTrafficPrice / 1,000,000 / CC price
+```
+
+The purchased traffic in bytes is rounded down:
+
+```text
+bytes = floor(CC amount × CC price × 1,000,000 / extraTrafficPrice)
+```
+
+The purchased traffic must be at least `minTopupAmount` bytes. For example, at a CC price of 0.15 USD and an `extraTrafficPrice` of 60 USD/MB, a transfer of 100 CC buys 250,000 bytes.
+Note that the CC price (`amuletPrice`) can change from round to round, so the purchased traffic can differ slightly from the calculated amount.
+
+The transfer fails, and burns no CC, if:
+
+- the memo has an incorrect format,
+- the synchronizer is not a synchronizer on which traffic can be bought (error code: `splice.lfdecentralizedtrust.org/unknown-synchronizer`), or
+- the purchased traffic is less than `minTopupAmount` (error code: `splice.lfdecentralizedtrust.org/insufficient-topup-amount`). Use an amount that buys at least `minTopupAmount` bytes.
+
+The `splice.lfdecentralizedtrust.org/reason` metadata of the transfer result and of the burn shows the purchased traffic, for example:
+
+```text
+splice/memo:purchased-traffic-bytes=250000&member-id=PAR::...&synchronizer-id=...&migration-id=0
+```
+
+
+#### Execution window
+
+By default, the purchase creates a validator reward coupon for the validator that hosts the sending party. The coupon depends on the current round, so the transfer must be executed within about 10 minutes after it is prepared. If you sign the transaction long before it is executed (up to 24h before), add `&forfeit-validator-reward-coupon=true` to the memo to skip the reward coupon.
 
 ## Wasted traffic
 
@@ -211,3 +352,29 @@ SV operators are encouraged to monitor wasted traffic across all synchronizer me
 Note that wasted traffic is less relevant for SVs themselves, as SV components have unlimited traffic. Note also that SV mediators and sequencers waste traffic as part of their regular operation: They heavily use aggregate submissions where sequencers collect messages from a group of senders and only deliver a single message per recipient once a threshold of individual submissions has been sequenced; sequenced individual submissions beyond the aggregation threshold count as wasted traffic. All that said, should an SV component suddenly exhibit a significant increase in wasted traffic, this likely points to an actual issue that should be investigated.
 
 {/* COPIED_END */}
+
+## Calculating traffic cost
+
+The parameters above combine into formulas for the questions operators ask most often.
+
+**Remaining base rate (free) traffic at time `t`**, given the balance `last_balance` at the last submission time `last_time`:
+
+```
+available_base_rate(t) = min(
+  burstAmount,
+  last_balance + burstAmount * (t - last_time) / burstWindow
+)
+```
+
+This directly follows from the accrual rule above: the balance grows linearly and caps at `burstAmount` once a full `burstWindow` of inactivity has elapsed.
+
+**Cost of purchasing `N` bytes of extra traffic:**
+
+```
+cost_USD = (N / 1,000,000) * extraTrafficPrice
+cost_CC  = cost_USD / amuletPrice
+```
+
+`amuletPrice` is the USD-per-CC conversion rate recorded on the current `OpenMiningRound` contract (see the `extraTrafficPrice` query above); CC is always charged as `usd_amount / amuletPrice`, per the Daml implementation in `AmuletRules.daml`. `N` must be at least `minTopupAmount`. The validator's top-up automation always buys at least `minTopupAmount`; if `targetThroughput × minTopupInterval` is smaller, it buys `minTopupAmount` and spaces top-ups further apart.
+
+**Worked example**, using the DevNet values above (`burstAmount` = 400,000 bytes, `burstWindow` = 1,200,000,000 microseconds = 20 minutes, `extraTrafficPrice` = 60 USD/MB, `minTopupAmount` = 200,000 bytes): buying the minimum top-up of 200,000 bytes (0.2 MB) costs `0.2 * 60 = 12` USD, converted to CC at the round's `amuletPrice` using the formula above.
