@@ -33,12 +33,13 @@ jobs:
         with:
           python-version: "3.14"
 
-      # Scheduled runs stay dry until the FOLLOWUPS_APPLY repository variable is
-      # set to "true", so the policy can be observed in logs before it acts.
+      # Scheduled runs write to GitHub and Slack. Set the FOLLOWUPS_DRY_RUN
+      # repository variable to "true" to pause them without a code change.
+      # Manual runs write only when the apply input is checked.
       - name: Manage follow-ups
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLY: ${{ inputs.apply || vars.FOLLOWUPS_APPLY == 'true' }}
+          APPLY: ${{ (github.event_name == 'schedule' && vars.FOLLOWUPS_DRY_RUN != 'true') || inputs.apply }}
         run: |
           args=(--repo "$GITHUB_REPOSITORY")
           if [ "$APPLY" = "true" ]; then

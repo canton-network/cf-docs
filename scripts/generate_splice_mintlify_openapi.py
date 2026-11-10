@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import re
 import shutil
 import sys
 import tarfile
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -55,6 +57,14 @@ SCAN_OPENAPI_PUBLIC_SERVER = (
     "https://scan.sv-1.global.canton.network.sync.global/api/scan"
 )
 SCAN_OPENAPI_SERVER_REPLACEMENT_SPECS = {"scan.yaml", "scan-stream-server.yaml"}
+DERIVED_SPEC_TITLE_SUFFIX = " (validator scan proxy)"
+DERIVED_SPEC_NOTE = (
+    "This specification is derived by the documentation build from `{base}`. "
+    "The validator app also serves every operation in it behind its scan proxy, "
+    "under the path prefix `{mount}`, and routes each request through the same "
+    "BFT Scan connection as the other scan-proxy endpoints. The upstream OpenAPI "
+    "source does not describe this mounting."
+)
 UNPUBLISHED_SECURITY_SCHEME_LINK_RE = re.compile(
     r"as described in \[spliceAppBearerAuth\]\(\"?(?:\.\./)+common/src/main/openapi/"
     r"common-external\.yaml#/components/securitySchemes/spliceAppBearerAuth\"?\)"
@@ -287,10 +297,159 @@ def normalized_families(source_config: dict[str, Any]) -> list[dict[str, Any]]:
                     "nav_label": nav_label,
                     "source": source_ref,
                     "directory": directory,
+                    "derived_from": normalized_derivation(
+                        spec.get("derived_from"), filename=filename
+                    ),
                 }
             )
         normalized.append({"group": group, "specs": normalized_specs})
+    validate_derivations(normalized)
     return normalized
+
+
+def normalized_derivation(
+    derivation: Any, *, filename: str
+) -> dict[str, str] | None:
+    if derivation is None:
+        return None
+    if not isinstance(derivation, dict):
+        raise ValueError(f"derived_from for '{filename}' must be an object")
+    base = derivation.get("filename")
+    path_prefix = derivation.get("path_prefix")
+    server_url = derivation.get("server_url")
+    if not all(
+        isinstance(item, str) and item for item in (base, path_prefix, server_url)
+    ):
+        raise ValueError(
+            f"derived_from for '{filename}' must define non-empty filename, path_prefix, and server_url"
+        )
+    if base == filename:
+        raise ValueError(f"Spec '{filename}' cannot be derived from itself")
+    if not path_prefix.startswith("/") or path_prefix.endswith("/"):
+        raise ValueError(
+            f"derived_from.path_prefix for '{filename}' must start with '/' and not end with '/'"
+        )
+    return {"filename": base, "path_prefix": path_prefix, "server_url": server_url}
+
+
+def validate_derivations(families: list[dict[str, Any]]) -> None:
+    specs = {spec["filename"]: spec for family in families for spec in family["specs"]}
+    for filename, spec in specs.items():
+        derivation = spec.get("derived_from")
+        if derivation is None:
+            continue
+        base = specs.get(derivation["filename"])
+        if base is None:
+            raise ValueError(
+                f"Spec '{filename}' is derived from '{derivation['filename']}', which is not a configured spec"
+            )
+        if base.get("derived_from") is not None:
+            raise ValueError(
+                f"Spec '{filename}' cannot be derived from '{derivation['filename']}', which is itself derived"
+            )
+
+
+def derived_spec_configs(families: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
+        spec["filename"]: spec
+        for family in families
+        for spec in family["specs"]
+        if spec.get("derived_from") is not None
+    }
+
+
+def derive_spec_payload(
+    *, base_spec: dict[str, Any], spec_config: dict[str, Any]
+) -> dict[str, Any]:
+    """Build a derived OpenAPI document that re-mounts every base path under a prefix."""
+    derivation = spec_config["derived_from"]
+    prefix = derivation["path_prefix"]
+    server_url = derivation["server_url"]
+    base_paths = base_spec.get("paths")
+    if not isinstance(base_paths, dict):
+        raise ValueError(
+            f"Base spec {derivation['filename']} for {spec_config['filename']} must define paths"
+        )
+
+    info = copy.deepcopy(base_spec.get("info"))
+    if not isinstance(info, dict):
+        info = {}
+    title = info.get("title")
+    info["title"] = (
+        f"{title}{DERIVED_SPEC_TITLE_SUFFIX}"
+        if isinstance(title, str) and title.strip()
+        else spec_config["nav_label"]
+    )
+    note = DERIVED_SPEC_NOTE.format(
+        base=derivation["filename"],
+        mount=urllib.parse.urlsplit(server_url).path.rstrip("/") + prefix,
+    )
+    description = info.get("description")
+    info["description"] = (
+        f"{description.rstrip()}\n\n{note}"
+        if isinstance(description, str) and description.strip()
+        else note
+    )
+
+    derived: dict[str, Any] = {}
+    for key, value in base_spec.items():
+        if key == "info":
+            derived["info"] = info
+            derived["servers"] = [{"url": server_url}]
+        elif key == "servers":
+            continue
+        elif key == "paths":
+            derived["paths"] = {
+                f"{prefix}{path}": copy.deepcopy(item)
+                for path, item in base_paths.items()
+            }
+        else:
+            derived[key] = copy.deepcopy(value)
+    if "info" not in derived:
+        derived = {"info": info, "servers": [{"url": server_url}], **derived}
+    return derived
+
+
+class _BlockScalarDumper(yaml.SafeDumper):
+    """Emit multi-line strings as block literals so derived specs stay readable."""
+
+
+def _represent_str(dumper: yaml.SafeDumper, value: str) -> yaml.ScalarNode:
+    style = "|" if "\n" in value else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
+
+
+_BlockScalarDumper.add_representer(str, _represent_str)
+
+
+def dump_openapi_yaml(payload: dict[str, Any]) -> bytes:
+    return yaml.dump(
+        payload,
+        Dumper=_BlockScalarDumper,
+        sort_keys=False,
+        allow_unicode=True,
+        width=100,
+    ).encode("utf-8")
+
+
+def derived_spec_bytes(
+    *, derived_specs: dict[str, dict[str, Any]], spec_bytes: dict[str, bytes]
+) -> dict[str, bytes]:
+    derived: dict[str, bytes] = {}
+    for filename, spec_config in sorted(derived_specs.items()):
+        base_filename = spec_config["derived_from"]["filename"]
+        normalized = render_output_bytes(
+            spec_filename=base_filename,
+            spec_bytes=spec_bytes[base_filename],
+            output_path=Path(base_filename),
+        )
+        base_spec = yaml.safe_load(normalized.decode("utf-8"))
+        if not isinstance(base_spec, dict):
+            raise ValueError(f"Expected {base_filename} to parse as an object")
+        derived[filename] = dump_openapi_yaml(
+            derive_spec_payload(base_spec=base_spec, spec_config=spec_config)
+        )
+    return derived
 
 
 def extract_spec_bytes(
@@ -516,7 +675,19 @@ def materialize_release_specs(
     release: dict[str, str],
     spec_filenames: set[str],
     force_refresh: bool,
+    derived_specs: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    requested_derived = {
+        filename: spec_config
+        for filename, spec_config in (derived_specs or {}).items()
+        if filename in spec_filenames
+    }
+    archive_filenames = {
+        filename for filename in spec_filenames if filename not in requested_derived
+    } | {
+        spec_config["derived_from"]["filename"]
+        for spec_config in requested_derived.values()
+    }
     archive = ensure_archive(
         cache_dir=cache_dir,
         release=release,
@@ -524,7 +695,7 @@ def materialize_release_specs(
     )
     extracted = extract_available_spec_bytes(
         archive=archive,
-        spec_filenames=spec_filenames,
+        spec_filenames=archive_filenames,
     )
     fixture_dir = cache_dir / "fixtures" / release["version"]
     if fixture_dir.exists():
@@ -546,7 +717,18 @@ def materialize_release_specs(
                 f"Expected {filename} from Splice {release['version']} to parse as an object"
             )
         parsed[filename] = payload
-    return parsed
+    for filename, spec_config in sorted(requested_derived.items()):
+        base_spec = parsed.get(spec_config["derived_from"]["filename"])
+        if base_spec is None:
+            continue
+        payload = derive_spec_payload(base_spec=base_spec, spec_config=spec_config)
+        (fixture_dir / filename).write_bytes(dump_openapi_yaml(payload))
+        parsed[filename] = payload
+    return {
+        filename: payload
+        for filename, payload in parsed.items()
+        if filename in spec_filenames
+    }
 
 
 def versioned_enabled_specs(
@@ -555,6 +737,7 @@ def versioned_enabled_specs(
     releases: list[dict[str, str]],
     spec_filenames: set[str],
     force_refresh: bool,
+    derived_specs: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, dict[str, Any]]]:
     snapshots: dict[str, dict[str, dict[str, Any]]] = {
         filename: {} for filename in spec_filenames
@@ -565,6 +748,7 @@ def versioned_enabled_specs(
             release=release,
             spec_filenames=spec_filenames,
             force_refresh=force_refresh,
+            derived_specs=derived_specs,
         )
         for filename, payload in release_specs.items():
             snapshots[filename][release["version"]] = payload
@@ -776,6 +960,11 @@ def build_splice_history_report(
         if isinstance(item, dict)
         and isinstance(item.get("filename"), str)
         and isinstance(item.get("reason"), str)
+    ) + tuple(
+        f"{filename} is derived from {spec_config['derived_from']['filename']} by "
+        f"prefixing every path with {spec_config['derived_from']['path_prefix']}; "
+        "the validator scan-proxy mounting is not described by an upstream OpenAPI document."
+        for filename, spec_config in sorted(derived_spec_configs(families).items())
     )
     return build_openapi_history_report(
         surface_id="splice-openapi",
@@ -1130,10 +1319,17 @@ def main() -> int:
         families=families,
         enabled_specs=enabled_specs,
     )
+    derived_specs = derived_spec_configs(families)
     spec_filenames = {
-        spec["filename"] for family in families for spec in family["specs"]
+        spec["filename"]
+        for family in families
+        for spec in family["specs"]
+        if spec["filename"] not in derived_specs
     }
     spec_bytes = extract_spec_bytes(archive=archive, spec_filenames=spec_filenames)
+    spec_bytes.update(
+        derived_spec_bytes(derived_specs=derived_specs, spec_bytes=spec_bytes)
+    )
 
     docs_json_path = Path(args.docs_json).resolve()
     docs_root = docs_json_path.parent
@@ -1151,6 +1347,7 @@ def main() -> int:
         releases=comparison_releases,
         spec_filenames=enabled_filenames,
         force_refresh=args.force_refresh,
+        derived_specs=derived_specs,
     )
     for family in navigation_families:
         for spec in family["specs"]:

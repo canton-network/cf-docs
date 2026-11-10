@@ -76,9 +76,14 @@ for a specific party and round. They differ from
 `Splice.Amulet.RewardCouponV2` coupons can be minted in two ways:
 
 1. **Automated minting** via the Splice Wallet backend that is part of the
-   validator app. This works for onboarded internal parties and for external
-   parties with an active
-   [minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting).
+   validator app. For onboarded internal parties, the
+   `CollectRewardsAndMergeAmuletsTrigger` polls for eligible coupons and
+   submits the consuming transfer. For external parties with an active
+   [minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting),
+   `MintingDelegationCollectRewardsTrigger` does the same, acting as the
+   delegate on the external party's behalf. To confirm a coupon was minted, check
+   the party's transaction history, where it is counted as app rewards. See
+   [Wallet Automation](/overview/reference/splice-wallet-reference#wallet-automation).
 
 2. **Direct minting** by constructing calls to `AmuletRules_Transfer` that
    use the coupon as a transfer input. These calls can be made directly
@@ -106,6 +111,31 @@ The reward computation is split across two components on each SV node:
    The `ProcessRewardsTrigger` then expands the tree by reading batches from
    Scan, creating `Splice.Amulet.RewardCouponV2` contracts for each eligible
    party at the leaf nodes.
+
+## Reward computation formula
+
+Scan computes each party's app reward for a round as follows (see
+[CIP-0104](https://github.com/canton-foundation/cips/blob/main/cip-0104/cip-0104.md#app-reward-computation)):
+specifies the exact computation Scan performs each round:
+
+```
+total_featured_app_burn_CC = (total_featured_app_traffic / 1,000,000) * traffic_price_in_CC_per_MB
+
+per_app_minting_allowance0 =
+  (total_app_traffic / 1,000,000) * traffic_price_in_CC_per_MB * issuance_per_featured_app_weight
+
+per_app_minting_allowance =
+  if per_app_minting_allowance0 >= app_reward_coupon_threshold_CC
+    then per_app_minting_allowance0
+    else 0
+```
+
+- `total_app_traffic` is the sum of a party's activity record weights for the round (in bytes) -- see [Splitting Total User Burn](https://github.com/canton-foundation/cips/blob/main/cip-0104/cip-0104.md#splitting-total-user-burn) for how traffic is attributed across apps when multiple app confirmers share a confirmation request.
+- `traffic_price_in_CC_per_MB` is `extraTrafficPrice` (see [Synchronizer Traffic](/global-synchronizer/deployment/synchronizer-traffic#calculating-traffic-cost)) converted to CC at the round's `amuletPrice`.
+- `issuance_per_featured_app_weight` is the CC minted per CC of featured app burn in the round: the round's app reward tranche divided by `total_featured_app_burn_CC`, capped at `featuredAppRewardCap` (see [Issuance Curve and Minting Schedule](/overview/reference/tokenomics-of-gs#issuance-curve-and-minting-schedule)).
+- `app_reward_coupon_threshold_CC` is `appRewardCouponThreshold` (from [RewardConfig](#rewardconfig) below) converted to CC at the round's conversion rate. A party whose allowance falls below it gets no coupon for that round; the reward is burned, not carried forward.
+
+A party's `activityWeight` on its `FeaturedAppRight` (default `1.0`) multiplies its share of `total_app_traffic` before this computation, so featured apps with a higher weight earn proportionally more per byte of traffic their users burn.
 
 ## Activation
 

@@ -88,9 +88,10 @@ def javadocio_symbol_url(group: str, artifact: str, version: str, doc_path: str)
 
 def deprecated_refs_from_java_html(text: str) -> dict[str, str]:
     refs: dict[str, str] = {}
+    # Javadoc 17 wraps the note in `deprecation-comment`; Javadoc 25 uses `block`.
     row_pattern = re.compile(
         r'<div class="col-summary-item-name[^"]*">\s*<a href="([^"]+)".*?</a>\s*</div>\s*'
-        r'<div class="col-last[^"]*">\s*(?:<div class="deprecation-comment">(.*?)</div>)?',
+        r'<div class="col-last[^"]*">\s*(?:<div class="(?:deprecation-comment|block)">(.*?)</div>)?',
         flags=re.S,
     )
     for href, comment_html in row_pattern.findall(text):

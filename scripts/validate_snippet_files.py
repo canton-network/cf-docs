@@ -19,9 +19,6 @@ IMPORT_RE = re.compile(
     r"from\s+[\"'](?P<path>[^\"']+)[\"']\s*;?\s*$",
     re.MULTILINE,
 )
-NETWORKVARS_SOURCE_RE = re.compile(
-    r"\{/\*\s*NETWORKVARS_START\s+source=\"(?P<source>[^\"]+)\"\s*\*/\}"
-)
 
 MISSING_LOG_NAME = "snippets-missing.log"
 ORPHAN_LOG_NAME = "snippets-orphan.log"
@@ -103,11 +100,6 @@ def snippet_refs_in_text(text: str) -> list[str]:
     seen: set[str] = set()
     for match in IMPORT_RE.finditer(text):
         ref = normalize_snippet_ref(match.group("path"))
-        if ref and ref not in seen:
-            seen.add(ref)
-            refs.append(ref)
-    for match in NETWORKVARS_SOURCE_RE.findall(text):
-        ref = normalize_snippet_ref(match)
         if ref and ref not in seen:
             seen.add(ref)
             refs.append(ref)

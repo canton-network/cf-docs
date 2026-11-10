@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import ssl
@@ -84,7 +85,15 @@ def request_json(
                 delay=delay,
             )
             time.sleep(delay)
-        except (urllib.error.URLError, TimeoutError, ssl.SSLError) as error:
+        # http.client errors such as RemoteDisconnected escape urlopen unwrapped
+        # when GitHub drops a connection; treat them like other network errors.
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            ssl.SSLError,
+            ConnectionError,
+            http.client.HTTPException,
+        ) as error:
             detail = str(error)
             if attempt == attempts:
                 raise RuntimeError(

@@ -5,8 +5,6 @@ description: "Connect a PQS instance to a Canton ledger and a PostgreSQL databas
 
 {/* COPIED_START source="docs-website:docs/replicated/pqs/3.5/tutorials/app-dev/pqs/index.rst" hash="795a8880" */}
 
-{/* DIVERGENCE: the source's body h1, copyright comment, and upstream vale linter directives are dropped (the frontmatter title is the page h1). Sphinx cross-references resolved to cf-docs pages: the "Canton and the JSON Ledger API" tutorial -> /appdev/modules/m4-json-api-tutorial; the SQL API reference -> /appdev/reference/pqs-sql-reference; the scribe.jar download instructions -> /sdks-tools/development-tools/pqs#install-and-download; "how to query contracts and transactions using SQL" -> /appdev/modules/m4-query-with-pqs. Upstream source (hash 795a8880) still uses Sphinx cross-references. */}
-
 This tutorial demonstrates how to query contracts and transactions using SQL in the Participant Query Store (PQS).
 
 ## Overview
@@ -31,7 +29,7 @@ Before running this tutorial, ensure you meet the following prerequisites:
 
 - `Java 17` or later - installation instructions: https://docs.oracle.com/en/java/javase/17/install/overview-jdk-installation.html
 
-- `scribe.jar` - download instructions: [Install and download](/sdks-tools/development-tools/pqs#install-and-download)
+- `pqs.jar` - download instructions: [Install and download](/sdks-tools/development-tools/pqs#install-and-download)
 
 ## Existing canton
 
@@ -55,20 +53,22 @@ Now we can start the PQS instance. The following command will run PQS, connectin
 we just started:
 
 ```bash
-./scribe.jar pipeline ledger postgres-document \
+./pqs.jar pipeline ledger postgres-document \
      --pipeline-ledger-start Oldest \
      --source-ledger-host localhost \
      --source-ledger-port 6865 \
      --target-postgres-host localhost \
      --target-postgres-port 5432 \
-     --target-postgres-database postgres
+     --target-postgres-database postgres \
+     --target-postgres-username postgres \
+     --target-postgres-password postgres
 ```
 
 We should observe similar lines in the logs output if all goes well:
 
 ```text
-14:07:44.206 I [zio-fiber-1449251953] com.digitalasset.zio.daml.ledgerapi.UpdateService:176 Converting transaction 12209d1ef62499b808f9f4f346d562087017eda89e2d09e3b38fa1a721706cd18bf4 (offset: 20, events: 1, remote trace: 9642bc089b80e5bd933acedbae8bbae9)  trace_id=00000000000000000000000000000000 correlation_id=9642bc089b80e5bd933acedbae8bbae9 application=scribe
-14:07:44.389 I [zio-fiber-120135998] com.digitalasset.scribe.postgres.document.DocumentPostgres.Service:370 Advanced watermark: ix = 1, offset = 20  trace_id=00000000000000000000000000000000 application=scribe
+14:07:44.206 I [zio-fiber-1449251953] com.digitalasset.zio.daml.ledgerapi.UpdateService:176 Converting transaction 12209d1ef62499b808f9f4f346d562087017eda89e2d09e3b38fa1a721706cd18bf4 (offset: 20, events: 1, remote trace: 9642bc089b80e5bd933acedbae8bbae9)  trace_id=00000000000000000000000000000000 correlation_id=9642bc089b80e5bd933acedbae8bbae9 application=pqs
+14:07:44.389 I [zio-fiber-120135998] com.digitalasset.pqs.postgres.document.DocumentPostgres.Service:370 Advanced watermark: ix = 1, offset = 20  trace_id=00000000000000000000000000000000 application=pqs
 ```
 
 This indicates that the PQS instance is successfully connected to the ledger and the database.

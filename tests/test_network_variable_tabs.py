@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -78,7 +81,14 @@ export const networkData = {
     assert loaded["mainnet"]["substitutions"]["chart_version_set"] == "export CHART_VERSION=0.6.12"
 
 
-def test_render_generated_block_inlines_imported_snippets_and_substitutes_tokens(tmp_path: Path) -> None:
+def write_template(docs_main: Path, relative: str, text: str) -> Path:
+    path = docs_main / "src" / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_render_network_tabs_inlines_imported_snippets_and_substitutes_tokens(tmp_path: Path) -> None:
     module = load_script_module()
     docs_main = tmp_path / "docs-main"
     imported = docs_main / "snippets" / "external" / "sample.mdx"
@@ -106,15 +116,12 @@ DevNet only: |gsf_scan_url|
 
 <ExternalSample />
 """
+    imports, body = module.split_source_imports(source, docs_main)
 
-    generated = module.render_generated_block(
-        "/snippets/networkvars/example.mdx",
-        source,
-        sample_network_data(),
-        docs_main,
-    )
+    generated = module.render_network_tabs(body, imports, sample_network_data(), docs_main)
 
-    assert '<Tabs>' in generated
+    assert generated.startswith("<Tabs>")
+    assert generated.endswith("</Tabs>")
     assert '<Tab title="DevNet (0.6.4)">' in generated
     assert '<Tab title="TestNet (0.6.3)">' in generated
     assert "https://scan.dev.example/api/scan/v0/dso-sequencers" in generated
@@ -129,49 +136,117 @@ DevNet only: |gsf_scan_url|
     assert "|gsf_scan_url|" not in generated
 
 
-def test_marked_page_update_is_idempotent(tmp_path: Path) -> None:
+def test_template_renders_whole_page_and_is_idempotent(tmp_path: Path) -> None:
     module = load_script_module()
     docs_main = tmp_path / "docs-main"
-    source = docs_main / "snippets" / "networkvars" / "example.mdx"
-    source.parent.mkdir(parents=True)
-    source.write_text("Scan URL: |gsf_scan_url|\n", encoding="utf-8")
-    page = docs_main / "example.mdx"
-    page.write_text(
+    block_snippet = docs_main / "snippets" / "external" / "block.mdx"
+    block_snippet.parent.mkdir(parents=True)
+    block_snippet.write_text("Block snippet for |gsf_scan_url|\n", encoding="utf-8")
+    (docs_main / "snippets" / "existing.mdx").write_text("Existing\n", encoding="utf-8")
+    source = write_template(
+        docs_main,
+        "guide/example.mdx",
         """---
 title: Example
+hidden: true
 ---
 
-{/* NETWORKVARS_START source="/snippets/networkvars/example.mdx" */}
-stale
-{/* NETWORKVARS_END */}
+import Existing from "/snippets/existing.mdx";
+
+import BlockSnippet from "/snippets/external/block.mdx";
+
+Editor prose before.
+
+<Existing />
+
+<Tabs>
+  <Tab title="All networks">
+    Scan URL: |gsf_scan_url|
+
+    ```bash
+    curl |gsf_scan_url|/api
+    ```
+
+    <BlockSnippet />
+  </Tab>
+</Tabs>
+
+<Tabs>
+<Tab title="Ordinary tab">
+Kept as written: |gsf_scan_url|
+</Tab>
+</Tabs>
+
+Editor prose after.
 """,
-        encoding="utf-8",
     )
+    output = docs_main / "guide" / "example.mdx"
 
-    prefix = 'import Existing from "/snippets/existing.mdx";\n\n\nEditor prose before.\n\n'
-    suffix = '\n\n\nEditor prose after.\n'
-    page.write_text(prefix + page.read_text() + suffix, encoding="utf-8")
-    before = page.read_bytes()
-    assert module.update_page(page, sample_network_data(), docs_main, check=True)
-    assert page.read_bytes() == before
-    assert module.update_page(page, sample_network_data(), docs_main)
-    first = page.read_text(encoding="utf-8")
-    assert "Scan URL: https://scan.dev.example" in first
-    assert "stale" not in first
-    assert first.startswith(prefix)
-    assert first.endswith(suffix)
-    assert not module.update_page(page, sample_network_data(), docs_main)
-    assert page.read_text(encoding="utf-8") == first
+    assert module.update_page(source, sample_network_data(), docs_main, check=True)
+    assert not output.exists()
+    assert module.update_page(source, sample_network_data(), docs_main)
+    rendered = output.read_text(encoding="utf-8")
+    assert rendered.startswith(
+        "---\ntitle: Example\n---\n"
+        "{/* Generated from /src/guide/example.mdx by `npm run generate:network-variable-tabs`. "
+        "Edit that file, not this one. */}\n\n"
+        'import Existing from "/snippets/existing.mdx";\n\nEditor prose before.'
+    )
+    assert "hidden: true" not in rendered
+    assert 'title="All networks"' not in rendered
+    assert "```bash\ncurl https://scan.dev.example/api\n```" in rendered
+    assert '<Tab title="Ordinary tab">\nKept as written: |gsf_scan_url|\n</Tab>' in rendered
+    assert "BlockSnippet" not in rendered
+    assert "Scan URL: https://scan.dev.example" in rendered
+    assert "Block snippet for https://scan.test.example" in rendered
+    assert rendered.endswith("</Tabs>\n\nEditor prose after.\n")
+    assert not module.update_page(source, sample_network_data(), docs_main)
+    assert output.read_text(encoding="utf-8") == rendered
 
 
-def test_validate_script_detects_dirty_stale_output_without_writing(tmp_path: Path) -> None:
+def test_template_must_be_hidden(tmp_path: Path) -> None:
+    module = load_script_module()
+    docs_main = tmp_path / "docs-main"
+    source = write_template(docs_main, "visible.mdx", "---\ntitle: Visible\n---\n\nBody\n")
+
+    with pytest.raises(ValueError, match="hidden: true"):
+        module.render_page(source, sample_network_data(), docs_main)
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        '<Tabs>\n<Tab title="All networks">\nShared |gsf_scan_url|\n</Tab>\n<Tab title="DevNet">\nExtra\n</Tab>\n</Tabs>',
+        '<Tabs>\n<Tab title="DevNet">\nExtra\n</Tab>\n<Tab title="All networks">\nShared |gsf_scan_url|\n</Tab>\n</Tabs>',
+    ],
+)
+def test_all_networks_tab_must_be_the_only_tab(tmp_path: Path, block: str) -> None:
+    module = load_script_module()
+    docs_main = tmp_path / "docs-main"
+    source = write_template(docs_main, "extra-tab.mdx", f"---\ntitle: Extra\nhidden: true\n---\n\n{block}\n")
+
+    with pytest.raises(ValueError, match="only tab"):
+        module.render_page(source, sample_network_data(), docs_main)
+
+
+def test_generated_page_without_template_is_orphaned(tmp_path: Path) -> None:
+    module = load_script_module()
+    docs_main = tmp_path / "docs-main"
+    write_template(docs_main, "kept.mdx", "---\ntitle: Kept\nhidden: true\n---\n\nBody\n")
+    for name in ("kept", "orphan"):
+        (docs_main / f"{name}.mdx").write_text(
+            f"---\ntitle: {name}\n---\n{module.generated_notice(f'/src/{name}.mdx')}\n\nBody\n",
+            encoding="utf-8",
+        )
+
+    assert module.orphaned_outputs(docs_main) == [docs_main / "orphan.mdx"]
+
+
+def test_validate_script_detects_hand_edited_output_without_writing(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     docs_main = repo / "docs-main"
-    source = docs_main / "snippets" / "networkvars" / "example.mdx"
     network_data = docs_main / "snippets" / "generated" / "version-dashboard-data.mdx"
-    source.parent.mkdir(parents=True)
     network_data.parent.mkdir(parents=True)
-    source.write_text("Scan URL: |gsf_scan_url|\n", encoding="utf-8")
     network_data.write_text(
         """export const networkData = {
   devnet: {
@@ -183,13 +258,10 @@ def test_validate_script_detects_dirty_stale_output_without_writing(tmp_path: Pa
 """,
         encoding="utf-8",
     )
-    page = docs_main / "example.mdx"
-    page.write_text(
-        """{/* NETWORKVARS_START source="/snippets/networkvars/example.mdx" */}
-stale
-{/* NETWORKVARS_END */}
-""",
-        encoding="utf-8",
+    write_template(
+        docs_main,
+        "example.mdx",
+        "---\ntitle: Example\nhidden: true\n---\n\n<Tabs>\n<Tab title=\"All networks\">\nScan URL: |gsf_scan_url|\n</Tab>\n</Tabs>\n",
     )
     script_dir = repo / "scripts"
     script_dir.mkdir()
@@ -197,31 +269,6 @@ stale
     validator = REPO_ROOT / "scripts" / "validate_network_variable_tabs.py"
     (script_dir / generator.name).write_text(generator.read_text(encoding="utf-8"), encoding="utf-8")
     (script_dir / validator.name).write_text(validator.read_text(encoding="utf-8"), encoding="utf-8")
-
-    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
-    subprocess.run(
-        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "initial"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-    page.write_text(page.read_text() + "\nUncommitted editor prose.\n", encoding="utf-8")
-    before = page.read_bytes()
-    stale = subprocess.run(
-        ["python3", "scripts/validate_network_variable_tabs.py"],
-        cwd=repo,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    assert stale.returncode == 1
-    assert "Network variable tabs are stale" in stale.stderr
-    assert "docs-main/example.mdx" in stale.stderr
-    assert page.read_bytes() == before
-
     subprocess.run(
         [sys.executable, "scripts/generate_network_variable_tabs.py"],
         cwd=repo,
@@ -229,19 +276,11 @@ stale
         capture_output=True,
         text=True,
     )
-    assert page.read_text().endswith("\nUncommitted editor prose.\n")
-
-    subprocess.run(["git", "add", "docs-main/example.mdx"], cwd=repo, check=True, capture_output=True, text=True)
-    subprocess.run(
-        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "render"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    page = docs_main / "example.mdx"
+    assert "Scan URL: https://scan.dev.example" in page.read_text(encoding="utf-8")
 
     current = subprocess.run(
-        ["python3", "scripts/validate_network_variable_tabs.py"],
+        [sys.executable, "scripts/validate_network_variable_tabs.py"],
         cwd=repo,
         check=False,
         capture_output=True,
@@ -249,6 +288,45 @@ stale
     )
     assert current.returncode == 0
     assert "Network variable tabs are rendered and up to date." in current.stdout
+
+    page.write_text(page.read_text() + "\nHand edit to the generated page.\n", encoding="utf-8")
+    before = page.read_bytes()
+    report_path = tmp_path / "report.json"
+    stale = subprocess.run(
+        [sys.executable, "scripts/validate_network_variable_tabs.py", "--report", str(report_path)],
+        cwd=repo,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert stale.returncode == 1
+    assert "Network variable tabs are stale" in stale.stderr
+    assert "docs-main/src/" in stale.stderr
+    assert "docs-main/example.mdx" in stale.stderr
+    assert page.read_bytes() == before
+    assert json.loads(report_path.read_text(encoding="utf-8")) == {
+        "stale": [{"page": "docs-main/example.mdx", "template": "docs-main/src/example.mdx"}],
+        "orphans": [],
+        "errors": [],
+    }
+
+    write_template(
+        docs_main,
+        "broken.mdx",
+        '---\ntitle: Broken\nhidden: true\n---\n\n<Tabs>\n<Tab title="All networks">\nA\n</Tab>\n<Tab title="DevNet">\nB\n</Tab>\n</Tabs>\n',
+    )
+    broken = subprocess.run(
+        [sys.executable, "scripts/validate_network_variable_tabs.py", "--report", str(report_path)],
+        cwd=repo,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert broken.returncode == 1
+    assert "could not be rendered" in broken.stderr
+    errors = json.loads(report_path.read_text(encoding="utf-8"))["errors"]
+    assert [error["template"] for error in errors] == ["docs-main/src/broken.mdx"]
+    assert "only tab" in errors[0]["message"]
 
 
 def test_generation_preserves_ordinary_editor_files(tmp_path: Path) -> None:
@@ -263,29 +341,36 @@ def test_generation_preserves_ordinary_editor_files(tmp_path: Path) -> None:
     image.write_bytes(b"\x89PNG\r\n\x1a\neditor-upload")
     before = {path: path.read_bytes() for path in docs_main.iterdir()}
 
-    for check in (True, False):
-        assert not any(
-            module.update_page(path, sample_network_data(), docs_main, check=check)
-            for path in module.iter_pages(docs_main)
-        )
-        assert {path: path.read_bytes() for path in docs_main.iterdir()} == before
+    assert module.iter_sources(docs_main) == []
+    assert module.orphaned_outputs(docs_main) == []
+    assert {path: path.read_bytes() for path in docs_main.iterdir()} == before
 
 
-def test_checked_in_network_variable_pages_are_static_tabs() -> None:
-    generated_pages = [
-        path
-        for path in (REPO_ROOT / "docs-main").rglob("*.mdx")
-        if "NETWORKVARS_START" in path.read_text(encoding="utf-8")
-    ]
-    assert generated_pages
-    for page in generated_pages:
+def test_checked_in_templates_are_hidden_listed_and_rendered() -> None:
+    module = load_script_module()
+    docs_main = REPO_ROOT / "docs-main"
+    templates = module.iter_sources(docs_main)
+    assert templates
+    assert not (docs_main / "snippets" / "networkvars").exists()
+
+    docs_json = json.loads((docs_main / "docs.json").read_text(encoding="utf-8"))
+    template_product = next(
+        product for product in docs_json["navigation"]["products"] if product["product"] == "Page templates"
+    )
+    assert template_product["hidden"] is True
+    assert sorted(template_product["pages"]) == sorted(
+        path.relative_to(docs_main).with_suffix("").as_posix() for path in templates
+    )
+
+    for template in templates:
+        page = module.output_path_for_source(template, docs_main)
         text = page.read_text(encoding="utf-8")
-        assert "<NetworkVariables" not in text
-        assert "from '/snippets/components/version.mdx'" not in text
+        assert module.generated_notice(module.source_ref_for_path(template, docs_main)) in text
+        assert '<Tab title="All networks">' not in text
         assert "<Tabs>" in text
         assert "<Tab title=" in text
 
-    onboarding = REPO_ROOT / "docs-main" / "global-synchronizer" / "deployment" / "onboarding-process.mdx"
+    onboarding = docs_main / "global-synchronizer" / "deployment" / "onboarding-process.mdx"
     onboarding_text = onboarding.read_text(encoding="utf-8")
     assert "scan.sv-1.dev.global.canton.network.sync.global" in onboarding_text
     assert "dso-sequencers" in onboarding_text

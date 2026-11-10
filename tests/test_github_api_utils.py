@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import importlib.util
 import io
 import sys
@@ -95,3 +96,45 @@ def test_request_json_does_not_retry_nontransient_http_errors(monkeypatch) -> No
         )
 
     assert calls == 1
+
+
+def test_request_json_retries_dropped_connections(monkeypatch) -> None:
+    # GitHub closing the socket raises RemoteDisconnected, not URLError.
+    module = load_script_module()
+    outcomes: list[object] = [
+        http.client.RemoteDisconnected("Remote end closed connection without response"),
+        ConnectionResetError("connection reset"),
+        FakeResponse(b'{"ok": true}'),
+    ]
+
+    def fake_urlopen(_request: object, *, timeout: float) -> FakeResponse:
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        assert isinstance(outcome, FakeResponse)
+        return outcome
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(module.time, "sleep", lambda _delay: None)
+
+    assert module.request_json(
+        "https://api.github.test/data", user_agent="test-agent", retry_delay_seconds=0
+    ) == {"ok": True}
+    assert outcomes == []
+
+
+def test_request_json_reports_persistent_dropped_connection(monkeypatch) -> None:
+    # Callers catch RuntimeError per item, so a dropped connection must not
+    # escape as a raw http.client error and end the whole run.
+    module = load_script_module()
+
+    def fake_urlopen(_request: object, *, timeout: float) -> FakeResponse:
+        raise http.client.RemoteDisconnected("Remote end closed connection without response")
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(module.time, "sleep", lambda _delay: None)
+
+    with pytest.raises(RuntimeError, match="Remote end closed connection"):
+        module.request_json(
+            "https://api.github.test/data", user_agent="test-agent", attempts=2
+        )

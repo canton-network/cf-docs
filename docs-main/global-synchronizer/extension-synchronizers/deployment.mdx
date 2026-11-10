@@ -1,0 +1,232 @@
+---
+title: "Deploying a Dedicated Synchronizer"
+description: "Step-by-step guide to configure, start, bootstrap, and verify a dedicated Canton synchronizer"
+---
+
+import CANTON_DOCS_CN_GS_EXTENSION_SYNCHRONIZERS_DEPLOYMENT_0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/docs-cn/global-synchronizer-extension-synchronizers-deployment-0.mdx";
+import CANTON_DOCS_CN_GS_EXTENSION_SYNCHRONIZERS_DEPLOYMENT_1 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/docs-cn/global-synchronizer-extension-synchronizers-deployment-1.mdx";
+
+This tutorial walks you through deploying a **dedicated synchronizer** (also called an extension synchronizer): configure sequencer and mediator nodes, start them, bootstrap topology, connect validators, and verify the deployment.
+
+It is for operators who run their own synchronizer alongside — or instead of relying solely on — the [Global Synchronizer](/overview/understand/global-synchronizer). It is **not** the Super Validator / Global Synchronizer operator guide.
+
+For concepts first, see [Dedicated Synchronizers](/global-synchronizer/extension-synchronizers/dedicated-synchronizers). For deep reference (all bootstrap variants, HA, pruning, and so on), use [Synchronizer Operations](/global-synchronizer/extension-synchronizers/synchronizer-operations) — this page is the end-to-end walkthrough; that page is the reference.
+
+<Info>
+**Setup order**
+
+1. **Configure** — APIs, sequencer backend, TLS, and storage
+2. **Start** — Deploy and start sequencer and mediator
+3. **Bootstrap** — Initialize synchronizer topology
+4. **Connect** — Attach validators / participants
+5. **Verify** — Health, topology, and a test transaction
+6. **Harden** (optional) — HA, monitoring, backups, and related ops
+</Info>
+
+## Who this guide is for
+
+Use this guide when:
+
+- You need a dedicated synchronizer for privacy, performance, governance, or cost reasons
+- A single organization will own and operate the sequencer and mediator (the default path below)
+- You may later connect the same validators to the Global Synchronizer ([hybrid pattern](/global-synchronizer/extension-synchronizers/hybrid-synchronizer-pattern))
+
+If you only need Canton Network public connectivity and Canton Coin, deploy a [validator on the Global Synchronizer](/global-synchronizer/deployment/deployment-options) instead of standing up your own synchronizer.
+
+## Choose your topology
+
+| Choose… | When… | Then follow… |
+|---|---|---|
+| **Centralized, single-operator** (default) | One org owns sequencer and mediator | This tutorial |
+| **Decentralized / multi-owner** | Distinct operators must co-sign topology | [Decentralized bootstrap](/global-synchronizer/extension-synchronizers/synchronizer-operations#set-up-a-decentralized-synchronizer) |
+| **HA / multi-sequencer** | Production redundancy | Finish this tutorial, then [High Availability](/global-synchronizer/extension-synchronizers/synchronizer-operations#high-availability-in-synchronizer) |
+| **Hybrid (dedicated + Global Synchronizer)** | Need CN connectivity as well | This tutorial, then [hybrid pattern](/global-synchronizer/extension-synchronizers/hybrid-synchronizer-pattern) and [linking validators](/global-synchronizer/extension-synchronizers/linking-validator-multi-sync) |
+
+**Default path for this guide:** one sequencer + one mediator, single owner, [BFT sequencer backend](/global-synchronizer/extension-synchronizers/bft-orderer) (minimal single-node network). Background on the orderer is in [BFT Orderer Architecture](/global-synchronizer/extension-synchronizers/bft-orderer). API, backend, and TLS details are in [Synchronizer Operations — configure](/global-synchronizer/extension-synchronizers/synchronizer-operations#configure-synchronizer-apis).
+
+<Note>
+The database sequencer backend is unsupported. Use the BFT sequencer backend for new dedicated synchronizers. Multi-node BFT peer networks and advanced backend options are covered under [Configure Sequencer Backend](/global-synchronizer/extension-synchronizers/synchronizer-operations#configure-sequencer-backend).
+</Note>
+
+## Prerequisites
+
+Before you begin:
+
+- Familiarity with [Canton's synchronizer architecture](/overview/reference/synchronizer-overview)
+- **PostgreSQL 14+** — separate databases for sequencer and mediator; for production, a managed service with automated backups, at least **4 vCPUs / 16 GB memory**, and SSD-backed storage
+- **TLS certificates** for the sequencer **public API** (validators connect here)
+- The Canton 3.5 release (`canton-open-source-3.5.<patch>.tar.gz` from [Canton releases](https://github.com/digital-asset/canton/releases)) for the sequencer and mediator
+- Shell access to the host that runs the sequencer and mediator, for the **Canton Console**
+
+## 1. Configure APIs, backend, and TLS
+
+Write configuration **before** starting nodes. At minimum you need:
+
+1. **Sequencer and mediator APIs** — public and admin ports/addresses ([Configure Synchronizer APIs](/global-synchronizer/extension-synchronizers/synchronizer-operations#configure-synchronizer-apis))
+2. **Sequencer backend** — `sequencer.type = BFT` for the default path ([Configure Sequencer Backend](/global-synchronizer/extension-synchronizers/synchronizer-operations#configure-sequencer-backend))
+3. **TLS** on the sequencer public API ([Secure Synchronizer APIs](/global-synchronizer/extension-synchronizers/synchronizer-operations#secure-synchronizer-apis))
+4. **Storage** — Postgres for each node (next section)
+
+Save this configuration as `synchronizer.conf` and fill in each node's Postgres connection from [step 2](#2-set-up-databases). The public API listens on `127.0.0.1` unless you set `address`, so validators on other hosts need `address = "0.0.0.0"` (or a specific interface):
+
+```scala
+canton {
+  sequencers {
+    sequencer1 {
+      storage.type = postgres
+      // ... postgres connection ...
+      public-api {
+        address = "0.0.0.0"
+        port = 5001
+        // TLS: see Secure Synchronizer APIs
+      }
+      admin-api.port = 5002
+      sequencer.type = BFT
+    }
+  }
+
+  mediators {
+    mediator1 {
+      storage.type = postgres
+      // ... postgres connection ...
+      admin-api.port = 5202
+    }
+  }
+}
+```
+
+For peers, endpoint authentication, dedicated BFT storage, external sequencers, and client authentication, use the operations reference — do not expand this tutorial into those variants.
+
+## 2. Set up databases
+
+Create separate PostgreSQL databases and dedicated users, for example `sequencer_db` / `sequencer_user` and `mediator_db` / `mediator_user`. Each node stores its own state independently.
+
+Point the sequencer and mediator storage configuration at those databases before you start the nodes.
+
+## 3. Deploy and start sequencer and mediator
+
+Download the Canton 3.5 release (`canton-open-source-3.5.<patch>.tar.gz`) from [Canton releases](https://github.com/digital-asset/canton/releases) and unpack it. From the unpacked directory, start both nodes with the configuration from [step 1](#1-configure-apis-backend-and-tls):
+
+```bash
+./bin/canton daemon --config synchronizer.conf
+```
+
+This runs the sequencer and mediator in one process. To run them as separate processes, put each node's block in its own file (each wrapped in `canton { }`) and start one `daemon` per file.
+
+<Note>
+The published `canton-sequencer` and `canton-mediator` Docker images ship with their own built-in configuration (node names, ports, manual identity initialization, and the database sequencer backend), so this guide's configuration doesn't apply to them unchanged. See [Canton Docker Operations](/global-synchronizer/deployment/docker).
+</Note>
+
+### Open a Canton Console
+
+Bootstrap runs in a Canton Console that reaches the nodes' admin APIs. The admin APIs in `synchronizer.conf` listen on `127.0.0.1` by default, so run the console on the same host. Save this as `remote.conf`:
+
+```scala
+canton {
+  remote-sequencers {
+    sequencer1 {
+      public-api {
+        address = "localhost"
+        port = 5001
+      }
+      admin-api {
+        address = "localhost"
+        port = 5002
+      }
+    }
+  }
+  remote-mediators {
+    mediator1 {
+      admin-api {
+        address = "localhost"
+        port = 5202
+      }
+    }
+  }
+}
+```
+
+If you enabled TLS on the public API, add the matching client TLS settings to `public-api` in this file. Then start the console:
+
+```bash
+./bin/canton --config remote.conf
+```
+
+### Confirm nodes are healthy
+
+Before bootstrap:
+
+- The sequencer and mediator processes are running
+- Sequencer health endpoint returns HTTP 200 (when exposed)
+- `nodes.remote.foreach(_.health.wait_for_running())` returns in the console
+
+## 4. Bootstrap (initialize) the synchronizer
+
+Nodes must be **fresh** (not previously initialized), **started**, and already configured with backend, APIs, TLS, and storage.
+
+In the console you opened in [step 3](#open-a-canton-console) (default **centralized** bootstrap — single owner, threshold 1):
+
+<CANTON_DOCS_CN_GS_EXTENSION_SYNCHRONIZERS_DEPLOYMENT_0 />
+
+This creates the synchronizer identity and registers the sequencer and mediator in the synchronizer topology. You should see a physical synchronizer id for `my-private-sync` (or the name you chose).
+
+Other bootstrap flows (do not inline here):
+
+- [Decentralized synchronizer](/global-synchronizer/extension-synchronizers/synchronizer-operations#set-up-a-decentralized-synchronizer)
+- [Decentralized with a subset of sequencers as owners](/global-synchronizer/extension-synchronizers/synchronizer-operations#set-up-a-decentralized-synchronizer-with-a-subset-of-sequencers-as-owners)
+- [Permissioned synchronizer](/global-synchronizer/extension-synchronizers/synchronizer-operations#bootstrap-a-permissioned-synchronizer)
+
+Full bootstrap reference: [Bootstrap a Synchronizer](/global-synchronizer/extension-synchronizers/synchronizer-operations#bootstrap-a-synchronizer).
+
+## 5. Connect validators
+
+Once the synchronizer is initialized, connect each validator (participant). On the Canton Console:
+
+<CANTON_DOCS_CN_GS_EXTENSION_SYNCHRONIZERS_DEPLOYMENT_1 />
+
+<Note>
+This command works when the same console manages the sequencer and the validator. A validator run by another organization connects by URL instead; see [Connect to a Sequencer by URL](/global-synchronizer/extension-synchronizers/linking-validator-multi-sync#connect-to-a-sequencer-by-url).
+</Note>
+
+Or configure the connection in the validator's Helm values:
+
+```yaml
+extraDomains:
+  - alias: "my-private-sync"
+    url: "https://sequencer.example.com:5001"
+```
+
+`extraDomains` accepts only `alias` and `url`. If the sequencer's TLS certificate isn't signed by a CA the Java runtime trusts by default, connect from the console with `connect(..., certificatesPath = ...)` instead.
+
+Use a stable **alias** (here `my-private-sync`) consistently in console and Helm. After changing connection config at runtime, disconnect and reconnect the synchronizer on the participant so the update takes effect.
+
+For validators that also stay on the Global Synchronizer, see [linking a validator to multiple synchronizers](/global-synchronizer/extension-synchronizers/linking-validator-multi-sync).
+
+## 6. Verify the deployment
+
+Work through this checklist:
+
+1. **Sequencer health** — HTTP health endpoint returns 200
+2. **Mediator in topology** — Mediator is registered on the synchronizer
+3. **Participant connected** — `participant.synchronizers.list_connected()` shows your alias
+4. **Ping** — Participant can ping across the synchronizer (see bootstrap examples in [Synchronizer Operations](/global-synchronizer/extension-synchronizers/synchronizer-operations#set-up-a-centralized-synchronizer))
+5. **Optional smoke test** — Allocate a test party and create a contract assigned to the dedicated synchronizer
+
+## Production hardening and next steps
+
+- **TLS everywhere** — Validators to sequencer public API; prefer TLS for peer and admin paths in production ([Secure Synchronizer APIs](/global-synchronizer/extension-synchronizers/synchronizer-operations#secure-synchronizer-apis))
+- **Network policies** — Restrict sequencer endpoint access to known validator networks
+- **Monitoring** — [Synchronizer monitoring](/global-synchronizer/extension-synchronizers/synchronizer-monitoring); reuse your validator metrics stack where possible
+- **Backups** — Back up sequencer and mediator databases regularly ([Backup and Restore](/global-synchronizer/extension-synchronizers/synchronizer-operations#backup-and-restore))
+- **HA** — [High Availability in Synchronizer](/global-synchronizer/extension-synchronizers/synchronizer-operations#high-availability-in-synchronizer)
+- **Traffic management** — If you enable traffic controls on a dedicated synchronizer, see [Sequencer Traffic Management](/global-synchronizer/extension-synchronizers/synchronizer-operations#sequencer-traffic-management)
+- **Pruning** — [Synchronizer Pruning](/global-synchronizer/extension-synchronizers/synchronizer-operations#synchronizer-pruning)
+
+## Related reference
+
+- [Dedicated Synchronizers](/global-synchronizer/extension-synchronizers/dedicated-synchronizers) — Why and when to use them
+- [Hybrid Synchronizer Pattern](/global-synchronizer/extension-synchronizers/hybrid-synchronizer-pattern) — Dedicated + Global Synchronizer
+- [Linking Validators](/global-synchronizer/extension-synchronizers/linking-validator-multi-sync) — Multi-synchronizer participants
+- [Synchronizer Operations](/global-synchronizer/extension-synchronizers/synchronizer-operations) — Configure, bootstrap variants, HA, traffic, pruning, backup
+- [BFT Orderer Architecture](/global-synchronizer/extension-synchronizers/bft-orderer) — Ordering backend background
+- [Synchronizer Monitoring](/global-synchronizer/extension-synchronizers/synchronizer-monitoring) — Observability

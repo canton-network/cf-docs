@@ -12,6 +12,7 @@ from pathlib import Path
 from x2mdx.cli import main as cli_main
 from x2mdx.jvm_docs.lifecycle import (
     build_jvm_doc_lifecycle_report_from_sources,
+    deprecated_refs_from_java_html,
     parse_java_type_page,
     parse_scala_type_page,
 )
@@ -369,6 +370,24 @@ class JvmDocsTests(unittest.TestCase):
             "[Open](<https://example.com/Sample%24.html#make%5BA%3C:Foo%5D%28value:Bar%7BBaz%7D%29>)",
             object_text,
         )
+
+    def test_deprecated_list_notes_parse_from_javadoc_17_and_25_markup(self) -> None:
+        javadoc_17 = """
+            <div class="col-summary-item-name even-row-color"><a href="com/example/Foo.html#oldMethod()">oldMethod</a></div>
+            <div class="col-last even-row-color"><div class="deprecation-comment">since 1.1.0 use newMethod()</div></div>
+        """
+        javadoc_25 = """
+            <div class="col-summary-item-name even-row-color"><a href="com/example/Foo.html#oldMethod()">oldMethod</a></div>
+            <div class="col-last even-row-color">
+            <div class="block">since 1.1.0 use newMethod()</div>
+            </div>
+        """
+
+        for html in (javadoc_17, javadoc_25):
+            self.assertEqual(
+                deprecated_refs_from_java_html(html)["com/example/Foo.html#oldMethod()"],
+                "since 1.1.0 use newMethod()",
+            )
 
     def test_java_meta_description_fallback_ignores_declaration_text(self) -> None:
         _, summary = parse_java_type_page(

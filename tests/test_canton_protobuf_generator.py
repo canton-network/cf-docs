@@ -203,7 +203,7 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
             ledger_mapping,
             {
                 "com/daml/ledger/api/v2/command_service.proto": (
-                    "community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/command_service.proto"
+                    "community/ledger-api-proto/src/main/protobuf/com/daml/ledger/api/v2/command_service.proto"
                 ),
                 "com/daml/ledger/api/v2/value.proto": (
                     "community/daml-lf/ledger-api-value-proto/src/main/protobuf/com/daml/ledger/api/v2/value.proto"
@@ -230,6 +230,49 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
             "com/digitalasset/canton/tea/scalapb/package.proto", ledger_mapping
         )
 
+    def test_source_paths_follow_the_repository_layout_at_each_tag(self) -> None:
+        repo_dir = self.root / "canton"
+        repo_dir.mkdir()
+
+        def git(*args: str) -> None:
+            subprocess.run(["git", *args], cwd=repo_dir, check=True, capture_output=True)
+
+        git("init", "-q")
+        git("config", "user.email", "test@example.com")
+        git("config", "user.name", "Test")
+        command_service = "com/daml/ledger/api/v2/command_service.proto"
+        value = "com/daml/ledger/api/v2/value.proto"
+        legacy_root = repo_dir / "community/ledger-api/src/main/protobuf"
+        self.write_proto(legacy_root, command_service)
+        self.write_proto(legacy_root, value)
+        self.write_proto(repo_dir / "community/other/src/main/protobuf", value)
+        git("add", "-A")
+        git("commit", "-q", "-m", "old layout")
+        git("tag", "v3.4.9")
+        git("mv", "community/ledger-api", "community/ledger-api-proto")
+        git("commit", "-q", "-m", "new layout")
+        git("tag", "v3.4.10")
+
+        current_root = generator.SECTION_TO_REPO_PREFIX["ledger-api"]
+        import_to_repo_path = {
+            command_service: f"{current_root}/{command_service}",
+            value: f"{current_root}/{value}",
+            "com/daml/ledger/api/v2/missing.proto": f"{current_root}/com/daml/ledger/api/v2/missing.proto",
+        }
+
+        self.assertEqual(
+            generator.import_to_source_path_at_tag(repo_dir, "v3.4.9", import_to_repo_path),
+            {command_service: f"community/ledger-api/src/main/protobuf/{command_service}"},
+            "legacy paths resolve by import path; ambiguous and missing files get no source path",
+        )
+        self.assertEqual(
+            generator.import_to_source_path_at_tag(repo_dir, "v3.4.10", import_to_repo_path),
+            {
+                command_service: f"{current_root}/{command_service}",
+                value: f"{current_root}/{value}",
+            },
+        )
+
     def test_split_protobuf_navigation_flattens_admin_packages_under_grpc(self) -> None:
         docs_root = self.root / "docs-main"
         docs_json = docs_root / "docs.json"
@@ -254,12 +297,10 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        ledger_output = docs_root / "appdev" / "reference" / "protobuf-history"
-        ledger_legacy_output = docs_root / "reference" / "protobuf"
+        ledger_output = docs_root / "reference" / "protobuf"
         admin_output = docs_root / "reference" / "admin-api" / "protobuf"
         self.write_mdx(ledger_output, "overview.mdx", "Ledger API protobuf")
-        self.write_mdx(ledger_legacy_output, "overview.mdx", "Ledger API protobuf")
-        self.write_mdx(ledger_legacy_output, "packages/com-daml-ledger-api-v2.mdx", "com.daml.ledger.api.v2")
+        self.write_mdx(ledger_output, "packages/com-daml-ledger-api-v2.mdx", "com.daml.ledger.api.v2")
         self.write_mdx(admin_output, "overview.mdx", "Admin API protobuf")
         self.write_mdx(admin_output, "packages/com-digitalasset-canton-admin-health-v30.mdx", "com.digitalasset.canton.admin.health.v30")
 
@@ -267,7 +308,6 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
             docs_json_path=docs_json,
             dropdown_label="API Reference",
             ledger_output_dir=ledger_output,
-            ledger_legacy_output_dir=ledger_legacy_output,
             admin_output_dir=admin_output,
         )
 
@@ -300,20 +340,11 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         docs_root.mkdir(parents=True)
         docs_json.write_text('{"redirects": []}\n', encoding="utf-8")
 
-        generator.ensure_ledger_protobuf_redirects(
-            docs_json_path=docs_json,
-            output_dirs=(
-                docs_root / "reference" / "protobuf",
-                docs_root / "appdev" / "reference" / "protobuf-history",
-            ),
-        )
-        generator.ensure_ledger_protobuf_redirects(
-            docs_json_path=docs_json,
-            output_dirs=(
-                docs_root / "reference" / "protobuf",
-                docs_root / "appdev" / "reference" / "protobuf-history",
-            ),
-        )
+        for _ in range(2):
+            generator.ensure_ledger_protobuf_redirects(
+                docs_json_path=docs_json,
+                output_dir=docs_root / "reference" / "protobuf",
+            )
 
         self.assertEqual(
             json.loads(docs_json.read_text(encoding="utf-8"))["redirects"],
@@ -328,11 +359,61 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
                 },
                 {
                     "source": "/appdev/reference/protobuf-history",
-                    "destination": "/appdev/reference/protobuf-history/overview",
+                    "destination": "/reference/protobuf/overview",
                 },
                 {
                     "source": "/appdev/reference/protobuf-history/index",
-                    "destination": "/appdev/reference/protobuf-history/overview",
+                    "destination": "/reference/protobuf/overview",
+                },
+                {
+                    "source": "/appdev/reference/protobuf-history/:slug*",
+                    "destination": "/reference/protobuf/:slug*",
+                },
+            ],
+        )
+
+    def test_ledger_protobuf_redirects_retarget_retired_render_root(self) -> None:
+        docs_root = self.root / "docs-main"
+        docs_json = docs_root / "docs.json"
+        docs_root.mkdir(parents=True)
+        docs_json.write_text(
+            json.dumps(
+                {
+                    "redirects": [
+                        {
+                            "source": "/appdev/reference/protobuf-history",
+                            "destination": "/appdev/reference/protobuf-history/overview",
+                        },
+                        {
+                            "source": "/appdev/reference/protobuf-history/index",
+                            "destination": "/appdev/reference/protobuf-history/overview",
+                        },
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        generator.ensure_ledger_protobuf_redirects(
+            docs_json_path=docs_json,
+            output_dir=docs_root / "reference" / "protobuf",
+        )
+
+        redirects = json.loads(docs_json.read_text(encoding="utf-8"))["redirects"]
+        self.assertFalse(
+            any(redirect["destination"].startswith("/appdev/") for redirect in redirects)
+        )
+        self.assertEqual(
+            redirects[:2],
+            [
+                {
+                    "source": "/appdev/reference/protobuf-history",
+                    "destination": "/reference/protobuf/overview",
+                },
+                {
+                    "source": "/appdev/reference/protobuf-history/index",
+                    "destination": "/reference/protobuf/overview",
                 },
             ],
         )

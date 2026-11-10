@@ -55,17 +55,30 @@ Edit pages, navigation, and images in `docs-main/`, either directly or through
 the Mintlify editor. Ordinary content has no separate source copy and is not
 rewritten by documentation generation.
 
-Network-dependent sections use templates in `docs-main/snippets/networkvars/`.
-Edit those templates, then run `npm run generate:network-variable-tabs` to update
-the marked `NETWORKVARS_START` / `NETWORKVARS_END` regions. Generation preserves
-content outside those regions. Edit generated reference pages through their
-owning generators, as before.
+Pages with network-dependent sections are generated from page templates in
+`docs-main/src/`. Each template sits at the same relative path as the page it
+renders, so `docs-main/src/global-synchronizer/deployment/kubernetes-deployment.mdx`
+renders `docs-main/global-synchronizer/deployment/kubernetes-deployment.mdx`.
+Generated pages start with a `Generated from /src/...` comment; edit the
+template, not the generated page. Templates are hidden pages (`hidden: true`,
+listed under the hidden "Page templates" product in `docs.json`) so the Mintlify
+editor can open them without publishing them in navigation, search, or the sitemap.
+
+Inside a template, wrap network-dependent content in a single tab,
+`<Tabs>` / `<Tab title="All networks">`, which the Mintlify editor can edit. Use
+`|token|` placeholders for values from the version dashboard data and
+`<div data-network-only="devnet,testnet">` for network-specific content. Run
+`npm run generate:network-variable-tabs` to render one tab per network into the
+generated page. To add a template, copy the page into `docs-main/src/`, add
+`hidden: true` to its frontmatter, and add it to the "Page templates" product.
+Edit generated reference pages through their owning generators, as before.
 
 For generated API lifecycle settings, see the [examples and accepted values](config/x2mdx/lifecycle.md).
 
-Run `npm run validate:network-variable-tabs` to check generated regions without
-modifying files. Direct edits inside those regions fail validation; edit the
-referenced template instead. Ordinary page edits and new images do not require
+Run `npm run validate:network-variable-tabs` to check generated pages without
+modifying files. Direct edits to a generated page fail validation; edit its
+template instead. On pull requests, CI also posts a comment naming the template
+to edit and quoting lines that exist only in the generated page. Ordinary page edits and new images do not require
 regeneration.
 
 ### Running the dev server
@@ -83,16 +96,37 @@ The site will be available at http://localhost:3000.
 mintlify broken-links
 ```
 
-## Generate external snippets
+## Update generated docs
 
-External snippet extraction from source repositories is documented in [config/snippet-config/update-workflows.md](config/snippet-config/update-workflows.md). Use that workflow when updating snippet configs under `config/snippet-config/` or regenerating checked-in snippets under `docs-main/snippets/external/`.
+The [Update generated docs](.github/workflows/update-version-dashboard.yml) workflow
+runs every two hours. It regenerates each target in turn and opens or updates one
+PR per target that changed.
 
-Run this whenever you add, remove, or update a snippet source in `config/snippet-config/`, or when you need to pull in changes from an upstream repo (such as Canton or Splice) that are referenced by existing snippets.
+To run it outside the schedule, use **Run workflow** on the workflow's Actions page,
+or:
 
 ```bash
-npm run generate:external-snippets -- --list
-npm run generate:external-snippets -- canton --source-dir ../canton
+gh workflow run "Update generated docs" -R canton-network/cf-docs --ref main
+gh workflow run "Update generated docs" -R canton-network/cf-docs --ref main \
+  -f targets="canton-metrics-reference daml-script"
 ```
+
+`targets` defaults to `all`; otherwise pass space-separated target keys. Set
+`-f dry_run=true` to list the selected commands without generating or opening PRs.
+To list target keys locally:
+
+```bash
+python3 scripts/update_generated_reference_prs.py --targets all --print-targets-json
+```
+
+Only one run executes at a time. A dispatch made while a run is in progress waits
+for it, and a newer waiting run replaces an older waiting one. To restart instead,
+cancel the in-progress run first (`gh run cancel <run-id> -R canton-network/cf-docs`).
+Cancellation can take several minutes to stop the remaining matrix jobs.
+
+## Generate external snippets
+
+To add, edit, move, or delete snippets, or to refresh every snippet from a source repository, use the [snippet commands](config/snippet-config/snippet-commands.md).
 
 ## License
 

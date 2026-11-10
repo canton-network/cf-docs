@@ -415,18 +415,18 @@ def test_target_paths_exist_in_base_checkout() -> None:
     assert {key: paths for key, paths in missing_paths.items() if paths} == {}
 
 
-def test_network_variable_tab_target_pages_match_generated_blocks() -> None:
+def test_network_variable_tab_target_pages_match_page_templates() -> None:
     module = load_script_module()
+    source_root = REPO_ROOT / "docs-main" / "src"
 
-    generated_block_pages = tuple(
+    template_output_pages = tuple(
         sorted(
-            path.relative_to(REPO_ROOT).as_posix()
-            for path in (REPO_ROOT / "docs-main").rglob("*.mdx")
-            if "{/* NETWORKVARS_START" in path.read_text(encoding="utf-8")
+            f"docs-main/{path.relative_to(source_root).as_posix()}"
+            for path in source_root.rglob("*.mdx")
         )
     )
 
-    assert module.NETWORK_VARIABLE_TAB_PAGES == generated_block_pages
+    assert module.NETWORK_VARIABLE_TAB_PAGES == template_output_pages
 
 
 def test_body_markdown_includes_description_changes_and_validation() -> None:

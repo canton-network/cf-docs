@@ -3,9 +3,6 @@ title: 'Preparing and Signing a Transaction'
 description: 'The end-to-end external-party signing flow: build a command, select UTXOs, prepare, validate, visualize, sign, submit, and observe a transaction.'
 ---
 
-
-{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/preparing-and-signing-transactions/index.rst" hash="39205f15" */}
-
 ## High-level Signing Process
 
 The basic steps of preparing and signing a transaction using an external party are as follows:
@@ -25,302 +22,324 @@ In the examples below, the SDK examples use the Ping app which comes pre-install
 The below performs a two-step transfer between Alice and Bob and expose their holdings:
 
 <Tabs>
-    <Tab title="Creating a transfer">
-        ``` typescript
-        import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
-        import { pino } from 'pino'
-        import _accept from './_accept.js'
-        import { TransferTestScriptParameters } from './types.js'
-        import _reject from './_reject.js'
-        import _withdraw from './_withdraw.js'
-        import _expire from './_expire.js'
-        import {
-            TOKEN_NAMESPACE_CONFIG,
-            TOKEN_PROVIDER_CONFIG_DEFAULT,
-            AMULET_NAMESPACE_CONFIG,
-        } from '../utils/index.js'
 
-        const logger = pino({ name: 'v1-02-two-step-transfer', level: 'info' })
+  <Tab title="Creating a transfer">
 
-        const sdk = await SDK.create({
-            auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
-            ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
-            token: TOKEN_NAMESPACE_CONFIG,
-            amulet: AMULET_NAMESPACE_CONFIG,
-        })
+  {/* include ../../examples/scripts/02-two-step-transfer/index.ts */}
+  ```typescript
+  import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
+  import _accept from './_accept.js'
+  import type { TransferTestScriptParameters } from './types.js'
+  import _reject from './_reject.js'
+  import _withdraw from './_withdraw.js'
+  import _expire from './_expire.js'
+  import {
+      TOKEN_NAMESPACE_CONFIG,
+      TOKEN_PROVIDER_CONFIG_DEFAULT,
+      AMULET_NAMESPACE_CONFIG,
+      localNetGlobalSynchronizer,
+  } from '../utils/index.js'
 
-        const senderKeys = sdk.keys.generate()
+  import { configureLogging } from '../utils/configure-logging.js'
+  const logger = await configureLogging()
 
-        const sender = await sdk.party.external
-            .create(senderKeys.publicKey, {
-                partyHint: 'v1-02-alice',
-            })
-            .sign(senderKeys.privateKey)
-            .execute()
+  const sdk = await SDK.create({
+      auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
+      ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+      synchronizerId: localNetGlobalSynchronizer,
+      token: TOKEN_NAMESPACE_CONFIG,
+      amulet: AMULET_NAMESPACE_CONFIG,
+  })
 
-        const receiverKeys = sdk.keys.generate()
+  const senderKeys = sdk.keys.generate()
 
-        const receiver = await sdk.party.external
-            .create(receiverKeys.publicKey, {
-                partyHint: 'v1-02-bob',
-            })
-            .sign(receiverKeys.privateKey)
-            .execute()
+  const sender = await sdk.party.external
+      .create(senderKeys.publicKey, {
+          partyHint: 'v1-02-alice',
+      })
+      .sign(senderKeys.privateKey)
+      .execute()
 
-        const [amuletTapCommand, amuletTapDisclosedContracts] = await sdk.amulet.tap(
-            sender.partyId,
-            '10000'
-        )
+  const receiverKeys = sdk.keys.generate()
 
-        await sdk.ledger
-            .prepare({
-                partyId: sender.partyId,
-                commands: amuletTapCommand,
-                disclosedContracts: amuletTapDisclosedContracts,
-            })
-            .sign(senderKeys.privateKey)
-            .execute({ partyId: sender.partyId })
+  const receiver = await sdk.party.external
+      .create(receiverKeys.publicKey, {
+          partyHint: 'v1-02-bob',
+      })
+      .sign(receiverKeys.privateKey)
+      .execute()
 
-        const senderUtxos = await sdk.token.utxos.list({ partyId: sender.partyId })
+  const [amuletTapCommand, amuletTapDisclosedContracts] = await sdk.amulet.tap(
+      sender.partyId,
+      '10000'
+  )
 
-        const senderAmuletUtxos = senderUtxos.filter((utxo) => {
-            return (
-                utxo.interfaceViewValue.amount === '10000.0000000000' &&
-                utxo.interfaceViewValue.instrumentId.id === 'Amulet'
-            )
-        })
+  await sdk.ledger
+      .prepare({
+          partyId: sender.partyId,
+          commands: amuletTapCommand,
+          disclosedContracts: amuletTapDisclosedContracts,
+      })
+      .sign(senderKeys.privateKey)
+      .execute({ partyId: sender.partyId })
 
-        if (senderAmuletUtxos.length === 0) {
-            throw new Error('No UTXOs found for Sender')
-        }
+  const senderUtxos = await sdk.token.utxos.list({ partyId: sender.partyId })
 
-        const transferTestScriptParameters: TransferTestScriptParameters = {
-            sdk,
-            sender,
-            senderKeys,
-            receiver,
-            receiverKeys,
-            logger,
-        }
+  const senderAmuletUtxos = senderUtxos.filter((utxo) => {
+      return (
+          utxo.interfaceViewValue.amount === '10000.0000000000' &&
+          utxo.interfaceViewValue.instrumentId.id === 'Amulet'
+      )
+  })
 
-        await _accept(transferTestScriptParameters)
+  if (senderAmuletUtxos.length === 0) {
+      throw new Error('No UTXOs found for Sender')
+  }
 
-        await _reject(transferTestScriptParameters)
+  const transferTestScriptParameters: TransferTestScriptParameters = {
+      sdk,
+      sender,
+      senderKeys,
+      receiver,
+      receiverKeys,
+      logger,
+  }
 
-        await _withdraw(transferTestScriptParameters)
+  await _accept(transferTestScriptParameters)
 
-        await _expire(transferTestScriptParameters)
-        ```
-    </Tab>
-    <Tab title="Accepting a transfer">
-        ``` typescript
-        import { localNetStaticConfig } from '@canton-network/wallet-sdk'
-        import { TransferTestScriptParameters } from './types.js'
+  await _reject(transferTestScriptParameters)
 
-        export default async (args: TransferTestScriptParameters) => {
-            const { sdk, sender, receiver, senderKeys, receiverKeys, logger } = args
+  await _withdraw(transferTestScriptParameters)
 
-            const [transferCommand, transferDisclosedContracts] =
-                await sdk.token.transfer.create({
-                    sender: sender.partyId,
-                    recipient: receiver.partyId,
-                    instrumentId: 'Amulet',
-                    registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-                    amount: '2000',
-                })
+  await _expire(transferTestScriptParameters)
 
-            logger.info('Transfer command created, ready for signing and execution')
+  // Forcefully exit to prevent floating ledger retries from crashing the event loop
+  process.exit(0)
+  ```
 
-            await sdk.ledger
-                .prepare({
-                    partyId: sender.partyId,
-                    commands: transferCommand,
-                    disclosedContracts: transferDisclosedContracts,
-                })
-                .sign(senderKeys.privateKey)
-                .execute({ partyId: sender.partyId })
+  </Tab>
 
-            logger.info(
-                { sender, receiver },
-                'Submitted transfer command from Sender to Receiver'
-            )
-            const receiverPendingTransfers = await sdk.token.transfer.pending(
-                receiver.partyId
-            )
-            logger.info(
-                receiverPendingTransfers,
-                'Receiver pending transfer instructions'
-            )
+  <Tab title="Accepting a transfer">
 
-            const [acceptCommand, acceptDisclosedContracts] =
-                await sdk.token.transfer.accept({
-                    transferInstructionCid: receiverPendingTransfers[0].contractId,
-                    registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-                })
+  {/* include ../../examples/scripts/02-two-step-transfer/_accept.ts */}
+  ```typescript
+  import { localNetStaticConfig } from '@canton-network/wallet-sdk'
+  import type { TransferTestScriptParameters } from './types.js'
 
-            await sdk.ledger
-                .prepare({
-                    partyId: receiver.partyId,
-                    commands: acceptCommand,
-                    disclosedContracts: acceptDisclosedContracts,
-                })
-                .sign(receiverKeys.privateKey)
-                .execute({ partyId: receiver.partyId })
-            logger.info('Receiver accepted the transfer instruction')
+  export default async (args: TransferTestScriptParameters) => {
+      const { sdk, sender, receiver, senderKeys, receiverKeys, logger } = args
 
-            const receiverUtxos = await sdk.token.utxos.list({
-                partyId: receiver.partyId,
-            })
-            logger.info(
-                receiverUtxos,
-                'Receiver UTXOs after accepting transfer instruction'
-            )
+      const [transferCommand, transferDisclosedContracts] =
+          await sdk.token.transfer.create({
+              sender: sender.partyId,
+              recipient: receiver.partyId,
+              instrumentId: 'Amulet',
+              registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+              amount: '2000',
+          })
 
-            const receiverAmuletUtxos = receiverUtxos.filter((utxo) => {
-                return (
-                    utxo.interfaceViewValue.amount === '2000.0000000000' &&
-                    utxo.interfaceViewValue.instrumentId.id === 'Amulet'
-                )
-            })
+      logger.info('Transfer command created, ready for signing and execution')
 
-            if (receiverAmuletUtxos.length === 0) {
-                throw new Error(
-                    'No Amulet UTXOs found for Receiver after accepting transfer instruction'
-                )
-            }
+      await sdk.ledger
+          .prepare({
+              partyId: sender.partyId,
+              commands: transferCommand,
+              disclosedContracts: transferDisclosedContracts,
+          })
+          .sign(senderKeys.privateKey)
+          .execute({ partyId: sender.partyId })
 
-            logger.info('Two step transfer process completed successfully')
-        }
-        ```
-    </Tab>
-    <Tab title="Rejecting a transfer">
-        ``` typescript
-        import { localNetStaticConfig } from '@canton-network/wallet-sdk'
-        import { TransferTestScriptParameters } from './types.js'
+      logger.info(
+          { sender, receiver },
+          'Submitted transfer command from Sender to Receiver'
+      )
+      const receiverPendingTransfers = await sdk.token.transfer.pending(
+          receiver.partyId
+      )
+      logger.info(
+          receiverPendingTransfers,
+          'Receiver pending transfer instructions'
+      )
 
-        export default async (args: TransferTestScriptParameters) => {
-            const { sdk, receiver, sender, senderKeys, receiverKeys, logger } = args
+      const [acceptCommand, acceptDisclosedContracts] =
+          await sdk.token.transfer.accept({
+              transferInstructionCid: receiverPendingTransfers[0].contractId,
+              registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+          })
 
-            const [transferCommand, transferDisclosedContracts] =
-                await sdk.token.transfer.create({
-                    sender: sender.partyId,
-                    recipient: receiver.partyId,
-                    instrumentId: 'Amulet',
-                    registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-                    amount: '2000',
-                })
+      await sdk.ledger
+          .prepare({
+              partyId: receiver.partyId,
+              commands: acceptCommand,
+              disclosedContracts: acceptDisclosedContracts,
+          })
+          .sign(receiverKeys.privateKey)
+          .execute({ partyId: receiver.partyId })
+      logger.info('Receiver accepted the transfer instruction')
 
-            logger.info('Transfer command created, ready for signing and execution')
+      const receiverUtxos = await sdk.token.utxos.list({
+          partyId: receiver.partyId,
+      })
+      logger.info(
+          receiverUtxos,
+          'Receiver UTXOs after accepting transfer instruction'
+      )
 
-            await sdk.ledger
-                .prepare({
-                    partyId: sender.partyId,
-                    commands: transferCommand,
-                    disclosedContracts: transferDisclosedContracts,
-                })
-                .sign(senderKeys.privateKey)
-                .execute({ partyId: sender.partyId })
+      const receiverAmuletUtxos = receiverUtxos.filter((utxo) => {
+          return (
+              utxo.interfaceViewValue.amount === '2000.0000000000' &&
+              utxo.interfaceViewValue.instrumentId.id === 'Amulet'
+          )
+      })
 
-            logger.info(
-                { sender, receiver },
-                'Submitted transfer command from Sender to Receiver'
-            )
+      if (receiverAmuletUtxos.length === 0) {
+          throw new Error(
+              'No Amulet UTXOs found for Receiver after accepting transfer instruction'
+          )
+      }
 
-            const pendingTransfer = await sdk.token.transfer.pending(receiver.partyId)
+      logger.info('Two step transfer process completed successfully')
+  }
+  ```
 
-            if (!pendingTransfer.length) throw Error('pendingTransfer is empty')
+  </Tab>
 
-            const [rejectCommand, rejectDisclosedContracts] =
-                await sdk.token.transfer.reject({
-                    transferInstructionCid: pendingTransfer[0].contractId,
-                    registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-                })
+  <Tab title="Rejecting a transfer">
 
-            await sdk.ledger
-                .prepare({
-                    partyId: receiver.partyId,
-                    commands: rejectCommand,
-                    disclosedContracts: rejectDisclosedContracts,
-                })
-                .sign(receiverKeys.privateKey)
-                .execute({
-                    partyId: receiver.partyId,
-                })
+  {/* include ../../examples/scripts/02-two-step-transfer/_reject.ts */}
+  ```typescript
+  import { localNetStaticConfig } from '@canton-network/wallet-sdk'
+  import type { TransferTestScriptParameters } from './types.js'
 
-            const pendingTransferAfterReject = await sdk.token.transfer.pending(
-                receiver.partyId
-            )
-            if (pendingTransferAfterReject.length)
-                throw Error('pendingTransferAfterReject is not empty')
+  export default async (args: TransferTestScriptParameters) => {
+      const { sdk, receiver, sender, senderKeys, receiverKeys, logger } = args
 
-            logger.info('Successfully rejected the submitted transfer')
-        }
-        ```
-    </Tab>
-    <Tab title="Withdrawing a transfer">
-        ``` typescript
-        import { localNetStaticConfig } from '@canton-network/wallet-sdk'
-        import { TransferTestScriptParameters } from './types.js'
+      const [transferCommand, transferDisclosedContracts] =
+          await sdk.token.transfer.create({
+              sender: sender.partyId,
+              recipient: receiver.partyId,
+              instrumentId: 'Amulet',
+              registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+              amount: '2000',
+          })
 
-        export default async (args: TransferTestScriptParameters) => {
-            const { sdk, receiver, sender, senderKeys, logger } = args
+      logger.info('Transfer command created, ready for signing and execution')
 
-            const [transferCommand, transferDisclosedContracts] =
-                await sdk.token.transfer.create({
-                    sender: sender.partyId,
-                    recipient: receiver.partyId,
-                    instrumentId: 'Amulet',
-                    registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-                    amount: '2000',
-                })
+      await sdk.ledger
+          .prepare({
+              partyId: sender.partyId,
+              commands: transferCommand,
+              disclosedContracts: transferDisclosedContracts,
+          })
+          .sign(senderKeys.privateKey)
+          .execute({ partyId: sender.partyId })
 
-            logger.info('Transfer command created, ready for signing and execution')
+      logger.info(
+          { sender, receiver },
+          'Submitted transfer command from Sender to Receiver'
+      )
 
-            await sdk.ledger
-                .prepare({
-                    partyId: sender.partyId,
-                    commands: transferCommand,
-                    disclosedContracts: transferDisclosedContracts,
-                })
-                .sign(senderKeys.privateKey)
-                .execute({ partyId: sender.partyId })
+      const pendingTransfer = await sdk.token.transfer.pending(receiver.partyId)
 
-            logger.info(
-                { sender, receiver },
-                'Submitted transfer command from Sender to Receiver'
-            )
+      if (!pendingTransfer.length) throw Error('pendingTransfer is empty')
 
-            const pendingTransfer = await sdk.token.transfer.pending(receiver.partyId)
+      const [rejectCommand, rejectDisclosedContracts] =
+          await sdk.token.transfer.reject({
+              transferInstructionCid: pendingTransfer[0].contractId,
+              registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+          })
 
-            if (!pendingTransfer.length) throw Error('pendingTransfer is empty')
+      await sdk.ledger
+          .prepare({
+              partyId: receiver.partyId,
+              commands: rejectCommand,
+              disclosedContracts: rejectDisclosedContracts,
+          })
+          .sign(receiverKeys.privateKey)
+          .execute({
+              partyId: receiver.partyId,
+          })
 
-            const [withdrawCommand, withdrawDisclosedContracts] =
-                await sdk.token.transfer.withdraw({
-                    transferInstructionCid: pendingTransfer[0].contractId,
-                    registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-                })
+      const pendingTransferAfterReject = await sdk.token.transfer.pending(
+          receiver.partyId
+      )
+      if (pendingTransferAfterReject.length)
+          throw Error('pendingTransferAfterReject is not empty')
 
-            await sdk.ledger
-                .prepare({
-                    partyId: sender.partyId,
-                    commands: withdrawCommand,
-                    disclosedContracts: withdrawDisclosedContracts,
-                })
-                .sign(senderKeys.privateKey)
-                .execute({
-                    partyId: sender.partyId,
-                })
+      logger.info('Successfully rejected the submitted transfer')
+  }
+  ```
 
-            const pendingTransferAfterWithdraw = await sdk.token.transfer.pending(
-                receiver.partyId
-            )
-            if (pendingTransferAfterWithdraw.length)
-                throw Error('pendingTransferAfterWithdraw is not empty')
+  </Tab>
 
-            logger.info('Successfully withdrawn the submitted transfer')
-        }
-        ```
-    </Tab>
+  <Tab title="Withdrawing a transfer">
+
+  {/* include ../../examples/scripts/02-two-step-transfer/_withdraw.ts */}
+  ```typescript
+  import { localNetStaticConfig } from '@canton-network/wallet-sdk'
+  import type { TransferTestScriptParameters } from './types.js'
+
+  export default async (args: TransferTestScriptParameters) => {
+      const { sdk, receiver, sender, senderKeys, logger } = args
+
+      const [transferCommand, transferDisclosedContracts] =
+          await sdk.token.transfer.create({
+              sender: sender.partyId,
+              recipient: receiver.partyId,
+              instrumentId: 'Amulet',
+              registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+              amount: '2000',
+          })
+
+      logger.info('Transfer command created, ready for signing and execution')
+
+      await sdk.ledger
+          .prepare({
+              partyId: sender.partyId,
+              commands: transferCommand,
+              disclosedContracts: transferDisclosedContracts,
+          })
+          .sign(senderKeys.privateKey)
+          .execute({ partyId: sender.partyId })
+
+      logger.info(
+          { sender, receiver },
+          'Submitted transfer command from Sender to Receiver'
+      )
+
+      const pendingTransfer = await sdk.token.transfer.pending(receiver.partyId)
+
+      if (!pendingTransfer.length) throw Error('pendingTransfer is empty')
+
+      const [withdrawCommand, withdrawDisclosedContracts] =
+          await sdk.token.transfer.withdraw({
+              transferInstructionCid: pendingTransfer[0].contractId,
+              registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+          })
+
+      await sdk.ledger
+          .prepare({
+              partyId: sender.partyId,
+              commands: withdrawCommand,
+              disclosedContracts: withdrawDisclosedContracts,
+          })
+          .sign(senderKeys.privateKey)
+          .execute({
+              partyId: sender.partyId,
+          })
+
+      const pendingTransferAfterWithdraw = await sdk.token.transfer.pending(
+          receiver.partyId
+      )
+      if (pendingTransferAfterWithdraw.length)
+          throw Error('pendingTransferAfterWithdraw is not empty')
+
+      logger.info('Successfully withdrawn the submitted transfer')
+  }
+  ```
+
+  </Tab>
+
 </Tabs>
 
 
@@ -344,125 +363,137 @@ In the examples below, the SDK example uses the Token Standards inside the a val
 The Wallet SDK allow us to build such a command easily:
 
 <Tabs>
-    <Tab title="SDK">
-        ``` typescript
-        import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
-        export default async function () {
-            // it is important to configure the SDK correctly else you might run into connectivity or authentication issues
-            const sdk = await SDK.create({
-                auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
-                ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
-                token: global.TOKEN_NAMESPACE_CONFIG,
-            })
+  <Tab title="SDK">
 
-            const sender = global.EXISTING_PARTY_1
-            const receiver = global.EXISTING_PARTY_2
+  {/* include ../../examples/snippets/create-transfer-command.ts */}
+  ```typescript
+  import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
-            const utxos = await sdk.token.utxos.list({ partyId: sender })
+  export default async function () {
+      // it is important to configure the SDK correctly else you might run into connectivity or authentication issues
+      const sdk = await SDK.create({
+          auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+          ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+          synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
+          token: global.TOKEN_NAMESPACE_CONFIG,
+      })
 
-            const utxosToUse = utxos.filter((t) => t.interfaceViewValue.amount != '50') //we filter out the 50, since we want to send 125
+      const sender = global.EXISTING_PARTY_1
+      const receiver = global.EXISTING_PARTY_2
 
-            await sdk.token.transfer.create({
-                sender,
-                recipient: receiver,
-                amount: '2000',
-                instrumentId: 'Amulet',
-                registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-                inputUtxos: utxosToUse.map((t) => t.contractId),
-            })
-        }
-        ```
-    </Tab>
-    <Tab title="cURL">
-        ```bash
-        # In the examples below, replace the following with your own values: "YOUR_NODE_JSON_API", "OFFSET_FROM_1", "WALLET_ID", "YOUR_CHOICE_OF_INPUT_CIDs",
-        # "SENDER_PARTY_ID", "RECEIVER_PARTY_ID"
+      const utxos = await sdk.token.utxos.list({ partyId: sender })
 
-        # 1. Call your own node’s RPC to get the latest offset / ledger end
-        curl -X GET http://YOUR_NODE_JSON_API/v2/state/ledger-end
+      const utxosToUse = utxos.filter((t) => t.interfaceViewValue.amount != '50') //we filter out the 50, since we want to send 125
 
-        # 2. Get the contract ID of an active Amulet contract via
-        curl -X POST http://YOUR_NODE_JSON_API/v2/state/active-contracts -d 
-        '{  "verbose" : true, 
-            "activeAtOffset": OFFSET_FROM_1, 
-            "filter" : {
-                "filtersByParty" : {
-                    "WALLET_ID" : {
-                        "cumulative":  
-                            [{"identifierFilter": {
-                                "InterfaceFilter": {
-                                    "value": {
-                                        "includeInterfaceView":true,
-                                        "includeCreatedEventBlob": false, 
-                                        "interfaceId": "#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding"}}}}]}}}}'
+      await sdk.token.transfer.create({
+          sender,
+          recipient: receiver,
+          amount: '2000',
+          instrumentId: 'Amulet',
+          registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+          inputUtxos: utxosToUse.map((t) => t.contractId),
+      })
+  }
+  ```
 
-        # 3. Get context information for Canton Coin
-            #3. a) the Registry admin party id:
-        curl -X GET https://scan.sv-1.global.canton.network.sync.global/registry/metadata/v1/info
-        # Example output:
-        # {"adminId":"DSO::1220b143…","supportedApis":{"splice-api-token-metadata-v1":1}}
+  </Tab>
 
-            # 3. b) the instrument ID:
-        curl -X GET https://scan.sv-1.global.canton.network.sync.global/registry/metadata/v1/instruments
-        # Example output:
-        # "instrumentId" : {
-        #   "admin" : "DSO::1220b1431ef217342db44d516bb9befde802be7d8899637d290895fa58880f19accc",
-        #   "id" : "Amulet"}
+  <Tab title="cURL">
 
-            # 3. c) Get the TransferFactory and context from the asset admin:
-        curl -X POST -H "Content-Type: application/json" https://scan.sv-1.dev.global.canton.network.sync.global/registry/transfer-instruction/v1/transfer-factory -d '{
-        "choiceArguments" : {
-        "expectedAdmin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-        "transfer" : {
-            "sender" : "SENDER_PARTY_ID",
-            "receiver" : "RECEIVER_PARTY_ID",
-            "amount" : "1000.0",
-            "instrumentId" : {
-            "admin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-            "id" : "Amulet"
-            },
-            "requestedAt" : "2025-07-11T12:45:00Z",
-            "executeBefore" : "2025-07-12T12:45:00Z",
-            "inputHoldingCids" : [
-            "YOUR_CHOICE_OF_INPUT_CIDs"
-            ],
-            "meta" : { "values" : {} }
-        },
-        "extraArgs" : {
-            "context": { "values" : {} },
-            "meta" : { "values" : {} }
-        }
-            }
-        }'
-        # Example output:
-        # {
-        #   "factoryId": "009f00e5bf0…", – ContractId of the transferfactory to use
-        #   "transferKind": "direct", – type of transfer - see pre-approvals for more information
-        #   "choiceContext": { … }, – data to stick in the extra arguments
-        #   "disclosedContracts": [ … ] – any admin-private contracts on chain needed for preparation
-        # }
+  {/* include ../../examples/bash/create-command.sh */}
+  ```bash
+  # In the examples below, replace the following with your own values: "YOUR_NODE_JSON_API", "OFFSET_FROM_1", "WALLET_ID", "YOUR_CHOICE_OF_INPUT_CIDs",
+  # "SENDER_PARTY_ID", "RECEIVER_PARTY_ID"
 
-        # 4. The information obtained can be used to construct the transfer and transaction in the prepare step:
-        #
-        # Transfer:
-        #   "transfer" : {
-        #     "sender" : "SENDER_PARTY_ID",
-        #     "receiver" : "RECEIVER_PARTY_ID",
-        #     "amount" : "1000.0",
-        #     "instrumentId" : {
-        #       "admin" : "DSO::1220b1431ef217342db44d516bb9befde802be7d8899637d290895fa58880f19accc",
-        #       "id" : "Amulet"
-        #     },
-        #     "requestedAt" : "2025-08-11T12:45:00Z",
-        #     "executeBefore" : "2025-08-12T12:45:00Z",
-        #     "inputHoldingCids" : [
-        #   "YOUR_CHOICE_OF_INPUT_CIDs"
-        #     ],
-        #     "meta" : { "values" : {} }
-        #   }
-        ```
-    </Tab>
+  # 1. Call your own node’s RPC to get the latest offset / ledger end
+  curl -X GET http://YOUR_NODE_JSON_API/v2/state/ledger-end
+
+  # 2. Get the contract ID of an active Amulet contract via
+  curl -X POST http://YOUR_NODE_JSON_API/v2/state/active-contracts -d 
+  '{  "verbose" : true, 
+      "activeAtOffset": OFFSET_FROM_1, 
+      "filter" : {
+          "filtersByParty" : {
+              "WALLET_ID" : {
+                  "cumulative":  
+                      [{"identifierFilter": {
+                          "InterfaceFilter": {
+                              "value": {
+                                  "includeInterfaceView":true,
+                                  "includeCreatedEventBlob": false, 
+                                  "interfaceId": "#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding"}}}}]}}}}'
+
+  # 3. Get context information for Canton Coin
+      #3. a) the Registry admin party id:
+  curl -X GET https://scan.sv-1.global.canton.network.sync.global/registry/metadata/v1/info
+  # Example output:
+  # {"adminId":"DSO::1220b143…","supportedApis":{"splice-api-token-metadata-v1":1}}
+
+      # 3. b) the instrument ID:
+  curl -X GET https://scan.sv-1.global.canton.network.sync.global/registry/metadata/v1/instruments
+  # Example output:
+  # "instrumentId" : {
+  #   "admin" : "DSO::1220b1431ef217342db44d516bb9befde802be7d8899637d290895fa58880f19accc",
+  #   "id" : "Amulet"}
+
+      # 3. c) Get the TransferFactory and context from the asset admin:
+  curl -X POST -H "Content-Type: application/json" https://scan.sv-1.dev.global.canton.network.sync.global/registry/transfer-instruction/v1/transfer-factory -d '{
+  "choiceArguments" : {
+    "expectedAdmin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+    "transfer" : {
+      "sender" : "SENDER_PARTY_ID",
+      "receiver" : "RECEIVER_PARTY_ID",
+      "amount" : "1000.0",
+      "instrumentId" : {
+        "admin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "id" : "Amulet"
+      },
+      "requestedAt" : "2025-07-11T12:45:00Z",
+      "executeBefore" : "2025-07-12T12:45:00Z",
+      "inputHoldingCids" : [
+        "YOUR_CHOICE_OF_INPUT_CIDs"
+      ],
+      "meta" : { "values" : {} }
+    },
+    "extraArgs" : {
+      "context": { "values" : {} },
+      "meta" : { "values" : {} }
+    }
+      }
+    }'
+  # Example output:
+  # {
+  #   "factoryId": "009f00e5bf0…", – ContractId of the transferfactory to use
+  #   "transferKind": "direct", – type of transfer - see pre-approvals for more information
+  #   "choiceContext": { … }, – data to stick in the extra arguments
+  #   "disclosedContracts": [ … ] – any admin-private contracts on chain needed for preparation
+  # }
+
+
+
+  # 4. The information obtained can be used to construct the transfer and transaction in the prepare step:
+  #
+  # Transfer:
+  #   "transfer" : {
+  #     "sender" : "SENDER_PARTY_ID",
+  #     "receiver" : "RECEIVER_PARTY_ID",
+  #     "amount" : "1000.0",
+  #     "instrumentId" : {
+  #       "admin" : "DSO::1220b1431ef217342db44d516bb9befde802be7d8899637d290895fa58880f19accc",
+  #       "id" : "Amulet"
+  #     },
+  #     "requestedAt" : "2025-08-11T12:45:00Z",
+  #     "executeBefore" : "2025-08-12T12:45:00Z",
+  #     "inputHoldingCids" : [
+  #   "YOUR_CHOICE_OF_INPUT_CIDs"
+  #     ],
+  #     "meta" : { "values" : {} }
+  #   }
+  ```
+
+  </Tab>
+
 </Tabs>
 
 
@@ -473,7 +504,8 @@ In a more professional way, you would want to carefully pick which utxo's you wo
 more information on that, see the next section [UTXO Selection and Management](#utxo-selection-and-management). Alongside, you might also want to define a custom 
 expiration time for when the transaction should automatically expire.
 
-``` typescript
+{/* include ../../examples/snippets/create-transfer-command-full.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -481,6 +513,7 @@ export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
         token: global.TOKEN_NAMESPACE_CONFIG,
     })
 
@@ -505,8 +538,8 @@ if we call `sdk.token.utxos.list({partyId, includeLocked: true})` then it will s
 ### UTXO Selection and Management
 
 If you opt to choose your own UTXOs, it's advised that you read the other documentation sections on 
-[Holding UTXO Management](https://docs.canton.network/appdev/deep-dives/token-standard#holding-utxo-management) and 
-[UTXO Model and Dust Expiry](https://docs.canton.network/overview/reference/canton-coin-tokenomics#utxo-model-and-dust-expiry)
+[Holding UTXO Management](/appdev/deep-dives/token-standard#holding-utxo-management) and 
+[UTXO Model and Dust Expiry](/overview/reference/canton-coin-tokenomics#utxo-model-and-dust-expiry)
 
 
 ## Preparing the Transaction
@@ -518,68 +551,78 @@ Note: contractId's are pinned as part of prepare step, the execution of the tran
 To prepare a transaction we need to send the commands to the ledger.
 
 <Tabs>
-    <Tab title="SDK">
-        ``` typescript
-        import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
-        export default async function () {
-            const sdk = await SDK.create({
-                auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
-                ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
-                token: global.TOKEN_NAMESPACE_CONFIG,
-            })
+  <Tab title="SDK">
 
-            const sender = global.EXISTING_PARTY_1
-            const receiver = global.EXISTING_PARTY_2
+  {/* include ../../examples/snippets/prepare-transfer-transaction.ts */}
+  ```typescript
+  import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
-            const [transferCommand, disclosedContracts] =
-                await sdk.token.transfer.create({
-                    sender,
-                    recipient: receiver,
-                    amount: '2000',
-                    instrumentId: 'Amulet',
-                    registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-                })
+  export default async function () {
+      const sdk = await SDK.create({
+          auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+          ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+          synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
+          token: global.TOKEN_NAMESPACE_CONFIG,
+      })
 
-            sdk.ledger.prepare({
-                partyId: sender,
-                commands: transferCommand,
-                disclosedContracts,
-            })
-        }
-        ```
-    </Tab>
-    <Tab title="cURL">
-        ```bash
-        # In the example below, replace the values with your own
+      const sender = global.EXISTING_PARTY_1
+      const receiver = global.EXISTING_PARTY_2
 
-        # PrepareTransaction call with all the inputs gathered.
-        curl -X POST http://YOUR_NODE_JSON_API/v2/interactive-submission/prepare -d {
-            "userId" : "USER_ID",
-            "commandId" : "curl-transfer-test",
-            "actAs" : ["SENDER_PARTY_ID"],
-            "readAs" : [],
-            "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-            "verboseHashing": false,
-            "packageIdSelectionPreference" : [],
-            "commands" : [ {
-            "ExerciseCommand" : {
-                "templateId" : "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory",
-                "contractId" : "009f00e5bf0…",
-                "choice" : "TransferFactory_Transfer",
-                "choiceArgument" : { 
-                ... ,
-                "extraArgs" : {
-                    "context": { ... },
-                    ...
-                }
-                }
+      const [transferCommand, disclosedContracts] =
+          await sdk.token.transfer.create({
+              sender,
+              recipient: receiver,
+              amount: '2000',
+              instrumentId: 'Amulet',
+              registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+          })
+
+      sdk.ledger.prepare({
+          partyId: sender,
+          commands: transferCommand,
+          disclosedContracts,
+      })
+  }
+  ```
+
+  </Tab>
+
+  <Tab title="cURL">
+
+  {/* include ../../examples/bash/prepare-transaction.sh */}
+  ```bash
+  # In the example below, replace the values with your own
+
+  # PrepareTransaction call with all the inputs gathered.
+   curl -X POST http://YOUR_NODE_JSON_API/v2/interactive-submission/prepare -d {
+      "userId" : "USER_ID",
+      "commandId" : "curl-transfer-test",
+      "actAs" : ["SENDER_PARTY_ID"],
+      "readAs" : [],
+      "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+      "verboseHashing": false,
+      "packageIdSelectionPreference" : [],
+      "commands" : [ {
+        "ExerciseCommand" : {
+          "templateId" : "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory",
+          "contractId" : "009f00e5bf0…",
+          "choice" : "TransferFactory_Transfer",
+          "choiceArgument" : { 
+            ... ,
+            "extraArgs" : {
+              "context": { ... },
+              ...
             }
-            } ],
-            "disclosedContracts" : [ … ]
+          }
         }
-        ```
-    </Tab>
+      } ],
+      "disclosedContracts" : [ … ]
+    }
+  ```
+
+  </Tab>
+
 </Tabs>
 
 The return type is an unsigned transaction if the combination of the commands are possible, otherwise an error is returned. The transaction can then be visualised and signed by the party.
@@ -592,7 +635,8 @@ On top of visualizing the transaction, it's also important to compute the transa
 
 The hash can be computed using the Wallet SDK:
 
-``` typescript
+{/* include ../../examples/snippets/compute-transaction-hash.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -600,6 +644,7 @@ export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
 
     const transaction = global.PREPARED_TRANSACTION
@@ -632,7 +677,7 @@ for instance on the `getTransactionById` or `listHoldingTransactions` (Detailed 
 
 The Transactions will have format:
 
-``` javascript
+```typescript
 export interface Transaction {
     updateId: string // unique updateId
     offset: number // the ledger offset (local validator)
@@ -644,7 +689,7 @@ export interface Transaction {
 
 A single transaction can contain multiple events (deposits and withdrawals are considered events). In order to figure out the on chain transaction it is required to iterate over all the events. The events have the format:
 
-``` javascript
+```typescript
 export interface TokenStandardEvent {
     label: Label // used to identify the type of transaction
     lockedHoldingsChange: HoldingsChange // all the changes to locked holdings
@@ -658,758 +703,775 @@ export interface TokenStandardEvent {
 below you can have a look at different event types and how to potentially visualize the transaction for a client
 
 <Tabs>
-    <Tab title="Tap operation">
-    Here is an example on how a "tap" event looks like (Performing tap):
 
-    ```json
-    {
-        "updateId": "1220a8d78d06461abd045813491f9997a1bcf2f29d4c2a9afadeb89616998201b40a",
-        "offset": 1313,
-        "recordTime": "2025-10-14T02:11:45.485840Z",
-        "synchronizerId": "global-domain::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-        "events": [
-            {
-                "label": {
-                    "burnAmount": "0",
-                    "mintAmount": "2000000",
-                    "type": "Mint",
-                    "tokenStandardChoice": null,
-                    "reason": "tapped faucet",
-                    "meta": {
-                        "values": {}
-                    }
-                },
-                "unlockedHoldingsChange": {
-                    "creates": [
-                        {
-                            "amount": "2000000.0000000000",
-                            "instrumentId": {
-                                "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                "id": "Amulet"
-                            },
-                            "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
-                            "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                            "meta": {
-                                "values": {
-                                    "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                                    "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                                }
-                            },
-                            "lock": null
-                        }
-                    ]
-                },
-                "unlockedHoldingsChangeSummary": {
-                    "numOutputs": 1,
-                    "outputAmount": "2000000",
-                    "amountChange": "2000000"
-                },
-                "transferInstruction": null
-            }
-        ]
-    }
-    ```
+  <Tab title="Tap operation">
 
-    The tap gives a nice and simple view some key values to look at. Using the `label` we can quickly gage what is happening:
+  Here is an example on how a "tap" event looks like (Performing tap):
 
-    ```json
-    "label": {
-        "burnAmount": "0", // how much was burned
-        "mintAmount": "2000000", // how much was minted
-        "type": "Mint", // event type
-        "tokenStandardChoice": null, // no token standard choice
-        "reason": "tapped faucet", // reason
-        "meta": {
-            "values": {} // any other meta data value
-        }
-    }
-    ```
+  {/* include ../../examples/snippets/tap-event.json */}
+  ```json
+  {
+      "updateId": "1220a8d78d06461abd045813491f9997a1bcf2f29d4c2a9afadeb89616998201b40a",
+      "offset": 1313,
+      "recordTime": "2025-10-14T02:11:45.485840Z",
+      "synchronizerId": "global-domain::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+      "events": [
+          {
+              "label": {
+                  "burnAmount": "0",
+                  "mintAmount": "2000000",
+                  "type": "Mint",
+                  "tokenStandardChoice": null,
+                  "reason": "tapped faucet",
+                  "meta": {
+                      "values": {}
+                  }
+              },
+              "unlockedHoldingsChange": {
+                  "creates": [
+                      {
+                          "amount": "2000000.0000000000",
+                          "instrumentId": {
+                              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                              "id": "Amulet"
+                          },
+                          "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
+                          "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                          "meta": {
+                              "values": {
+                                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+                              }
+                          },
+                          "lock": null
+                      }
+                  ]
+              },
+              "unlockedHoldingsChangeSummary": {
+                  "numOutputs": 1,
+                  "outputAmount": "2000000",
+                  "amountChange": "2000000"
+              },
+              "transferInstruction": null
+          }
+      ]
+  }
+  ```
 
-    For a "tap" event we don't have any locked holding changes, however we do have an unlocked create event:
+  The tap gives a nice and simple view some key values to look at. Using the `label` we can quickly gauge what is happening:
 
-    ```json
-    "unlockedHoldingsChange": {
-        // we have one create event
-        // if utxos what spend this would be an archive instead
-        "creates": [
-            {
-                // amount on the utxo
-                "amount": "2000000.0000000000",
-                // instrument information
-                "instrumentId": {
-                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                    "id": "Amulet"
-                },
-                // the contract id of the new utxo
-                "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
-                // owner of the utxo
-                "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                // any meta data
-                "meta": {
-                    "values": {
-                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                    }
-                },
-                // lock if applicable
-                "lock": null
-            }
-        ]
-    }
-    ```
-    </Tab>
-    <Tab title="Merge Split">
-        A Merge or split is usually done by performing a transfer to yourself, by selecting several input utxos they can be consolidated into one and likewise a transfer to yourself of one big utxo can be used to split it into two. Below is the usual merge split that you would see if you use an utxo that is bigger than the transferred amount when performing a two-step transfer:
+  ```json
+  "label": {
+      "burnAmount": "0", // how much was burned
+      "mintAmount": "2000000", // how much was minted
+      "type": "Mint", // event type
+      "tokenStandardChoice": null, // no token standard choice
+      "reason": "tapped faucet", // reason
+      "meta": {
+          "values": {} // any other meta data value
+      }
+  }
+  ```
 
-        ```json
-        {
-            "updateId": "1220f5c5a8403d830babd0b25124701ec59c0540d3f75377fe48df34c89a955f7bfc",
-            "offset": 1316,
-            "recordTime": "2025-10-14T02:11:47.509312Z",
-            "synchronizerId": "global-domain::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-            "events": [
-                {
-                    "label": {
-                        "burnAmount": "0",
-                        "mintAmount": "0",
-                        "type": "MergeSplit",
-                        "tokenStandardChoice": {
-                            "name": "TransferFactory_Transfer",
-                            "choiceArgument": {
-                                "expectedAdmin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                "transfer": {
-                                    "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                                    "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
-                                    "amount": "100.0000000000",
-                                    "instrumentId": {
-                                        "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                        "id": "Amulet"
-                                    },
-                                    "requestedAt": "2025-10-14T02:10:47.406Z",
-                                    "executeBefore": "2025-10-15T02:11:47.406Z",
-                                    "inputHoldingCids": [
-                                        "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305"
-                                    ],
-                                    "meta": {
-                                        "values": {
-                                            "splice.lfdecentralizedtrust.org/reason": "memo-ref"
-                                        }
-                                    }
-                                },
-                                "extraArgs": {
-                                    "context": {
-                                        "values": {
-                                            "amulet-rules": {
-                                                "tag": "AV_ContractId",
-                                                "value": "00ccd166b3b91e776fc1d2270d3ffdff551bd43117c679a145281d4c4545fa8bc7ca1112204f1604f06e4c616656c39678e173f68a2ae3a96af984b71120a6da57ca34d66c"
-                                            },
-                                            "open-round": {
-                                                "tag": "AV_ContractId",
-                                                "value": "003a5299317dd50dc84c2a645f2b233f69dfd16286ddf9dd2996c764ff93e591cbca11122008b6e9f88a00262449d8e6bf4de2edf50b85a160c068744b53091653fb107b9f"
-                                            }
-                                        }
-                                    },
-                                    "meta": {
-                                        "values": {}
-                                    }
-                                }
-                            },
-                            "exerciseResult": {
-                                "output": {
-                                    "tag": "TransferInstructionResult_Pending",
-                                    "value": {
-                                        "transferInstructionCid": "002e296168aeabe02e40c04874c794a5855f918b8acf950f56b2b941c09305fd4bca1112201bda3ae677b8a26e682f6869c97afeea9136852ee31e638045f6be87d6c0e953"
-                                    }
-                                },
-                                "senderChangeCids": [
-                                    "00ba31e046f04908e6bf6fe5eeb725f0e2054f37353e85c7ef99a0924df8c1b891ca11122046dee24aeae91d4a5fc0570458cad8ccc94002645b6a6e2c82cc5f07ca897fe9"
-                                ],
-                                "meta": {
-                                    "values": {}
-                                }
-                            }
-                        },
-                        "reason": "memo-ref",
-                        "meta": {
-                            "values": {}
-                        }
-                    },
-                    "lockedHoldingsChange": {
-                        "creates": [
-                            {
-                                "amount": "100.0000000000",
-                                "instrumentId": {
-                                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                    "id": "Amulet"
-                                },
-                                "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
-                                "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                                "meta": {
-                                    "values": {
-                                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                                    }
-                                },
-                                "lock": {
-                                    "holders": [
-                                        "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
-                                    ],
-                                    "expiresAt": "2025-10-15T02:11:47.406Z",
-                                    "expiresAfter": null,
-                                    "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
-                                }
-                            }
-                        ]
-                    },
-                    "lockedHoldingsChangeSummary": {
-                        "numOutputs": 1,
-                        "outputAmount": "100",
-                        "amountChange": "100"
-                    },
-                    "unlockedHoldingsChange": {
-                        "creates": [
-                            {
-                                "amount": "1999900.0000000000",
-                                "instrumentId": {
-                                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                    "id": "Amulet"
-                                },
-                                "contractId": "00ba31e046f04908e6bf6fe5eeb725f0e2054f37353e85c7ef99a0924df8c1b891ca11122046dee24aeae91d4a5fc0570458cad8ccc94002645b6a6e2c82cc5f07ca897fe9",
-                                "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                                "meta": {
-                                    "values": {
-                                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                                    }
-                                },
-                                "lock": null
-                            }
-                        ],
-                        "archives": [
-                            {
-                                "amount": "2000000.0000000000",
-                                "instrumentId": {
-                                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                    "id": "Amulet"
-                                },
-                                "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
-                                "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                                "meta": {
-                                    "values": {
-                                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                                    }
-                                },
-                                "lock": null
-                            }
-                        ]
-                    },
-                    "unlockedHoldingsChangeSummary": {
-                        "numInputs": 1,
-                        "inputAmount": "2000000",
-                        "numOutputs": 1,
-                        "outputAmount": "1999900",
-                        "amountChange": "-100"
-                    },
-                    "transferInstruction": {
-                        "originalInstructionCid": null,
-                        "transfer": {
-                            "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                            "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
-                            "amount": "100.0000000000",
-                            "instrumentId": {
-                                "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                "id": "Amulet"
-                            },
-                            "requestedAt": "2025-10-14T02:10:47.406Z",
-                            "executeBefore": "2025-10-15T02:11:47.406Z",
-                            "inputHoldingCids": [
-                                "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305"
-                            ],
-                            "meta": {
-                                "values": {
-                                    "splice.lfdecentralizedtrust.org/reason": "memo-ref"
-                                }
-                            }
-                        },
-                        "status": {
-                            "before": null
-                        },
-                        "meta": null
-                    }
-                }
-            ]
-        }
-        ```
+  For a "tap" event we don't have any locked holding changes, however we do have an unlocked create event:
 
-        The label gives us the quick information
+  ```json
+  "unlockedHoldingsChange": {
+      // we have one create event
+      // if utxos what spend this would be an archive instead
+      "creates": [
+          {
+              // amount on the utxo
+              "amount": "2000000.0000000000",
+              // instrument information
+              "instrumentId": {
+                  "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                  "id": "Amulet"
+              },
+              // the contract id of the new utxo
+              "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
+              // owner of the utxo
+              "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+              // any meta data
+              "meta": {
+                  "values": {
+                      "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                      "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+                  }
+              },
+              // lock if applicable
+              "lock": null
+          }
+      ]
+  }
+  ```
 
-        ```json
-        "label": {
-                "burnAmount": "0",  // how much was burned
-                "mintAmount": "0",  // how much was minted
-                "type": "MergeSplit", // event type
-                "tokenStandardChoice": { // the entire token standard choice
+  </Tab>
 
-                },
-                "reason": "memo-ref", // memo tag
-                "meta": { // any other relevant meta data
-                "values": {}
-                }
-            }
-        ```
+  <Tab title="Merge Split">
 
-        The locked holding change shows one new utxo equivalent to the amount send to Bob. Once Bob accepts the transfer this locked utxo would be archived.information.
+  A Merge or split is usually done by performing a transfer to yourself, by selecting several input utxos they can be consolidated into one and likewise a transfer to yourself of one big utxo can be used to split it into two. Below is the usual merge split that you would see if you use an utxo that is bigger than the transferred amount when performing a two-step transfer:
 
-        ```json
-        "lockedHoldingsChange": {
-            // we have 1 new locked holding of the transfer amount (100)
-            "creates": [
-                {
-                "amount": "100.0000000000",
-                "instrumentId": {
-                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                    "id": "Amulet"
-                },
-                "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
-                // alice is still the owner since this a locked utxo, until bob accepts
-                "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                "meta": {
-                    "values": {
-                    "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                    "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                    }
-                },
-                "lock": {
-                // the DSO (instrument Admin) is holder of the lock
-                    "holders": [
-                    "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
-                    ],
-                    "expiresAt": "2025-10-15T02:11:47.406Z",
-                    "expiresAfter": null,
-                    "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
-                }
-                }
-            ]
-            },
-            //overview of how holdings have changed
-            "lockedHoldingsChangeSummary": {
-            "numOutputs": 1,
-            "outputAmount": "100",
-            "amountChange": "100"
-            },
-        ```
+  {/* include ../../examples/snippets/merge-split-event.json */}
+  ```json
+  {
+      "updateId": "1220f5c5a8403d830babd0b25124701ec59c0540d3f75377fe48df34c89a955f7bfc",
+      "offset": 1316,
+      "recordTime": "2025-10-14T02:11:47.509312Z",
+      "synchronizerId": "global-domain::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+      "events": [
+          {
+              "label": {
+                  "burnAmount": "0",
+                  "mintAmount": "0",
+                  "type": "MergeSplit",
+                  "tokenStandardChoice": {
+                      "name": "TransferFactory_Transfer",
+                      "choiceArgument": {
+                          "expectedAdmin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                          "transfer": {
+                              "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                              "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+                              "amount": "100.0000000000",
+                              "instrumentId": {
+                                  "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                                  "id": "Amulet"
+                              },
+                              "requestedAt": "2025-10-14T02:10:47.406Z",
+                              "executeBefore": "2025-10-15T02:11:47.406Z",
+                              "inputHoldingCids": [
+                                  "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305"
+                              ],
+                              "meta": {
+                                  "values": {
+                                      "splice.lfdecentralizedtrust.org/reason": "memo-ref"
+                                  }
+                              }
+                          },
+                          "extraArgs": {
+                              "context": {
+                                  "values": {
+                                      "amulet-rules": {
+                                          "tag": "AV_ContractId",
+                                          "value": "00ccd166b3b91e776fc1d2270d3ffdff551bd43117c679a145281d4c4545fa8bc7ca1112204f1604f06e4c616656c39678e173f68a2ae3a96af984b71120a6da57ca34d66c"
+                                      },
+                                      "open-round": {
+                                          "tag": "AV_ContractId",
+                                          "value": "003a5299317dd50dc84c2a645f2b233f69dfd16286ddf9dd2996c764ff93e591cbca11122008b6e9f88a00262449d8e6bf4de2edf50b85a160c068744b53091653fb107b9f"
+                                      }
+                                  }
+                              },
+                              "meta": {
+                                  "values": {}
+                              }
+                          }
+                      },
+                      "exerciseResult": {
+                          "output": {
+                              "tag": "TransferInstructionResult_Pending",
+                              "value": {
+                                  "transferInstructionCid": "002e296168aeabe02e40c04874c794a5855f918b8acf950f56b2b941c09305fd4bca1112201bda3ae677b8a26e682f6869c97afeea9136852ee31e638045f6be87d6c0e953"
+                              }
+                          },
+                          "senderChangeCids": [
+                              "00ba31e046f04908e6bf6fe5eeb725f0e2054f37353e85c7ef99a0924df8c1b891ca11122046dee24aeae91d4a5fc0570458cad8ccc94002645b6a6e2c82cc5f07ca897fe9"
+                          ],
+                          "meta": {
+                              "values": {}
+                          }
+                      }
+                  },
+                  "reason": "memo-ref",
+                  "meta": {
+                      "values": {}
+                  }
+              },
+              "lockedHoldingsChange": {
+                  "creates": [
+                      {
+                          "amount": "100.0000000000",
+                          "instrumentId": {
+                              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                              "id": "Amulet"
+                          },
+                          "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
+                          "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                          "meta": {
+                              "values": {
+                                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+                              }
+                          },
+                          "lock": {
+                              "holders": [
+                                  "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
+                              ],
+                              "expiresAt": "2025-10-15T02:11:47.406Z",
+                              "expiresAfter": null,
+                              "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
+                          }
+                      }
+                  ]
+              },
+              "lockedHoldingsChangeSummary": {
+                  "numOutputs": 1,
+                  "outputAmount": "100",
+                  "amountChange": "100"
+              },
+              "unlockedHoldingsChange": {
+                  "creates": [
+                      {
+                          "amount": "1999900.0000000000",
+                          "instrumentId": {
+                              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                              "id": "Amulet"
+                          },
+                          "contractId": "00ba31e046f04908e6bf6fe5eeb725f0e2054f37353e85c7ef99a0924df8c1b891ca11122046dee24aeae91d4a5fc0570458cad8ccc94002645b6a6e2c82cc5f07ca897fe9",
+                          "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                          "meta": {
+                              "values": {
+                                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+                              }
+                          },
+                          "lock": null
+                      }
+                  ],
+                  "archives": [
+                      {
+                          "amount": "2000000.0000000000",
+                          "instrumentId": {
+                              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                              "id": "Amulet"
+                          },
+                          "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
+                          "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                          "meta": {
+                              "values": {
+                                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+                              }
+                          },
+                          "lock": null
+                      }
+                  ]
+              },
+              "unlockedHoldingsChangeSummary": {
+                  "numInputs": 1,
+                  "inputAmount": "2000000",
+                  "numOutputs": 1,
+                  "outputAmount": "1999900",
+                  "amountChange": "-100"
+              },
+              "transferInstruction": {
+                  "originalInstructionCid": null,
+                  "transfer": {
+                      "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                      "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+                      "amount": "100.0000000000",
+                      "instrumentId": {
+                          "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                          "id": "Amulet"
+                      },
+                      "requestedAt": "2025-10-14T02:10:47.406Z",
+                      "executeBefore": "2025-10-15T02:11:47.406Z",
+                      "inputHoldingCids": [
+                          "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305"
+                      ],
+                      "meta": {
+                          "values": {
+                              "splice.lfdecentralizedtrust.org/reason": "memo-ref"
+                          }
+                      }
+                  },
+                  "status": {
+                      "before": null
+                  },
+                  "meta": null
+              }
+          }
+      ]
+  }
+  ```
 
-        There is also an unlocked holding change, consist of one create and one archive. Since alice had one transaction of 2000000.0000000000, and only send 100, then she gets the remaining 1999900.0000000000 back:
+  The label gives us the quick information
 
-        ```json
-        "unlockedHoldingsChange": {
-                // creates the new utxo for alice with the unspent amount
-                "creates": [
-                {
-                    "amount": "1999900.0000000000",
-                    "instrumentId": {
-                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                    "id": "Amulet"
-                    },
-                    "contractId": "00ba31e046f04908e6bf6fe5eeb725f0e2054f37353e85c7ef99a0924df8c1b891ca11122046dee24aeae91d4a5fc0570458cad8ccc94002645b6a6e2c82cc5f07ca897fe9",
-                    "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                    "meta": {
-                    "values": {
-                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                    }
-                    },
-                    "lock": null
-                }
-                ],
-                // archives the old spend utxo
-                "archives": [
-                {
-                    "amount": "2000000.0000000000",
-                    "instrumentId": {
-                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                    "id": "Amulet"
-                    },
-                    "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
-                    "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                    "meta": {
-                    "values": {
-                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                    }
-                    },
-                    "lock": null
-                }
-                ]
-            },
-            // overview of how this has changed alices utxos
-            "unlockedHoldingsChangeSummary": {
-                "numInputs": 1,
-                "inputAmount": "2000000",
-                "numOutputs": 1,
-                "outputAmount": "1999900",
-                "amountChange": "-100"
-            }
-        ```
-    </Tab>
-    <Tab title="Transfer Out">
-        When Bob accepts the transfer we see the actual transfer out event. This is seen from Alice point of view
+  ```json
+  "label": {
+          "burnAmount": "0",  // how much was burned
+          "mintAmount": "0",  // how much was minted
+          "type": "MergeSplit", // event type
+          "tokenStandardChoice": { // the entire token standard choice
 
-        ```json
-        {
-            "updateId": "122064654ed225797ea8161eb0730d38beff917201cecb00079666192cda648bb182",
-            "offset": 1319,
-            "recordTime": "2025-10-14T02:11:48.989233Z",
-            "synchronizerId": "global-domain::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-            "events": [
-                {
-                    "label": {
-                        "burnAmount": "0",
-                        "mintAmount": "0",
-                        "type": "TransferOut",
-                        "receiverAmounts": [
-                            {
-                                "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
-                                "amount": "100"
-                            }
-                        ],
-                        "tokenStandardChoice": {
-                            "name": "TransferInstruction_Accept",
-                            "choiceArgument": {
-                                "extraArgs": {
-                                    "context": {
-                                        "values": {
-                                            "amulet-rules": {
-                                                "tag": "AV_ContractId",
-                                                "value": "00ccd166b3b91e776fc1d2270d3ffdff551bd43117c679a145281d4c4545fa8bc7ca1112204f1604f06e4c616656c39678e173f68a2ae3a96af984b71120a6da57ca34d66c"
-                                            },
-                                            "expire-lock": {
-                                                "tag": "AV_Bool",
-                                                "value": true
-                                            },
-                                            "open-round": {
-                                                "tag": "AV_ContractId",
-                                                "value": "003a5299317dd50dc84c2a645f2b233f69dfd16286ddf9dd2996c764ff93e591cbca11122008b6e9f88a00262449d8e6bf4de2edf50b85a160c068744b53091653fb107b9f"
-                                            }
-                                        }
-                                    },
-                                    "meta": {
-                                        "values": {}
-                                    }
-                                }
-                            },
-                            "exerciseResult": {
-                                "output": {
-                                    "tag": "TransferInstructionResult_Completed",
-                                    "value": {
-                                        "receiverHoldingCids": [
-                                            "002e360f78cf28a40c742839572bbf7a683ba59c3db906757b284a2edf433700edca1112209685da5d5a5c531b51504601c175cbbeaba8956e7a7fc2926fa8909d8b81a95a"
-                                        ]
-                                    }
-                                },
-                                "senderChangeCids": [],
-                                "meta": {
-                                    "values": {}
-                                }
-                            }
-                        },
-                        "reason": "memo-ref",
-                        "meta": {
-                            "values": {}
-                        }
-                    },
-                    "lockedHoldingsChange": {
-                        "archives": [
-                            {
-                                "amount": "100.0000000000",
-                                "instrumentId": {
-                                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                    "id": "Amulet"
-                                },
-                                "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
-                                "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                                "meta": {
-                                    "values": {
-                                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                                    }
-                                },
-                                "lock": {
-                                    "holders": [
-                                        "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
-                                    ],
-                                    "expiresAt": "2025-10-15T02:11:47.406Z",
-                                    "expiresAfter": null,
-                                    "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
-                                }
-                            }
-                        ]
-                    },
-                    "lockedHoldingsChangeSummary": {
-                        "numInputs": 1,
-                        "inputAmount": "100",
-                        "amountChange": "-100"
-                    },
-                    "transferInstruction": {
-                        "originalInstructionCid": null,
-                        "transfer": {
-                            "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                            "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
-                            "amount": "100.0000000000",
-                            "instrumentId": {
-                                "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                "id": "Amulet"
-                            },
-                            "requestedAt": "2025-10-14T02:10:47.406Z",
-                            "executeBefore": "2025-10-15T02:11:47.406Z",
-                            "inputHoldingCids": [
-                                "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b"
-                            ],
-                            "meta": {
-                                "values": {
-                                    "splice.lfdecentralizedtrust.org/reason": "memo-ref"
-                                }
-                            }
-                        },
-                        "meta": {
-                            "values": {}
-                        },
-                        "status": {
-                            "before": {
-                                "tag": "TransferPendingReceiverAcceptance",
-                                "value": {}
-                            }
-                        }
-                    }
-                }
-            ]
-        }
-        ```
+          },
+          "reason": "memo-ref", // memo tag
+          "meta": { // any other relevant meta data
+          "values": {}
+          }
+      }
+  ```
 
-        The label gives us the quick information.
+  The locked holding change shows one new utxo equivalent to the amount send to Bob. Once Bob accepts the transfer this locked utxo would be archived.information.
 
-        ```json
-        "label": {
-                "burnAmount": "0", // how much was burned
-                "mintAmount": "0",  // how much was minted
-                "type": "TransferOut", // event type
-                "receiverAmounts": [ // the list of receivers and how much
-                {
-                    "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
-                    "amount": "100"
-                }
-                ],
-                "tokenStandardChoice": { // the entire token standard choice
+  ```json
+  "lockedHoldingsChange": {
+      // we have 1 new locked holding of the transfer amount (100)
+      "creates": [
+          {
+          "amount": "100.0000000000",
+          "instrumentId": {
+              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+              "id": "Amulet"
+          },
+          "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
+          // alice is still the owner since this a locked utxo, until bob accepts
+          "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+          "meta": {
+              "values": {
+              "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+              "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+              }
+          },
+          "lock": {
+          // the DSO (instrument Admin) is holder of the lock
+              "holders": [
+              "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
+              ],
+              "expiresAt": "2025-10-15T02:11:47.406Z",
+              "expiresAfter": null,
+              "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
+          }
+          }
+      ]
+      },
+      //overview of how holdings have changed
+      "lockedHoldingsChangeSummary": {
+      "numOutputs": 1,
+      "outputAmount": "100",
+      "amountChange": "100"
+      },
+  ```
 
-                },
-                "reason": "memo-ref", // memo tag
-                "meta": { // any other meta data
-                "values": {}
-                }
-            }
-        ```
+  There is also an unlocked holding change, consist of one create and one archive. Since alice had one transaction of 2000000.0000000000, and only send 100, then she gets the remaining 1999900.0000000000 back:
 
-        We can see that the locked 100 transfer is now archived, on Bobs side he will see a Transfer In that creates an unlocked holding of 100.
+  ```json
+  "unlockedHoldingsChange": {
+          // creates the new utxo for alice with the unspent amount
+          "creates": [
+          {
+              "amount": "1999900.0000000000",
+              "instrumentId": {
+              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+              "id": "Amulet"
+              },
+              "contractId": "00ba31e046f04908e6bf6fe5eeb725f0e2054f37353e85c7ef99a0924df8c1b891ca11122046dee24aeae91d4a5fc0570458cad8ccc94002645b6a6e2c82cc5f07ca897fe9",
+              "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+              "meta": {
+              "values": {
+                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+              }
+              },
+              "lock": null
+          }
+          ],
+          // archives the old spend utxo
+          "archives": [
+          {
+              "amount": "2000000.0000000000",
+              "instrumentId": {
+              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+              "id": "Amulet"
+              },
+              "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
+              "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+              "meta": {
+              "values": {
+                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+              }
+              },
+              "lock": null
+          }
+          ]
+      },
+      // overview of how this has changed alices utxos
+      "unlockedHoldingsChangeSummary": {
+          "numInputs": 1,
+          "inputAmount": "2000000",
+          "numOutputs": 1,
+          "outputAmount": "1999900",
+          "amountChange": "-100"
+      }
+  ```
 
-        ```json
-        "lockedHoldingsChange": {
-                // The locked utxo is archived
-                "archives": [
-                {
-                    "amount": "100.0000000000",
-                    "instrumentId": {
-                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                    "id": "Amulet"
-                    },
-                    "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
-                    "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                    "meta": {
-                    "values": {
-                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                    }
-                    },
-                    "lock": {
-                    "holders": [
-                        "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
-                    ],
-                    "expiresAt": "2025-10-15T02:11:47.406Z",
-                    "expiresAfter": null,
-                    "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
-                    }
-                }
-                ]
-            }
-        ```
-    </Tab>
-    <Tab title="Transfer In">
-        Bob will see a transfer in once he has accepted the transferInstruction from Alice. If Bob had set up transfer pre-approval, then he would only see the below transfer:
+  </Tab>
 
-        ```json
-        {
-            "updateId": "122064654ed225797ea8161eb0730d38beff917201cecb00079666192cda648bb182",
-            "offset": 1319,
-            "recordTime": "2025-10-14T02:11:48.989233Z",
-            "synchronizerId": "global-domain::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-            "events": [
-                {
-                    "label": {
-                        "type": "TransferIn",
-                        "burnAmount": "0",
-                        "mintAmount": "0",
-                        "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                        "tokenStandardChoice": {
-                            "name": "TransferInstruction_Accept",
-                            "choiceArgument": {
-                                "extraArgs": {
-                                    "context": {
-                                        "values": {
-                                            "amulet-rules": {
-                                                "tag": "AV_ContractId",
-                                                "value": "00ccd166b3b91e776fc1d2270d3ffdff551bd43117c679a145281d4c4545fa8bc7ca1112204f1604f06e4c616656c39678e173f68a2ae3a96af984b71120a6da57ca34d66c"
-                                            },
-                                            "expire-lock": {
-                                                "tag": "AV_Bool",
-                                                "value": true
-                                            },
-                                            "open-round": {
-                                                "tag": "AV_ContractId",
-                                                "value": "003a5299317dd50dc84c2a645f2b233f69dfd16286ddf9dd2996c764ff93e591cbca11122008b6e9f88a00262449d8e6bf4de2edf50b85a160c068744b53091653fb107b9f"
-                                            }
-                                        }
-                                    },
-                                    "meta": {
-                                        "values": {}
-                                    }
-                                }
-                            },
-                            "exerciseResult": {
-                                "output": {
-                                    "tag": "TransferInstructionResult_Completed",
-                                    "value": {
-                                        "receiverHoldingCids": [
-                                            "002e360f78cf28a40c742839572bbf7a683ba59c3db906757b284a2edf433700edca1112209685da5d5a5c531b51504601c175cbbeaba8956e7a7fc2926fa8909d8b81a95a"
-                                        ]
-                                    }
-                                },
-                                "senderChangeCids": [],
-                                "meta": {
-                                    "values": {}
-                                }
-                            }
-                        },
-                        "reason": "memo-ref",
-                        "meta": {
-                            "values": {}
-                        }
-                    },
-                    "unlockedHoldingsChange": {
-                        "creates": [
-                            {
-                                "amount": "100.0000000000",
-                                "instrumentId": {
-                                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                    "id": "Amulet"
-                                },
-                                "contractId": "002e360f78cf28a40c742839572bbf7a683ba59c3db906757b284a2edf433700edca1112209685da5d5a5c531b51504601c175cbbeaba8956e7a7fc2926fa8909d8b81a95a",
-                                "owner": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
-                                "meta": {
-                                    "values": {
-                                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                                    }
-                                },
-                                "lock": null
-                            }
-                        ]
-                    },
-                    "unlockedHoldingsChangeSummary": {
-                        "numOutputs": 1,
-                        "outputAmount": "100",
-                        "amountChange": "100"
-                    },
-                    "transferInstruction": {
-                        "originalInstructionCid": null,
-                        "transfer": {
-                            "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                            "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
-                            "amount": "100.0000000000",
-                            "instrumentId": {
-                                "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                                "id": "Amulet"
-                            },
-                            "requestedAt": "2025-10-14T02:10:47.406Z",
-                            "executeBefore": "2025-10-15T02:11:47.406Z",
-                            "inputHoldingCids": [
-                                "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b"
-                            ],
-                            "meta": {
-                                "values": {
-                                    "splice.lfdecentralizedtrust.org/reason": "memo-ref"
-                                }
-                            }
-                        },
-                        "meta": {
-                            "values": {}
-                        },
-                        "status": {
-                            "before": {
-                                "tag": "TransferPendingReceiverAcceptance",
-                                "value": {}
-                            }
-                        }
-                    }
-                }
-            ]
-        }
-        ```
+  <Tab title="Transfer Out">
 
-        The label gives us the quick information.
+  When Bob accepts the transfer we see the actual transfer out event. This is seen from Alice point of view
 
-        ```json
-        "label": {
-                "type": "TransferIn", // event type
-                "burnAmount": "0",  // how much was burned
-                "mintAmount": "0", // how much was minted
-                // the original sender of the amount
-                "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
-                "tokenStandardChoice": {
+  {/* include ../../examples/snippets/transfer-out-event.json */}
+  ```json
+  {
+      "updateId": "122064654ed225797ea8161eb0730d38beff917201cecb00079666192cda648bb182",
+      "offset": 1319,
+      "recordTime": "2025-10-14T02:11:48.989233Z",
+      "synchronizerId": "global-domain::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+      "events": [
+          {
+              "label": {
+                  "burnAmount": "0",
+                  "mintAmount": "0",
+                  "type": "TransferOut",
+                  "receiverAmounts": [
+                      {
+                          "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+                          "amount": "100"
+                      }
+                  ],
+                  "tokenStandardChoice": {
+                      "name": "TransferInstruction_Accept",
+                      "choiceArgument": {
+                          "extraArgs": {
+                              "context": {
+                                  "values": {
+                                      "amulet-rules": {
+                                          "tag": "AV_ContractId",
+                                          "value": "00ccd166b3b91e776fc1d2270d3ffdff551bd43117c679a145281d4c4545fa8bc7ca1112204f1604f06e4c616656c39678e173f68a2ae3a96af984b71120a6da57ca34d66c"
+                                      },
+                                      "expire-lock": {
+                                          "tag": "AV_Bool",
+                                          "value": true
+                                      },
+                                      "open-round": {
+                                          "tag": "AV_ContractId",
+                                          "value": "003a5299317dd50dc84c2a645f2b233f69dfd16286ddf9dd2996c764ff93e591cbca11122008b6e9f88a00262449d8e6bf4de2edf50b85a160c068744b53091653fb107b9f"
+                                      }
+                                  }
+                              },
+                              "meta": {
+                                  "values": {}
+                              }
+                          }
+                      },
+                      "exerciseResult": {
+                          "output": {
+                              "tag": "TransferInstructionResult_Completed",
+                              "value": {
+                                  "receiverHoldingCids": [
+                                      "002e360f78cf28a40c742839572bbf7a683ba59c3db906757b284a2edf433700edca1112209685da5d5a5c531b51504601c175cbbeaba8956e7a7fc2926fa8909d8b81a95a"
+                                  ]
+                              }
+                          },
+                          "senderChangeCids": [],
+                          "meta": {
+                              "values": {}
+                          }
+                      }
+                  },
+                  "reason": "memo-ref",
+                  "meta": {
+                      "values": {}
+                  }
+              },
+              "lockedHoldingsChange": {
+                  "archives": [
+                      {
+                          "amount": "100.0000000000",
+                          "instrumentId": {
+                              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                              "id": "Amulet"
+                          },
+                          "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
+                          "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                          "meta": {
+                              "values": {
+                                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+                              }
+                          },
+                          "lock": {
+                              "holders": [
+                                  "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
+                              ],
+                              "expiresAt": "2025-10-15T02:11:47.406Z",
+                              "expiresAfter": null,
+                              "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
+                          }
+                      }
+                  ]
+              },
+              "lockedHoldingsChangeSummary": {
+                  "numInputs": 1,
+                  "inputAmount": "100",
+                  "amountChange": "-100"
+              },
+              "transferInstruction": {
+                  "originalInstructionCid": null,
+                  "transfer": {
+                      "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                      "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+                      "amount": "100.0000000000",
+                      "instrumentId": {
+                          "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                          "id": "Amulet"
+                      },
+                      "requestedAt": "2025-10-14T02:10:47.406Z",
+                      "executeBefore": "2025-10-15T02:11:47.406Z",
+                      "inputHoldingCids": [
+                          "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b"
+                      ],
+                      "meta": {
+                          "values": {
+                              "splice.lfdecentralizedtrust.org/reason": "memo-ref"
+                          }
+                      }
+                  },
+                  "meta": {
+                      "values": {}
+                  },
+                  "status": {
+                      "before": {
+                          "tag": "TransferPendingReceiverAcceptance",
+                          "value": {}
+                      }
+                  }
+              }
+          }
+      ]
+  }
+  ```
 
-                },
-                "reason": "memo-ref", // memo tag
-                "meta": { // any other meta fields
-                "values": {}
-                }
-            }
-        ```
+  The label gives us the quick information.
 
-        Bob then also sees one new unlocked utxo for the 100.
+  ```json
+  "label": {
+          "burnAmount": "0", // how much was burned
+          "mintAmount": "0",  // how much was minted
+          "type": "TransferOut", // event type
+          "receiverAmounts": [ // the list of receivers and how much
+          {
+              "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+              "amount": "100"
+          }
+          ],
+          "tokenStandardChoice": { // the entire token standard choice
 
-        ```json
-        "unlockedHoldingsChange": {
-                // the new money available for Bob
-                "creates": [
-                {
-                    "amount": "100.0000000000",
-                    "instrumentId": {
-                    "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
-                    "id": "Amulet"
-                    },
-                    "contractId": "002e360f78cf28a40c742839572bbf7a683ba59c3db906757b284a2edf433700edca1112209685da5d5a5c531b51504601c175cbbeaba8956e7a7fc2926fa8909d8b81a95a",
-                    "owner": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
-                    "meta": {
-                    "values": {
-                        "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
-                        "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
-                    }
-                    },
-                    "lock": null
-                }
-                ]
-            }
-        ```
-    </Tab>
+          },
+          "reason": "memo-ref", // memo tag
+          "meta": { // any other meta data
+          "values": {}
+          }
+      }
+  ```
+
+  We can see that the locked 100 transfer is now archived, on Bobs side he will see a Transfer In that creates an unlocked holding of 100.
+
+  ```json
+  "lockedHoldingsChange": {
+          // The locked utxo is archived
+          "archives": [
+          {
+              "amount": "100.0000000000",
+              "instrumentId": {
+              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+              "id": "Amulet"
+              },
+              "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
+              "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+              "meta": {
+              "values": {
+                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+              }
+              },
+              "lock": {
+              "holders": [
+                  "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
+              ],
+              "expiresAt": "2025-10-15T02:11:47.406Z",
+              "expiresAfter": null,
+              "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
+              }
+          }
+          ]
+      }
+  ```
+
+  </Tab>
+
+  <Tab title="Transfer In">
+
+  Bob will see a transfer in once he has accepted the transferInstruction from Alice. If Bob had set up transfer pre-approval, then he would only see the below transfer:
+
+  {/* include ../../examples/snippets/transfer-in-event.json */}
+  ```json
+  {
+      "updateId": "122064654ed225797ea8161eb0730d38beff917201cecb00079666192cda648bb182",
+      "offset": 1319,
+      "recordTime": "2025-10-14T02:11:48.989233Z",
+      "synchronizerId": "global-domain::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+      "events": [
+          {
+              "label": {
+                  "type": "TransferIn",
+                  "burnAmount": "0",
+                  "mintAmount": "0",
+                  "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                  "tokenStandardChoice": {
+                      "name": "TransferInstruction_Accept",
+                      "choiceArgument": {
+                          "extraArgs": {
+                              "context": {
+                                  "values": {
+                                      "amulet-rules": {
+                                          "tag": "AV_ContractId",
+                                          "value": "00ccd166b3b91e776fc1d2270d3ffdff551bd43117c679a145281d4c4545fa8bc7ca1112204f1604f06e4c616656c39678e173f68a2ae3a96af984b71120a6da57ca34d66c"
+                                      },
+                                      "expire-lock": {
+                                          "tag": "AV_Bool",
+                                          "value": true
+                                      },
+                                      "open-round": {
+                                          "tag": "AV_ContractId",
+                                          "value": "003a5299317dd50dc84c2a645f2b233f69dfd16286ddf9dd2996c764ff93e591cbca11122008b6e9f88a00262449d8e6bf4de2edf50b85a160c068744b53091653fb107b9f"
+                                      }
+                                  }
+                              },
+                              "meta": {
+                                  "values": {}
+                              }
+                          }
+                      },
+                      "exerciseResult": {
+                          "output": {
+                              "tag": "TransferInstructionResult_Completed",
+                              "value": {
+                                  "receiverHoldingCids": [
+                                      "002e360f78cf28a40c742839572bbf7a683ba59c3db906757b284a2edf433700edca1112209685da5d5a5c531b51504601c175cbbeaba8956e7a7fc2926fa8909d8b81a95a"
+                                  ]
+                              }
+                          },
+                          "senderChangeCids": [],
+                          "meta": {
+                              "values": {}
+                          }
+                      }
+                  },
+                  "reason": "memo-ref",
+                  "meta": {
+                      "values": {}
+                  }
+              },
+              "unlockedHoldingsChange": {
+                  "creates": [
+                      {
+                          "amount": "100.0000000000",
+                          "instrumentId": {
+                              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                              "id": "Amulet"
+                          },
+                          "contractId": "002e360f78cf28a40c742839572bbf7a683ba59c3db906757b284a2edf433700edca1112209685da5d5a5c531b51504601c175cbbeaba8956e7a7fc2926fa8909d8b81a95a",
+                          "owner": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+                          "meta": {
+                              "values": {
+                                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+                              }
+                          },
+                          "lock": null
+                      }
+                  ]
+              },
+              "unlockedHoldingsChangeSummary": {
+                  "numOutputs": 1,
+                  "outputAmount": "100",
+                  "amountChange": "100"
+              },
+              "transferInstruction": {
+                  "originalInstructionCid": null,
+                  "transfer": {
+                      "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+                      "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+                      "amount": "100.0000000000",
+                      "instrumentId": {
+                          "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                          "id": "Amulet"
+                      },
+                      "requestedAt": "2025-10-14T02:10:47.406Z",
+                      "executeBefore": "2025-10-15T02:11:47.406Z",
+                      "inputHoldingCids": [
+                          "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b"
+                      ],
+                      "meta": {
+                          "values": {
+                              "splice.lfdecentralizedtrust.org/reason": "memo-ref"
+                          }
+                      }
+                  },
+                  "meta": {
+                      "values": {}
+                  },
+                  "status": {
+                      "before": {
+                          "tag": "TransferPendingReceiverAcceptance",
+                          "value": {}
+                      }
+                  }
+              }
+          }
+      ]
+  }
+  ```
+
+  The label gives us the quick information.
+
+  ```json
+  "label": {
+          "type": "TransferIn", // event type
+          "burnAmount": "0",  // how much was burned
+          "mintAmount": "0", // how much was minted
+          // the original sender of the amount
+          "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+          "tokenStandardChoice": {
+
+          },
+          "reason": "memo-ref", // memo tag
+          "meta": { // any other meta fields
+          "values": {}
+          }
+      }
+  ```
+
+  Bob then also sees one new unlocked utxo for the 100.
+
+  ```json
+  "unlockedHoldingsChange": {
+          // the new money available for Bob
+          "creates": [
+          {
+              "amount": "100.0000000000",
+              "instrumentId": {
+              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+              "id": "Amulet"
+              },
+              "contractId": "002e360f78cf28a40c742839572bbf7a683ba59c3db906757b284a2edf433700edca1112209685da5d5a5c531b51504601c175cbbeaba8956e7a7fc2926fa8909d8b81a95a",
+              "owner": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+              "meta": {
+              "values": {
+                  "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                  "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+              }
+              },
+              "lock": null
+          }
+          ]
+      }
+  ```
+
+  </Tab>
+
 </Tabs>
 
 
@@ -1421,39 +1483,50 @@ Once the transaction is validated, the hash retrieved from the prepare step can 
 Below shows an example in the Wallet SDK and using cURL commands:
 
 <Tabs>
-    <Tab title="SDK">
-        ``` typescript
-        import {
-            SDK,
-            localNetStaticConfig,
-            signTransactionHash,
-        } from '@canton-network/wallet-sdk'
 
-        export default async function () {
-            const sdk = await SDK.create({
-                auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
-                ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
-            })
-            const keys = sdk.keys.generate()
+  <Tab title="SDK">
 
-            const preparedParty = EXISTING_TOPOLOGY
+  {/* include ../../examples/snippets/sign-transaction-hash.ts */}
+  ```typescript
+  import {
+      SDK,
+      localNetStaticConfig,
+      signTransactionHash,
+  } from '@canton-network/wallet-sdk'
 
-            //This signing function works for a party topology hash or a transaction hash
-            signTransactionHash(preparedParty.multiHash, keys.privateKey)
-        }
-        ```
-    </Tab>
-    <Tab title="cURL">
-        ```bash
-        # In this example the hash is signed using openssl and "PREPARE_TRANSACTION_RESPONSE.json" is the JSON output from the prepare 
-        # transaction step is here. "PRIVATE_KEY_FILE" should be the private key of the namespace of the external party. For more information
-        # on the openssl commands to generate the key see here:
+  export default async function () {
+      const sdk = await SDK.create({
+          auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+          ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+          synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
+      })
+      const keys = sdk.keys.generate()
 
-        TRANSACTION_HASH=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction_hash)
-        PREPARED_TRANSACTION=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction)
-        SIGNATURE=$(echo -n "$TRANSACTION_HASH" | base64 --decode | openssl pkeyutl -rawin -inkey "PRIVATE_KEY_FILE" -keyform DER -sign | openssl base64 -e -A)
-        ```
-    </Tab>
+      const preparedParty = EXISTING_TOPOLOGY
+
+      //This signing function works for a party topology hash or a transaction hash
+      signTransactionHash(preparedParty.multiHash, keys.privateKey)
+  }
+  ```
+
+  </Tab>
+
+  <Tab title="cURL">
+
+  {/* include ../../examples/bash/sign-transaction-hash.sh */}
+  ```bash
+  # In this example the hash is signed using openssl and "PREPARE_TRANSACTION_RESPONSE.json" is the JSON output from the prepare 
+  # transaction step is here. "PRIVATE_KEY_FILE" should be the private key of the namespace of the external party. For more information
+  # on the openssl commands to generate the key see the External Signing Tutorial:
+  # https://docs.canton.network/appdev/deep-dives/external-signing-onboarding
+
+  TRANSACTION_HASH=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction_hash)
+  PREPARED_TRANSACTION=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction)
+  SIGNATURE=$(echo -n "$TRANSACTION_HASH" | base64 --decode | openssl pkeyutl -rawin -inkey "PRIVATE_KEY_FILE" -keyform DER -sign | openssl base64 -e -A)
+  ```
+
+  </Tab>
+
 </Tabs>
 
 
@@ -1462,25 +1535,30 @@ Below shows an example in the Wallet SDK and using cURL commands:
 
 The SDK exposes functionality that can be used in an offline environment to sign and validate transactions the below script shows an entire interaction between `Alice` and `Bob` with signing happening in an offline environment and online environment that performs the prepare and submit.
 
-``` typescript
+{/* include ../../examples/scripts/14-offline-signing.ts */}
+```typescript
 import {
     localNetStaticConfig,
     SDK,
     signTransactionHash,
 } from '@canton-network/wallet-sdk'
-import { pino } from 'pino'
 import {
     TOKEN_NAMESPACE_CONFIG,
     TOKEN_PROVIDER_CONFIG_DEFAULT,
     AMULET_NAMESPACE_CONFIG,
+    localNetGlobalSynchronizer,
 } from './utils/index.js'
 
-const onlineLogger = pino({ name: '14-online-localnet', level: 'info' })
-const offlineLogger = pino({ name: '14-oggline-localnet', level: 'info' })
+import { configureLogging } from './utils/configure-logging.js'
+const logger = await configureLogging()
+
+const onlineLogger = logger.child({ name: 'online' })
+const offlineLogger = logger.child({ name: 'offline' })
 
 const onlineSDK = await SDK.create({
     auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
     ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    synchronizerId: localNetGlobalSynchronizer,
     amulet: AMULET_NAMESPACE_CONFIG,
     token: TOKEN_NAMESPACE_CONFIG,
 })
@@ -1791,98 +1869,108 @@ await onlineSDK.ledger.execute(signedAcceptTransferHash, {
 })
 
 onlineLogger.info('Accepted transfer instruction')
+
+// Forcefully exit to prevent floating ledger retries from crashing the event loop
+process.exit(0)
 ```
-
-
 
 ## Submitting the Transaction
 
 Once the transaction is signed, it can be executed on the validator. You can observe completions by seeing the committed transactions. If they don't appear on your ledger, you are guaranteed some response, and you can keep retrying; signed transactions are idempotent. Finality usually takes 3-10s.
 
 <Tabs>
-    <Tab title="SDK">
-        ``` typescript
-        import {
-            SDK,
-            localNetStaticConfig,
-            signTransactionHash,
-        } from '@canton-network/wallet-sdk'
-        import { v4 } from 'uuid'
 
-        export default async function () {
-            const sdk = await SDK.create({
-                auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
-                ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
-            })
-            const myParty = global.EXISTING_PARTY_1
-            const keys = global.EXISTING_PARTY_1_KEYS
+  <Tab title="SDK">
 
-            const pingCommand = [
-                {
-                    CreateCommand: {
-                        templateId:
-                            '#canton-builtin-admin-workflow-ping:Canton.Internal.Ping:Ping',
-                        createArguments: {
-                            id: v4(),
-                            initiator: myParty,
-                            responder: myParty,
-                        },
-                    },
-                },
-            ]
+  {/* include ../../examples/snippets/execute-transaction.ts */}
+  ```typescript
+  import {
+      SDK,
+      localNetStaticConfig,
+      signTransactionHash,
+  } from '@canton-network/wallet-sdk'
 
-            const preparedPingCommand = sdk.ledger.prepare({
-                partyId: myParty,
-                commands: pingCommand,
-                disclosedContracts: [],
-            })
+  export default async function () {
+      const sdk = await SDK.create({
+          auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+          ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+          synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
+      })
+      const myParty = global.EXISTING_PARTY_1
+      const keys = global.EXISTING_PARTY_1_KEYS
 
-            const { response: preparedPingCommandResponse } =
-                await preparedPingCommand.toJSON()
+      const pingCommand = [
+          {
+              CreateCommand: {
+                  templateId:
+                      '#canton-builtin-admin-workflow-ping:Canton.Internal.Ping:Ping',
+                  createArguments: {
+                      id: crypto.randomUUID(),
+                      initiator: myParty,
+                      responder: myParty,
+                  },
+              },
+          },
+      ]
 
-            const signature = signTransactionHash(
-                preparedPingCommandResponse.preparedTransactionHash,
-                keys.privateKey
-            )
+      const preparedPingCommand = sdk.ledger.prepare({
+          partyId: myParty,
+          commands: pingCommand,
+          disclosedContracts: [],
+      })
 
-            const signed = sdk.ledger.fromSignature(
-                preparedPingCommandResponse,
-                signature
-            )
-            await sdk.ledger.execute(signed, { partyId: myParty })
-        }
-        ```
-    </Tab>
-    <Tab title="cURL">
-        ```bash
-        curl http://localhost:7575/v2/interactive-submission/execute -d {
-            "preparedTransaction": "$PREPARED_TRANSACTION",
-            "hashingSchemeVersion": "HASHING_SCHEME_VERSION_V2",
-            "userId": "USER_ID",
-            "submissionId": "51dd5a0e-2ab6-4ca4-aa9d-9333fb603eb0",
-            "deduplicationPeriod": {
-                "Empty": {}
-            },
-            "partySignatures": {
-                "signatures": [
-                    {
-                        "party": "PARTY_ID",
-                        "signatures": [
-                        {
-                            "format": "SIGNATURE_FORMAT_CONCAT",
-                            "signature": "$SIGNATURE",
-                            "signingAlgorithmSpec": "SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_256",
-                            "signedBy": "FINGERPRINT"
-                        }
-                        ]
-                    }
-                ]
-            }
-        }
-        ```
-    </Tab>
+      const { response: preparedPingCommandResponse } =
+          await preparedPingCommand.toJSON()
+
+      const signature = signTransactionHash(
+          preparedPingCommandResponse.preparedTransactionHash,
+          keys.privateKey
+      )
+
+      const signed = sdk.ledger.fromSignature(
+          preparedPingCommandResponse,
+          signature
+      )
+      await sdk.ledger.execute(signed, { partyId: myParty })
+  }
+  ```
+
+  </Tab>
+
+  <Tab title="cURL">
+
+  {/* include ../../examples/bash/execute-transaction.sh */}
+  ```bash
+  curl http://localhost:7575/v2/interactive-submission/execute -d {
+      "preparedTransaction": "$PREPARED_TRANSACTION",
+      "hashingSchemeVersion": "HASHING_SCHEME_VERSION_V2",
+      "userId": "USER_ID",
+      "submissionId": "51dd5a0e-2ab6-4ca4-aa9d-9333fb603eb0",
+      "deduplicationPeriod": {
+          "Empty": {}
+      },
+      "partySignatures": {
+          "signatures": [
+              {
+                  "party": "PARTY_ID",
+                  "signatures": [
+                  {
+                      "format": "SIGNATURE_FORMAT_CONCAT",
+                      "signature": "$SIGNATURE",
+                      "signingAlgorithmSpec": "SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_256",
+                      "signedBy": "FINGERPRINT"
+                  }
+                  ]
+              }
+          ]
+      }
+  }
+  ```
+
+  </Tab>
+
 </Tabs>
 
 ## Observing the Transaction
 
-The `execute` method in the `ledger`` namespace will execute the submission and wait for a response. THs returns an \`updateId` and `completionOffset`. Additionally, you can continuously monitor holdings changes using token standard history parser.
+The `execute` method in the `ledger` namespace will execute the submission and wait for a response. This returns an `updateId` and `completionOffset`. Additionally, you can continuously monitor holdings changes using token standard history parser.
