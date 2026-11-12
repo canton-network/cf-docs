@@ -961,6 +961,7 @@ flowchart TB
             subgraph SEQ["Sequencer: global-domain-&lt;SERIAL_ID&gt;-sequencer"]
                 direction LR
                 SEQAPI["Sequencer API<br/>:5008"]
+                SEQADMIN["Admin API<br/>:5009"]
                 BFT["CantonBFT orderer<br/>P2P API :5010"]
             end
             MED["Mediator<br/>global-domain-&lt;SERIAL_ID&gt;-mediator"]
@@ -975,8 +976,10 @@ flowchart TB
         SVAPP -->|Ledger API, Admin API| PART
         VALAPP -->|Ledger API, Admin API| PART
         SCANAPP -->|Ledger API, Admin API| PART
-        SVAPP -->|Admin API| SEQAPI
+        SVAPP -->|Admin API| SEQADMIN
         SVAPP -->|Admin API| MED
+        SCANAPP -->|Admin API| SEQADMIN
+        SCANAPP -->|Admin API| MED
 
         PART --> SEQAPI
         MED --> SEQAPI
@@ -986,7 +989,7 @@ flowchart TB
     Users["Browsers<br/>https://{sv,wallet,cns,scan}.sv-&lt;enumerator&gt;.&lt;network&gt;.&lt;hostname&gt;"]
     Onboarding["SV and validator onboarding<br/>(SVs and validators)"]
     Status["Network status<br/>(SVs, validators, read-only clients)"]
-    BFTClients["BFT reads and writes to sequencers<br/>(SVs and validators)"]
+    BFTClients["BFT reads and writes to sequencers<br/>(validators)"]
     OtherSVs["Other SVs' CantonBFT orderers"]
 
     Users --> SVUI & WALLETUI & CNSUI & SCANUI
@@ -1002,13 +1005,13 @@ flowchart TB
     classDef svsOnly fill:#c62828,stroke:#8e0000,color:#fff,stroke-dasharray:5 3
     classDef public fill:#2e7d32,stroke:#1b5e20,color:#fff
 
-    class SVUI,WALLETUI,CNSUI,VALAPP,PART,MED internal
+    class SVUI,WALLETUI,CNSUI,VALAPP,PART,SEQADMIN,MED internal
     class SVAPP,SEQAPI svsAndValidators
     class BFT svsOnly
     class SCANUI,SCANAPP public
 
-    linkStyle 0,1,2,3,4,13,14,15,16,17,18,19,20 stroke:#ab47bc,stroke-width:2px
-    linkStyle 5,6,7,8,9,10,11,12,21,22 stroke:#1e88e5,stroke-width:2px
+    linkStyle 0,1,2,3,4,15,16,17,18,19,20,21,22 stroke:#ab47bc,stroke-width:2px
+    linkStyle 5,6,7,8,9,10,11,12,13,14,23,24 stroke:#1e88e5,stroke-width:2px
 ```
 
 ## Configuring the Cluster Ingress
