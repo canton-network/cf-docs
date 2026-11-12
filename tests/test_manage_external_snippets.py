@@ -204,8 +204,8 @@ def test_derive_snippet_name_shortens_long_paths_deterministically() -> None:
         repo, short, {"type": "stringMarker", "start": "SWEEP_START", "end": "SWEEP_END"}
     ) == "splice-literal-marker-apps-app-src-pack-examples-sv-helm-validator-values-sweep-start"
 
-    deep = "cluster/helm/splice-cometbft/templates/extra/long/path/to/some/deeply/nested/component-values-template.yaml"
-    middle = "helm/splice-cometbft/templates/extra/long/path/to/some/deeply/nested"
+    deep = "cluster/helm/splice-global-domain/templates/extra/long/path/to/some/deeply/nested/component-values-template.yaml"
+    middle = "helm/splice-global-domain/templates/extra/long/path/to/some/deeply/nested"
     digest = hashlib.sha256(middle.encode()).hexdigest()[:6]
     name = author.derive_snippet_name(repo, deep, {"type": "fullFile"})
     assert name == f"splice-literal-full-cluster-{digest}-component-values-template"

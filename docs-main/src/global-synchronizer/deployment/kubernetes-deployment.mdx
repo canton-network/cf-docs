@@ -16,7 +16,6 @@ import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmText74 from "/snipp
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash302 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-bash-302.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash314 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-bash-314.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash326 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-bash-326.mdx";
-import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash381 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-bash-381.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash507 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-bash-507.mdx";
 
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash835 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-bash-835.mdx";
@@ -32,8 +31,6 @@ import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmYaml448 from "/snip
 import ExternalSpliceMainSpliceRstFullDocsSrcCommonBackupSuggestion from '/snippets/internal/splice/main/splice-rst-full-docs-src-common-backup-suggestion.mdx';
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash39 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-bash-39.mdx";
 
-import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmParsedLiteral354 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-parsed-literal-354.mdx";
-import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmText366 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-text-366.mdx";
 
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmParsedLiteral528 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-parsed-literal-528.mdx";
 
@@ -255,61 +252,6 @@ To setup the wallet, CNS and SV UI, create the following two secrets.
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash326 />
 
-## Configuring your CometBFT node
-
-**This step is only required when using CometBFT. When using CantonBFT skip this step.**
-
-Every SV node also deploys a CometBFT node. This node must be configured to join the existing Global Synchronizer BFT chain. To do that, you first must generate the keys that will identify the node.
-
-### Generating your CometBFT node keys
-
-<Tabs>
-<Tab title="All networks">
-
-To generate the node config you use the CometBFT docker image provided through Github Container Registry (|docker_repo_prefix|).
-
-Use the following shell commands to generate the proper keys:
-
-<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmParsedLiteral354 />
-
-Please keep a note of the node ID printed out above.
-
-In addition, please retain some of the configuration files generated, as follows (you might need to change the permissions/ownership for them as they are accessible only by the root user):
-
-<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmText366 />
-
-Any other files can be ignored.
-
-</Tab>
-</Tabs>
-
-### Configuring your CometBFT node keys
-
-The CometBFT node is configured with a secret, based on the output from Generating the CometBFT node identity The secret is created as follows, with the `node_key.json` and `priv_validator_key.json` files representing the files generated as part of the node identity:
-
-<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash381 />
-
-### Configuring CometBFT state sync
-
-<Warning>
-CometBFT state sync introduces a dependency on the sponsoring node for fetching the state snapshot on startup and therefore a single point of failure. It should only be enabled when joining a new node to a chain that has already been running for a while. In all other cases including for a new node after it has completed initialization and after network resets, state sync should be disabled.
-</Warning>
-
-CometBFT has a feature called state sync that allows a new peer to catch up quickly by reading a snapshot of data at or near the head of the chain and verifying it instead of fetching and replaying every block. (See [CometBFT documentation](https://docs.cometbft.com/v0.34/core/state-sync)). This leads to drastically shorter times to onboard new nodes at the cost of new nodes having a truncated block history. Further, when the chain has been pruned, state sync needs to be enabled on new nodes in order to bootstrap them successfully.
-
-There are 3 main configuration parameters that control state sync in CometBFT:
-
-- `rpc_servers` - The list of CometBFT RPC servers to connect to in order to fetch snapshots
-- `trust_height` - Height at which you should trust the chain
-- `trust_hash` - Hash corresponding to the trusted height
-
-A CometBFT node installed using our helm charts (see `helm-sv-install`) with the default values set in `splice-node/examples/sv-helm/cometbft-values.yaml` automatically uses state sync for bootstrapping if:
-
-- it has not been explicitly disabled by setting `stateSync.enable` to `false`
-- the block chain is mature enough for at least 1 state snapshot to have been taken i.e. the height of the latest block is greater than or equal to the configured interval between snapshots
-
-The snapshots are fetched from your onboarding sponsor which exposes its CometBFT RPC API at `https://sv.sv-X.TARGET_HOSTNAME:443/cometbft-rpc/`. This can be changed by setting `stateSync.rpcServers` accordingly. The `trust_height` and `trust_hash` are computed dynamically via an initialization script and setting them explicitly should not be required and is not currently supported.
-
 ## Configuring BFT Sequencer Connections
 
 By default, SV participants use BFT sequencer connections to interact with the Global Synchronizer, i.e., they maintain connections to a random subset of all sequencers (most of which typically operated by other SVs) and perform reads and writes in the same `BFT` manner used by regular validators. In principle, this mode of operation is more robust than using a single connection to the sequencer operated by the SV itself. However, bugs in the BFT sequencer connection logic or severe instability of other SVs's sequencers can make it prudent to temporarily switch back to using a single sequencer connection.
@@ -395,17 +337,6 @@ To install the Helm charts needed to start an SV node connected to the cluster, 
 |chart_version_set|
 ```
 
-Unless CantonBFT is being used, you also need to configure a CometBFT node for your SV. Please modify the file `splice-node/examples/sv-helm/cometbft-values.yaml` as follows:
-
-- Replace all instances of `TARGET_CLUSTER` with |splice_cluster|, per the cluster to which you are connecting.
-- Replace all instances of `TARGET_HOSTNAME` with |da_hostname|, per the cluster to which you are connecting.
-- Replace all instances of `SERIAL_ID` with the serial ID of the global synchronizer on your target cluster. Note that `SERIAL_ID` is also used within port numbers in URLs here!
-- Replace `YOUR_SV_NAME` with the name you chose when creating the SV identity (this must be an exact match of the string for your SV to be approved to onboard)
-- Replace `YOUR_COMETBFT_NODE_ID` with the id obtained when generating the config for the CometBFT node
-- Replace `YOUR_HOSTNAME` with the hostname that will be used for the ingress
-- Add `db.volumeSize` and `db.volumeStorageClass` to the values file adjust persistent storage size and storage class if necessary. (These values default to 20GiB and `standard-rwo`)
-- Uncomment the appropriate `nodeId`, `publicKey` and `keyAddress` values in the `sv1` section as per the cluster to which you are connecting.
-
 <div id="helm-configure-global-domain">
 
 Please modify the file `splice-node/examples/sv-helm/participant-values.yaml` as follows:
@@ -425,9 +356,9 @@ Please modify the file `splice-node/examples/sv-helm/global-domain-values.yaml` 
 
 - Replace all instances of `SERIAL_ID` with the serial ID of the global synchronizer on your target cluster.
 - Replace `YOUR_SV_NAME` with the name you chose when creating the SV identity.
-- When using CantonBFT instead of CometBFT
-    - Replace `sequencer.driver.type: cometbft` by `sequencer.driver.type: cantonbft` and remove the host and port configuration.
-    - Set `sequencer.driver.externalPort: 443` and set `sequencer.driver.externalAddress: sequencer-p2p-SERIAL_ID.sv.YOUR_HOSTNAME`
+- Configure the CantonBFT ordering layer of your sequencer under `sequencer.driver`:
+    - Keep `sequencer.driver.type: cantonbft`.
+    - Set `sequencer.driver.externalPort: 443` and set `sequencer.driver.externalAddress: sequencer-p2p-SERIAL_ID.sv.YOUR_HOSTNAME`.
     - Configure the database through
       `sequencer.driver.persistence.(host|port|databaseName|secretName)`. It is
       strongly recommended to use a separate database from the
@@ -441,7 +372,7 @@ Please modify the file `splice-node/examples/sv-helm/scan-values.yaml` as follow
 
 - No longer needed since splice `0.6.8`: Replace all instances of `MIGRATION_ID` with the migration ID of the global synchronizer on your target cluster.
 - Replace all instances of `SERIAL_ID` with the serial ID of the global synchronizer on your target cluster.
-- When using CantonBFT set `synchronizers.(current|legacy|successor).cantonBft.p2pUrl: https://sequencer-p2p-SERIAL_ID.sv.YOUR_HOSTNAME`
+- Set `synchronizers.(current|legacy|successor).cantonBft.p2pUrl: https://sequencer-p2p-SERIAL_ID.sv.YOUR_HOSTNAME`
 
 An SV node includes a validator app so you also need to configure that. Please modify the file `splice-node/examples/sv-helm/validator-values.yaml` as follows:
 
@@ -477,11 +408,6 @@ For configuring your sv app, please modify the file `splice-node/examples/sv-hel
 - Replace `YOUR_CONTACT_POINT` by a slack user name or email address that can be used by node operators to contact you in case there are issues with your node. If you do not want to share this, set it to an empty string.
 - If you would like to redistribute all or part of the SV rewards with other parties, you can fill up the `extraBeneficiaries` section with the desired parties and the percentage of the reward that corresponds to them. Note that the party you register must be known on the network for the reward coupon issuance to succeed. Furthermore, that party must be hosted on a validator node for its wallet to collect the SV reward coupons. That collection will happen automatically if the wallet is running. If it is not running during the time that the reward coupon can be collected, the corresponding reward is marked as unclaimed, and stored in an DSO-wide unclaimed reward pool. The `extraBeneficiaries` can be changed with just a restart of the SV app.
 - Optionally, uncomment the line for `initialAmuletPrice` and set it to your desired amulet price. This will create an amulet price vote from your SV with the configured price when onboarded. If not set, no vote will be cast. This can always be done later manually from the SV app UI.
-- When using CantonBFT instead of CometBFT, remove
-  `synchronizers.(current|legacy|successor).cometBFT` and instead set
-  `synchronizers.(current|legacy|successor).enableBftSequencer: true`.
-  When migrating from CometBFT to CantonBFT only set it for the `synchronizers` that actually use CantonBFT while
-  keeping the CometBFT config for the existing physical synchronizers.
 
 Please modify the file `splice-node/examples/sv-helm/info-values.yaml` as follows:
 
@@ -489,7 +415,6 @@ Please modify the file `splice-node/examples/sv-helm/info-values.yaml` as follow
 - Replace `MD5_HASH_OF_ALLOWED_IP_RANGES` with the MD5 hash of the `allowed-ip-ranges.json` file corresponding to the |splice_cluster| network.
 - Replace `MD5_HASH_OF_APPROVED_SV_IDENTITIES` with the MD5 hash of the `approved-sv-id-values.yaml` file corresponding to the |splice_cluster| network.
 - Replace `MIGRATION_ID` with the migration ID of the global synchronizer on your target cluster.
-- Replace all instances of `CHAIN_ID_SUFFIX` with the chain ID suffix of the |splice_cluster| network.
 - Uncomment `staging` synchronizer and `legacy` synchronizer sections if you are using them.
 - Replace `STAGING_SYNCHRONIZER_MIGRATION_ID` with the migration ID of the staging synchronizer on your target cluster.
 - Replace `STAGING_SYNCHRONIZER_VERSION` with the version of the staging synchronizer on your target cluster.
@@ -513,7 +438,7 @@ These environment variables will be used below.
 
 With these files in place, you can execute the following helm commands in sequence. It's generally a good idea to wait until each deployment reaches a stable state prior to moving on to the next step.
 
-Install the Canton and CometBFT components:
+Install the Canton synchronizer components:
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmParsedLiteral691 />
 
@@ -542,7 +467,85 @@ Note also that `Pod` restarts may happen during bringup, particularly if all hel
 
 ## SV Network Diagram
 
-<img src="/images/splice/sv-network-diagram.png" width="600" alt="SV Network Diagram" />
+The diagram below shows the components of an SV node, how they connect to each other, and which endpoints are reachable from outside the node. Blue arrows are gRPC connections and purple arrows are HTTPS connections. Node colors show who can reach a component from outside the SV node:
+
+- **Blue**: internal to the SV node.
+- **Amber**: reachable by SVs and validators. Only part of the SV app is reachable (for example, `/onboard`); most of it is internal.
+- **Red**: reachable by other SVs only.
+- **Green**: reachable by SVs, validators, and read-only clients.
+
+```mermaid
+flowchart TB
+    subgraph SVNode["SV Node"]
+        direction TB
+
+        SVUI["SV Web UI<br/>sv-web-ui"]
+        WALLETUI["Wallet Web UI<br/>wallet-web-ui"]
+        CNSUI["CNS Web UI<br/>ans-web-ui"]
+        SCANUI["Scan Web UI<br/>scan-web-ui"]
+
+        SVAPP["SV App<br/>sv-app"]
+        VALAPP["Validator App<br/>validator-app"]
+        SCANAPP["Scan App<br/>scan-app"]
+
+        PART["Participant<br/>participant"]
+
+        subgraph Sync["Synchronizer"]
+            direction TB
+            subgraph SEQ["Sequencer: global-domain-&lt;SERIAL_ID&gt;-sequencer"]
+                direction LR
+                SEQAPI["Sequencer"]
+                BFT["CantonBFT orderer"]
+            end
+            MED["Mediator<br/>global-domain-&lt;SERIAL_ID&gt;-mediator"]
+        end
+
+        SVUI -->|:5014| SVAPP
+        WALLETUI -->|:5003| VALAPP
+        CNSUI -->|:5003| VALAPP
+        SCANUI -->|:5012| SCANAPP
+        VALAPP -->|Scan API :5012| SCANAPP
+
+        SVAPP -->|Ledger API :5001<br/>Admin API :5002| PART
+        VALAPP -->|Ledger API :5001<br/>Admin API :5002| PART
+        SCANAPP -->|Ledger API :5001<br/>Admin API :5002| PART
+        SVAPP -->|Admin API :5009| SEQAPI
+        SVAPP -->|Admin API :5007| MED
+        SCANAPP -->|Admin API :5009| SEQAPI
+        SCANAPP -->|Admin API :5007| MED
+
+        PART -->|Sequencer API :5008| SEQAPI
+        MED -->|Sequencer API :5008| SEQAPI
+        SEQAPI <--> BFT
+    end
+
+    Users["Browsers<br/>https://{sv,wallet,cns,scan}.sv-&lt;enumerator&gt;.&lt;network&gt;.&lt;hostname&gt;"]
+    Onboarding["SV and validator onboarding<br/>(SVs and validators)"]
+    Status["Network status<br/>(SVs, validators, read-only clients)"]
+    BFTClients["BFT reads and writes to sequencers<br/>(validators)"]
+    OtherSVs["Other SVs' CantonBFT orderers"]
+
+    Users -->|:80| SVUI & WALLETUI & CNSUI & SCANUI
+    Users -->|/api/sv :5014| SVAPP
+    Users -->|/api/validator :5003| VALAPP
+    Onboarding -->|/onboard :5014| SVAPP
+    Status -->|/api/scan :5012| SCANAPP
+    BFTClients -->|"Sequencer API :5008<br/>https://sequencer-&lt;SERIAL_ID&gt;.sv-&lt;enumerator&gt;..."| SEQAPI
+    OtherSVs <-->|"P2P API :5010<br/>https://sequencer-p2p-&lt;SERIAL_ID&gt;.sv-&lt;enumerator&gt;..."| BFT
+
+    classDef internal fill:#1565c0,stroke:#0d47a1,color:#fff
+    classDef svsAndValidators fill:#b26a00,stroke:#7a4900,color:#fff
+    classDef svsOnly fill:#c62828,stroke:#8e0000,color:#fff,stroke-dasharray:5 3
+    classDef public fill:#2e7d32,stroke:#1b5e20,color:#fff
+
+    class SVUI,WALLETUI,CNSUI,VALAPP,PART,MED internal
+    class SVAPP,SEQAPI svsAndValidators
+    class BFT svsOnly
+    class SCANUI,SCANAPP public
+
+    linkStyle 0,1,2,3,4,15,16,17,18,19,20,21,22 stroke:#ab47bc,stroke-width:2px
+    linkStyle 5,6,7,8,9,10,11,12,13,14,23,24 stroke:#1e88e5,stroke-width:2px
+```
 
 ## Configuring the Cluster Ingress
 
@@ -580,8 +583,7 @@ Each SV is required to configure their cluster ingress to allow traffic from the
 - `https://cns.sv.<YOUR_HOSTNAME>/api/validator` should be routed to `/api/validator` at port 5003 of service `validator-app` in the `sv` namespace.
 - `https://sequencer-<SERIAL_ID>.sv.<YOUR_HOSTNAME>` should be routed to port 5008 of service `global-domain-<SERIAL_ID>-sequencer` in the `sv` namespace.
 - `https://info.sv.<YOUR_HOSTNAME>` should be routed to service `info` in the `sv` namespace. This endpoint should be publicly accessible without any IP restrictions.
-- When using CometBFT: `global-domain-<SERIAL_ID>-cometbft.sv.<YOUR_HOSTNAME>:26<SERIAL_ID>56` should be routed to port 26656 of service `global-domain-<SERIAL_ID>-cometbft-cometbft-p2p` in the `sv` namespace using the TCP protocol. Please note that cometBFT traffic is purely TCP. TLS is not supported so SNI host routing for these traffic is not possible.
-- When using CantonBFT: `https://sequencer-p2p-<SERIAL_ID>.sv.<YOUR_HOSTNAME>` should be routed to port 5010 of service `global-domain-<SERIAL_ID>-sequencer` in the `sv` namespace. Only other SVs need access to this but not validators.
+- `https://sequencer-p2p-<SERIAL_ID>.sv.<YOUR_HOSTNAME>` should be routed to port 5010 of service `global-domain-<SERIAL_ID>-sequencer` in the `sv` namespace. This is the CantonBFT peer-to-peer endpoint; only other SVs need access to it, not validators.
 
 <Warning>
 To keep the attack surface on your SV deployment and the Global Synchronizer small, please disallow ingress connections to all other services in your SV deployment. It should be assumed that opening up *any* additional port or service represents a security risk that needs to be carefully evaluated on a case-by-case basis.
@@ -593,7 +595,7 @@ The SV app OpenAPI specification annotates the endpoints that can be called with
 
 - `validators` - endpoints that validators need to reach. Note that other SVs need to reach some of these endpoints as well, so the `validators` audience is a superset of the `svs` audience.
 - `svs` - endpoints that only other SVs need to reach.
-- `none` - endpoints that do not need to be reachable from outside of the SV node's own deployment (for example, the CometBFT endpoints).
+- `none` - endpoints that do not need to be reachable from outside of the SV node's own deployment.
 
 SV operators can use this annotation to restrict the external exposure of their SV app: only the endpoints of a given audience need to be reachable from the corresponding networks. Endpoints with an audience of `none`, as well as endpoints without an `x-external-audience`, do not need to be exposed to external traffic at all.
 
@@ -652,10 +654,7 @@ And install it to your cluster:
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash914 />
 
-Create Istio Gateway resources in the `cluster-ingress` namespace. Save the following to a file named `gateways.yaml`, with the following modifications:
-
-- Replace `YOUR_HOSTNAME` with the actual hostname of your SV node
-- The second gateway (cn-apps-gateway) exposes ports for three migration IDs (0, 1, and 2) for the CometBFT apps of the SV node. If a higher migration ID is reached, expand that list using the same pattern.
+Create Istio Gateway resources in the `cluster-ingress` namespace. Save the following to a file named `gateways.yaml`, replacing `YOUR_HOSTNAME` with the actual hostname of your SV node:
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmYaml926 />
 
@@ -683,11 +682,10 @@ Connectivity to the following destinations is required throughout operation to e
 
 | Destination   | Url                                                                                                  | Protocol | Source pod                   |
 |---------------|------------------------------------------------------------------------------------------------------|----------|------------------------------|
-| CometBft P2P  | CometBft p2p IPs and ports `26<S>16`, `26<S>26`, `26<S>36`, `26<S>46`, `26<S>56`                     | TCP      | `global-domain-<S>-cometbft` |
 | CantonBFT P2P | urls returned from `https://scan.sv-1.<TARGET_HOSTNAME>/api/scan/v0/sv-bft-sequencers` for _all_ SVs | HTTPS    | `global-domain-<S>`          |
 | All SV Scans  | all returned from `https://scan.sv-1.<TARGET_HOSTNAME>/api/scan/v0/scans`                            | HTTPS    | scan-app and sv-app          |
 
-Connectivity from the local scan app to the scan instances of all other SVs is required so that the scan app can backfill its data in a `BFT` fashion. It might also be required in the future to support the operation of the ordering layer (post CometBFT). To get a list of all current scan instances, you can query the `/api/scan/v0/scans` endpoint on any scan instances known to you. For example using the sponsor's scan instance (and with some optional post-processing using [jq](https://jqlang.org/)):
+Connectivity from the local scan app to the scan instances of all other SVs is required so that the scan app can backfill its data in a `BFT` fashion. To get a list of all current scan instances, you can query the `/api/scan/v0/scans` endpoint on any scan instances known to you. For example using the sponsor's scan instance (and with some optional post-processing using [jq](https://jqlang.org/)):
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash1033 />
 
@@ -700,11 +698,10 @@ In addition to above destinations, the SV node must be able to reach its onboard
 | Destination          | Url                                                                      | Protocol | Source pod                   |
 |----------------------|--------------------------------------------------------------------------|----------|------------------------------|
 | Sponsor SV           | `sv.sv-1.<TARGET_HOSTNAME>:443`                                          | HTTPS    | sv-app                       |
-| CometBft JSON RPC    | `sv.sv-1.<TARGET_HOSTNAME>:443/api/sv/v0/admin/domain/cometbft/json-rpc` | HTTPS    | `global-domain-<S>-cometbft` |
 | Sponsor SV Sequencer | `sequencer-<S>.sv-1.<TARGET_HOSTNAME>:443`                               | HTTPS    | `participant-<S>`            |
 | Sponsor SV Scan      | `scan.sv-1.<TARGET_HOSTNAME>:443`                                        | HTTPS    | validator-app                |
 
-Note that you need to substitute both `<TARGET_HOSTNAME>` and `sv-1` in the above table to match the address of your SV onboarding sponsor. Note also that the address for the CometBft JSON RPC is configured in `cometbft-values.yaml` (under `stateSync.rpcServers`). Any onboarded SV can act as an SV onboarding sponsor.
+Note that you need to substitute both `<TARGET_HOSTNAME>` and `sv-1` in the above table to match the address of your SV onboarding sponsor. Any onboarded SV can act as an SV onboarding sponsor.
 
 In general, connectivity to the sponsor SV (outside of scan) is only required during SV onboarding. Connectivity to the sponsor SV sequencer is required also for a limited transition time after onboarding during which the newly onboarded SV sequencer is not ready for use yet (60 seconds with the current Global Synchronizer configuration).
 
@@ -725,8 +722,6 @@ You can open your browser at [https://cns.sv.YOUR_HOSTNAME](https://cns.sv.YOUR_
 Open your browser at [https://sv.sv.YOUR_HOSTNAME](https://sv.sv.YOUR_HOSTNAME) to login to the SV Operations user interface. You can use the credentials of the `validatorWalletUser` to login. These are the same credentials you used for the wallet login above. Note that only Super validators will be able to login. Once logged in one should see a page with some SV collective information.
 
 <img src="/images/splice/sv_home.png" width="600" alt="After logged in into the sv UI" />
-
-The SV UI presents also some useful debug information for the CometBFT node. To see it, click on the "CometBFT Debug Info" tab. If your CometBFT is configured correctly, and it has connectivity to all other nodes, you should see `n_peers` that is equal to the size of the DSO, excluding your own node, and you should see all peer SVs listed as peers (their human-friendly names will be listed in the `moniker` fields).
 
 <div id="sv-ui-global-domain">
 
@@ -751,13 +746,3 @@ Note that SVs must wait `voteCooldownTime` (a governance parameter that defaults
 [^1]: The URL must be reachable from the Canton participant, validator app and SV app running in your cluster, as well as from all web browsers that should be able to interact with the SV and wallet UIs.
 
 {/* COPIED_END */}
-
-## Summary of required changes for CantonBFT
-
-The detailed changes are listed in the respective sections above. This section only provides an overview over which components require changes:
-
-- No CometBFT helm chart
-- SV app synchronizers need to be configured to use CantonBFT instead of CometBFT
-- Scan must be configured with the p2p url of your own CantonBFT node.
-- The global-domain helm chart must be configured to use the CantonBFT driver and configured with the database for CantonBFT.
-- The p2p url of your CantonBFT node must be exposed in your ingress towards other Super Validators.
