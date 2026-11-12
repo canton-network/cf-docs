@@ -25,9 +25,9 @@ and component usage. Paste both into a documentation page to display the snippet
 whole file. To extract a section, surround it with `# EXAMPLE_START` and
 `# EXAMPLE_END` comments and add `--marker EXAMPLE`.
 
-## Edit a snippet
+## Edit (Update) a snippet
 
-Change the original source, then re-render the existing snippet:
+Change the original source, then re-render the existing snippet. Use this command to update the externally sourced snippets:
 
 ```bash
 printf 'message: goodbye\n' > ../dpm/example.yaml
@@ -45,10 +45,9 @@ release, omit the snippet name:
 npm run snippets:edit -- canton --source-dir ../canton
 ```
 
-Only generated MDX that changed is written; the manifest is left alone. If any
-source is missing, the command lists the missing files and writes nothing. Canton
-snippets read generated files, so first run
-`sbt "docs-open / reset" "docs-open / generateSphinxSnippets"` in the Canton checkout.
+Only generated MDX that changed is written; the manifest is left alone. If any source is missing, the command lists the missing files and writes nothing. Canton snippets read generated files, so first run `sbt "docs-open / reset" "docs-open / generateSphinxSnippets"` in the Canton checkout.
+
+Use `--dry-run` to preview diffs without writing.
 
 ## Move a snippet's source
 
@@ -109,32 +108,3 @@ For Add, Edit, and Move, merge the source PR before the cf-docs PR. If separatel
 removing source files or markers after Delete, merge the cf-docs removal first.
 For a fork, use `--head YOUR_USER:codex/snippet-example` and keep `--repo` pointing
 to the upstream repository.
-
-## Generate snippets
-
-`snippets:add`, `snippets:edit`, and `snippets:move` already extract MDX. Each command reads the repository manifest under `config/snippet-config/`, runs the extraction helper against your local source checkout, and writes only changed files under `docs-main/snippets/external/<repo>/main/`. There is no separate copy step.
-
-To regenerate every snippet for a repository after an upstream change:
-
-```bash
-npm run snippets:edit -- dpm --source-dir ../dpm
-npm run snippets:edit -- canton --source-dir ../canton
-```
-
-Omit the snippet name so the command walks the whole manifest. Use `--dry-run` to preview diffs without writing. If any recorded source is missing, the command lists the paths and writes nothing. Canton snippets depend on generated Sphinx inputs, so run this first in the Canton checkout:
-
-```bash
-sbt "docs-open / reset" "docs-open / generateSphinxSnippets"
-```
-
-Update note: The old `npm run generate:external-snippets` wrapper and its `--copy-output` flag are gone. Bulk refresh is `snippets:edit` without a snippet name, and output lands directly in the docs tree.
-
-For low-level extraction only (for example in a source-repo CI job), run the helper against an export config. By default it writes to that repo's `docs-output/`:
-
-```bash
-node scripts/helpers/generateOutputDocs.js --verbose
-# or from a source checkout that vendors the helper:
-node scripts/docs/generateOutputDocs.js --verbose
-```
-
-Optional flags: `--repo-root`, `--export-config`, `--output`. Prefer the `snippets:*` npm commands when updating checked-in docs in this repository.
