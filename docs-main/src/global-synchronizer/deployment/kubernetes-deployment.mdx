@@ -484,9 +484,9 @@ flowchart TB
         CNSUI["CNS Web UI<br/>ans-web-ui"]
         SCANUI["Scan Web UI<br/>scan-web-ui"]
 
-        SVAPP["SV App<br/>sv-app :5014"]
-        VALAPP["Validator App<br/>validator-app :5003"]
-        SCANAPP["Scan App<br/>scan-app :5012"]
+        SVAPP["SV App<br/>sv-app"]
+        VALAPP["Validator App<br/>validator-app"]
+        SCANAPP["Scan App<br/>scan-app"]
 
         PART["Participant<br/>participant"]
 
@@ -495,20 +495,20 @@ flowchart TB
             subgraph SEQ["Sequencer: global-domain-&lt;SERIAL_ID&gt;-sequencer"]
                 direction LR
                 SEQAPI["Sequencer"]
-                BFT["CantonBFT orderer<br/>P2P API :5010"]
+                BFT["CantonBFT orderer"]
             end
             MED["Mediator<br/>global-domain-&lt;SERIAL_ID&gt;-mediator"]
         end
 
-        SVUI --> SVAPP
-        WALLETUI --> VALAPP
-        CNSUI --> VALAPP
-        SCANUI --> SCANAPP
-        VALAPP -->|Scan API| SCANAPP
+        SVUI -->|:5014| SVAPP
+        WALLETUI -->|:5003| VALAPP
+        CNSUI -->|:5003| VALAPP
+        SCANUI -->|:5012| SCANAPP
+        VALAPP -->|Scan API :5012| SCANAPP
 
-        SVAPP -->|Ledger API, Admin API| PART
-        VALAPP -->|Ledger API, Admin API| PART
-        SCANAPP -->|Ledger API, Admin API| PART
+        SVAPP -->|Ledger API :5001<br/>Admin API :5002| PART
+        VALAPP -->|Ledger API :5001<br/>Admin API :5002| PART
+        SCANAPP -->|Ledger API :5001<br/>Admin API :5002| PART
         SVAPP -->|Admin API :5009| SEQAPI
         SVAPP -->|Admin API :5007| MED
         SCANAPP -->|Admin API :5009| SEQAPI
@@ -525,13 +525,13 @@ flowchart TB
     BFTClients["BFT reads and writes to sequencers<br/>(validators)"]
     OtherSVs["Other SVs' CantonBFT orderers"]
 
-    Users --> SVUI & WALLETUI & CNSUI & SCANUI
-    Users -->|/api/sv| SVAPP
-    Users -->|/api/validator| VALAPP
-    Onboarding -->|/onboard| SVAPP
-    Status -->|/api/scan| SCANAPP
-    BFTClients -->|"https://sequencer-&lt;SERIAL_ID&gt;.sv-&lt;enumerator&gt;..."| SEQAPI
-    OtherSVs <-->|"https://sequencer-p2p-&lt;SERIAL_ID&gt;.sv-&lt;enumerator&gt;..."| BFT
+    Users -->|:80| SVUI & WALLETUI & CNSUI & SCANUI
+    Users -->|/api/sv :5014| SVAPP
+    Users -->|/api/validator :5003| VALAPP
+    Onboarding -->|/onboard :5014| SVAPP
+    Status -->|/api/scan :5012| SCANAPP
+    BFTClients -->|"Sequencer API :5008<br/>https://sequencer-&lt;SERIAL_ID&gt;.sv-&lt;enumerator&gt;..."| SEQAPI
+    OtherSVs <-->|"P2P API :5010<br/>https://sequencer-p2p-&lt;SERIAL_ID&gt;.sv-&lt;enumerator&gt;..."| BFT
 
     classDef internal fill:#1565c0,stroke:#0d47a1,color:#fff
     classDef svsAndValidators fill:#b26a00,stroke:#7a4900,color:#fff
