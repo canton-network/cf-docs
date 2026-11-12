@@ -25,9 +25,9 @@ and component usage. Paste both into a documentation page to display the snippet
 whole file. To extract a section, surround it with `# EXAMPLE_START` and
 `# EXAMPLE_END` comments and add `--marker EXAMPLE`.
 
-## Edit a snippet
+## Edit (Update) a snippet
 
-Change the original source, then re-render the existing snippet:
+Change the original source, then re-render the existing snippet. Use this command to update the externally sourced snippets:
 
 ```bash
 printf 'message: goodbye\n' > ../dpm/example.yaml
@@ -45,10 +45,9 @@ release, omit the snippet name:
 npm run snippets:edit -- canton --source-dir ../canton
 ```
 
-Only generated MDX that changed is written; the manifest is left alone. If any
-source is missing, the command lists the missing files and writes nothing. Canton
-snippets read generated files, so first run
-`sbt "docs-open / reset" "docs-open / generateSphinxSnippets"` in the Canton checkout.
+Only generated MDX that changed is written; the manifest is left alone. If any source is missing, the command lists the missing files and writes nothing. Canton snippets read generated files, so first run `sbt "docs-open / reset" "docs-open / generateSphinxSnippets"` in the Canton checkout.
+
+Use `--dry-run` to preview diffs without writing.
 
 ## Move a snippet's source
 
