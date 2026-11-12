@@ -24,7 +24,7 @@ flowchart TB
         subgraph SyncInfra["Synchronizer Infrastructure"]
             SEQ[Sequencer Node]
             MED[Mediator Node]
-            BFT[CometBFT / BFT Orderer Node]
+            BFT[CantonBFT Orderer<br>in-process with Sequencer]
         end
 
         subgraph ValStack["Validator Stack"]
@@ -89,11 +89,11 @@ Like the sequencer, the mediator does not see decrypted transaction content. It 
 
 Each SV runs a mediator node. The mediators use BFT state machine replication so that the confirmation protocol continues to function as long as a sufficient threshold of mediators is honest and available.
 
-### CometBFT / BFT Orderer Node
+### CantonBFT Orderer
 
-The BFT orderer node participates in the consensus protocol that establishes the total ordering of messages processed by the sequencer. The current implementation uses [CometBFT](https://cometbft.com/) (formerly Tendermint), where each SV runs a CometBFT validator that participates in block production and voting.
+The BFT orderer participates in the consensus protocol that establishes the total ordering of messages processed by the sequencer. The Global Synchronizer uses CantonBFT, Canton's native BFT ordering service, which runs in-process with each SV's sequencer node rather than as a separate deployment.
 
-CometBFT nodes maintain peer-to-peer connections with all other SV CometBFT nodes and communicate over a dedicated TCP gossip/consensus channel (separate from the HTTPS APIs used by validators). The BFT consensus requires agreement from more than two-thirds of the SV nodes to produce a block, meaning the system tolerates up to `f` Byzantine (faulty or malicious) nodes where `f = floor((n-1)/3)` and `n` is the total number of SVs.
+CantonBFT orderers maintain peer-to-peer connections with the orderers of all other SVs over a dedicated peer-to-peer endpoint that only other SVs can reach (separate from the sequencer API used by validators). The BFT consensus requires agreement from more than two-thirds of the SV nodes to produce a block, meaning the system tolerates up to `f` Byzantine (faulty or malicious) nodes where `f = floor((n-1)/3)` and `n` is the total number of SVs.
 
 For more on how ordering consensus works, see [Ordering Consensus](/overview/reference/ordering-consensus).
 
@@ -121,7 +121,6 @@ The SV Web UI is the operator dashboard for governance and node monitoring. It p
 - DSO governance overview (active votes, network parameters, SV membership)
 - Vote creation and management interface for CIPs and parameter changes
 - Validator onboarding secret generation
-- CometBFT debug information (peer connectivity, block height, consensus state)
 - Global Synchronizer node status (sequencer and mediator health)
 
 ### Scan App
@@ -147,7 +146,7 @@ The Scan API is documented with an OpenAPI specification. Endpoints marked as `e
 
 An SV node has several distinct network connectivity requirements beyond what a regular validator needs.
 
-**BFT peer-to-peer connections**: Each SV's CometBFT node maintains TCP connections to every other SV's CometBFT node on dedicated P2P ports (e.g., port `26<MIGRATION_ID>56`). These connections carry the consensus gossip protocol.
+**BFT peer-to-peer connections**: Each SV's sequencer exposes a CantonBFT peer-to-peer endpoint over HTTPS (e.g., `sequencer-p2p-<SERIAL_ID>.sv.<hostname>`) and connects to the corresponding endpoint of every other SV. These connections carry the ordering protocol and are reachable only by other SVs.
 
 **Sequencer API**: The SV exposes its sequencer over HTTPS so that external validators (and other SVs' participants) can connect to it. Validators use BFT sequencer connections that read from and write to multiple SV sequencers simultaneously.
 
@@ -160,7 +159,7 @@ An SV node has several distinct network connectivity requirements beyond what a 
 Running an SV node means fulfilling several roles simultaneously:
 
 - **Synchronizer operator** -- run and maintain the sequencer and mediator nodes that validators depend on for transaction processing
-- **BFT consensus participant** -- run the CometBFT orderer node that contributes to block production and message ordering
+- **BFT consensus participant** -- run the CantonBFT orderer, as part of the sequencer, that contributes to message ordering
 - **Governance participant** -- vote on CIPs, approve new validators and SVs, and set network parameters through the DSO governance process
 - **Scan infrastructure provider** -- host a public Scan instance that indexes Global Synchronizer activity for transparency and third-party integrations
 - **Validator operator** -- host parties, manage Canton Coin holdings, and run applications like any other validator on the network
@@ -188,8 +187,7 @@ An SV node requires four PostgreSQL instances (which can be consolidated but are
 
 A running SV node in Kubernetes consists of the following pods (as shown by `kubectl get pods`):
 
-- `global-domain-<M>-cometbft` -- CometBFT consensus node
-- `global-domain-<M>-sequencer` -- Sequencer node
+- `global-domain-<M>-sequencer` -- Sequencer node, including the CantonBFT orderer
 - `global-domain-<M>-mediator` -- Mediator node
 - `participant-<M>` -- Canton participant
 - `sv-app` -- SV governance application
