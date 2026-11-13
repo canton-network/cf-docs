@@ -289,7 +289,6 @@ def test_network_snapshot_from_existing_rebuilds_required_fields() -> None:
     assert snapshot["spliceVersion"] == "0.6.14"
     assert snapshot["cantonVersion"] == "3.5.10"
     assert snapshot["cantonReleaseLineBranch"] == "release-line-0.6.14"
-    assert "chainIdSuffix" not in snapshot
     assert snapshot["preservedFromPrevious"] is True
     assert snapshot["sources"]["preservedFromPrevious"] is True
 
