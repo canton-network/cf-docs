@@ -1,28 +1,278 @@
 ---
-title: "3.7.0"
-description: "Canton 3.7.0 release notes."
+title: "3.7"
+description: "Canton 3.7 release notes."
 ---
 
-# Release of Canton 3.7.0
+{/* Generated from the RELEASE-NOTES.md files in public Canton release bundles. */}
+
+## Release of Canton 3.7.3 {#release-of-canton-3-7-3}
+
+Canton 3.7.3 has been released on November 12, 2026.
+
+### Summary {#summary-3-7-3}
+
+This is a maintenance release that fixes a resource leak on sequencer nodes and makes party replication safer.
+It also improves the experimental
+[traffic top-ups through the ledger](#traffic-enforcement-app-traffic-top-ups-through-a-daml-interface-experimental-3-7-3)
+in the traffic enforcement app and the alpha [Hybrid Party Replication (HyPR)](#remote-read-of-a-partys-acs-alpha-3-7-3).
+Its [breaking changes](#breaking-changes-3-7-3) affect party replication and the monitoring of CantonBFT P2P connections.
+
+### What's New {#whats-new-3-7-3}
+
+#### Participant node operators {#participant-node-operators-3-7-3}
+
+<a id="traffic-enforcement-app-traffic-top-ups-through-a-daml-interface-experimental-3-7-3" />
+##### Traffic enforcement app: traffic top-ups through a Daml interface (experimental)
+
+The traffic enforcement app (TEA) credits traffic top-ups that applications selling traffic (e.g. wallet providers)
+publish on the ledger through a new Daml interface. It replaces the `TrafficPurchaser` contracts of 3.7.0 to 3.7.2:
+TEA no longer credits exercises of `TrafficPurchaser_PurchaseCredits`. Before upgrading, switch the applications that
+sell traffic to templates implementing `TrafficCreditReporter`.
+
+Traffic top-ups through the ledger remain experimental: the Daml interface and the configuration may still change
+in a later release.
+
+The new Daml package `canton-api-traffic-credit-v1` defines the `TrafficCreditReporter` interface. Its
+`PublishCredit` choice credits `trafficAmount` bytes to a TEA `accountId` and must be exercised with the authority
+of the paymaster in the interface view. TEA only ingests credits whose paymaster is one of its configured
+paymasters. The choice's `observers` argument can notify additional parties of the credit without granting them
+authority to publish credits. Implementing templates supply `trafficCreditReporter_publishCreditImpl`, which must
+validate account ids and positive traffic amounts. Validation can evolve with the implementation without changing
+the interface package. The DAR `canton-api-traffic-credit-v1-1.0.0.dar` is shipped in the `dars` directory of the
+release bundle, so applications can depend on it.
+
+Top-up ingestion is enabled in the new block
+`canton.participants.<participant>.traffic-accounting.traffic-enforcement-server.top-up`:
+
+```
+top-up {
+  type = daml-credit
+  paymasters = ["paymaster::1220..."]
+  // optional, defaults to the participant's pruning offset
+  initial-offset-begin-exclusive = 42
+}
+```
+
+The default is `type = disabled`. `paymasters` must not be empty, and the parties must be hosted on the participant.
+This block replaces the settings `projection.top-up-paymasters` and
+`projection.initial-top-up-offset-begin-exclusive` of 3.7.0 to 3.7.2, which are removed. Move them to the new block
+before upgrading, as the participant does not start with them. Once an ingestion offset has been persisted, it takes
+precedence over `initial-offset-begin-exclusive`. Changing that setting does not reprocess transactions at or before
+the persisted offset.
+
+With Daml top-ups enabled, the participant uploads the `canton-api-traffic-credit-v1` DAR before starting TEA and
+vets it on every synchronizer it connects to, as long as
+`canton.participants.<participant>.parameters.admin-workflow.auto-load-dar` is enabled (the default). This setting
+also controls the other admin-workflow DARs. To manage these DARs manually, disable it and upload and vet the
+traffic credit DAR and the other required admin-workflow DARs. If the traffic credit DAR is missing while automatic
+loading is disabled, the participant logs a warning.
+
+A `PublishCredit` exercise whose arguments or acting parties do not match what TEA expects is not credited and is
+reported with the error code `TRAFFIC_TOP_UP_NOT_CREDITED`, which carries the `update_id` and `offset` of the credit.
+
+<a id="remote-read-of-a-partys-acs-alpha-3-7-3" />
+##### Remote read of a party's ACS (alpha)
+
+These endpoints are part of Hybrid Party Replication (HyPR), which is in alpha.
+
+The new endpoint `PartyManagementService.GetRemoteAcs` (console: `parties.get_remote_acs`) lets a participant that
+is authorized to host a party read that party's ACS from another participant through a sequencer channel. For now,
+exactly one party must be given. The new endpoint `PartyManagementService.GetPartyFreezingTime` (console:
+`parties.get_party_freezing_time`) returns the timestamp to pass as `asOf` to `get_remote_acs`.
+
+Remote read is disabled by default. It requires the `alpha-acs-replication-support` configuration on the source and
+target participants, and the `alpha-sequencer-channel-support` configuration on at least one sequencer node of the
+synchronizer.
+
+<a id="party-acs-import-for-a-freezing-participant-alpha-3-7-3" />
+##### Party ACS import for a Freezing participant (alpha)
+
+For HyPR, `PartyManagementService.ImportPartyAcs` (console: `parties.import_party_acs`) with a `party_id` also
+accepts the import if the participant is Freezing for the party. The import then requires the contract import mode
+`Validation`. Once connected to the synchronizer again, the participant moves its entry for the party from Freezing
+to Onboarding, and then from Onboarding to Active once that is safe, as after an import for an Onboarding
+participant.
+
+### Breaking changes {#breaking-changes-3-7-3}
+
+#### Participant node operators {#participant-node-operators-2-3-7-3}
+
+<a id="confirmation-threshold-check-counts-only-confirming-hosts-3-7-3" />
+##### Confirmation threshold check counts only confirming hosts
+
+This change improves safety: it prevents a hosting change that leaves a party unable to confirm requests.
+
+A party-to-participant change is rejected with `TOPOLOGY_CONFIRMING_THRESHOLD_CANNOT_BE_REACHED` if it leaves fewer
+hosts with Submission or Confirmation permission than the party's confirmation threshold, unless the force flag
+`FORCE_FLAG_ALLOW_CONFIRMING_THRESHOLD_CANNOT_BE_MET` is set. Since 3.4.4, the check also counted hosts with
+Observation permission, which never confirm. For example, a host could downgrade itself to Observation without the
+force flag, and every request that needed the party's confirmation then timed out until the party lowered its
+threshold.
+
+To downgrade a host, lower the threshold first, or in the same change. A party without hosts with Submission or
+Confirmation permission, and the removal of a party's mapping, are not checked.
+
+<a id="party-acs-import-rejected-after-the-partys-activation-3-7-3" />
+##### Party ACS import rejected after the party's activation
+
+This change improves safety: it prevents an ACS import that would leave the party with a wrong set of active
+contracts.
+
+`PartyManagementService.ImportPartyAcs` (console: `parties.import_party_acs`) with a `party_id` now rejects the
+import with `PARTY_ACS_IMPORT_AFTER_ACTIVATION` once the target participant has processed events past the party's
+activation. This happens if the target participant stays connected while the party authorizes the hosting. Since
+the activation, the target participant may have processed archivals or unassignments of contracts in the snapshot.
+In earlier versions, the import then failed midway, or made archived contracts active again if their archivals had
+been removed.
+
+Disconnect the target participant before the party authorizes the hosting, as the offline party replication steps
+require. If it has already processed the activation, restore it from a backup taken before the activation and
+import again. The force flag `IMPORT_PARTY_ACS_FORCE_FLAG_ALLOW_IMPORT_AFTER_ACTIVATION` in the new field
+`force_flags` (console: `forceFlags = Set(ImportPartyAcsForceFlag.AllowImportAfterActivation)`) skips the check. Set
+it only if no contract in the snapshot has been archived or unassigned since the activation.
+
+#### Synchronizer operators {#synchronizer-operators-3-7-3}
+
+<a id="cantonbft-p2p-endpoint-metric-label-renamed-3-7-3" />
+##### CantonBFT: P2P endpoint metric label renamed
+
+The label `endpoint` is renamed to `p2p-endpoint` (`p2p_endpoint` in Prometheus) on the metrics
+`daml.sequencer.bftordering.p2p.endpoint-status` and `daml.sequencer.bftordering.security.noncompliant.behavior`.
+The metric names are unchanged. On Kubernetes, the label `endpoint` identifies the scrape endpoint of the metrics
+collector, so the collector renamed the label of these metrics to `exported_endpoint`. The CantonBFT dashboards,
+which use the label, did not work there. The new label keeps its name on every deployment.
+
+Update dashboards and alerts that filter or group these metrics by `endpoint` or `exported_endpoint`. Until all
+sequencer nodes are upgraded, the metrics carry the old label on nodes that run an earlier version.
+
+### Minor Improvements {#minor-improvements-3-7-3}
+
+- The `Request-Timeout` header of JSON Ledger API requests now also accepts a time unit, for example `15s`. Values
+  without a time unit are still interpreted as milliseconds.
+
+### Bug Fixes {#bug-fixes-3-7-3}
+
+- Sequencer node: fixed another resource leak that increased CPU and memory usage after a few days of running.
+- Party replication: the party ACS import and the onboarding flag clearance now only consider the party's own
+  party-to-participant mapping. They no longer read the mapping of another party of the same namespace, such as a
+  party whose identifier starts with the party's identifier (e.g. `party-10` for `party-1`). In earlier versions,
+  the target participant could clear the party's onboarding flag before all requests in flight at the party's
+  onboarding were decided, leave the flag set, or clear the other party's flag too early, and online party
+  replication could check the wrong mapping. If the target knows no onboarding mapping of the imported party itself,
+  the import now fails with `PARTY_ACS_IMPORT_MISSING_ONBOARDING_MAPPING`.
+- Offline party replication: the automatic onboarding flag clearance no longer stalls when the first time the
+  target participant observes is the safe time itself, or when its clearance is rejected because another change of
+  the party's hosting took effect first (e.g. with two targets onboarding the party in parallel). In earlier
+  versions, the flag stayed set until a reconnect, a restart or a manual `clear_party_onboarding_flag`.
+  It also no longer logs warnings while it waits for an announced synchronizer upgrade or for its clearance to
+  take effect.
+- `clear_party_onboarding_flag` no longer leaves a pending onboarding clearance behind when called after the flag
+  is cleared, as the documented polling does. In earlier versions, a later ACS import of the party (e.g. after
+  offboarding it and onboarding it again) failed with `INVALID_STATE_PARTY_MANAGEMENT_ERROR`
+  (`ConflictingPendingOperationError`), and each reconnect ran a needless clearance attempt. Records left behind by
+  earlier versions are deleted on the next reconnect, or when the participant stops hosting the party.
+
+### Compatibility {#compatibility-3-7-3}
+
+The following Canton protocol versions are supported:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Canton protocol versions   | 36, 37          |
+
+Canton has been tested against the following versions of its dependencies:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Java Runtime               | OpenJDK 64-Bit Server VM (build 21.0.12+2-nixos, mixed mode, sharing)               |
+| Postgres                   | Recommended: PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) – Also tested: PostgreSQL 14.24 (Debian 14.24-1.pgdg13+2), PostgreSQL 15.19 (Debian 15.19-1.pgdg13+2), PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2), PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2), PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2)           |
+
+## Release of Canton 3.7.2 {#release-of-canton-3-7-2}
+
+Canton 3.7.2 has been released on November 04, 2026.
+
+### Summary {#summary-3-7-2}
+
+This is a maintenance release that fixes a resource leak on sequencer nodes and updates the base Docker image to address security vulnerabilities.
+Sequencer node operators should upgrade.
+
+### What’s New {#whats-new-3-7-2}
+
+#### Minor Improvements {#minor-improvements-3-7-2}
+- The `canton-participant`, `canton-mediator`, and `canton-sequencer` Docker images now enable the HTTP readiness endpoint (`/health/ready` on port 5071) by default.
+- The `HEALTHCHECK` of the `canton-participant` Docker image now uses the HTTP readiness endpoint (`/health/ready` on port 5071) instead of the gRPC health service.
+  Readiness is now only reported once database migrations and storage initialization have completed, so after an upgrade with long-running migrations the container stays unhealthy for longer.
+  Tooling that waits for the container to become healthy (e.g., `docker compose up --wait` or `condition: service_healthy`) may need longer timeouts.
+- Bump base docker image to [1.0.19](https://github.com/canton-network/canton-base-images/releases/tag/v1.0.19) to address security vulnerabilities.
+
+### Security and Bug Fixes {#security-and-bug-fixes-3-7-2}
+- Sequencer node: fixed a resource leak that caused a spike in threads, CPU and memory consumption.
+  The spike affected the node's ability to keep up with the rest of the synchronizer and required a restart of the node every few days.
+
+### Compatibility {#compatibility-3-7-2}
+
+The following Canton protocol versions are supported:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Canton protocol versions   | 36, 37          |
+
+Canton has been tested against the following versions of its dependencies:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Java Runtime               | OpenJDK 64-Bit Server VM (build 21.0.12+2-nixos, mixed mode, sharing)               |
+| Postgres                   | Recommended: PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) – Also tested: PostgreSQL 14.24 (Debian 14.24-1.pgdg13+2), PostgreSQL 15.19 (Debian 15.19-1.pgdg13+2), PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2), PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2), PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2)           |
+
+## Release of Canton 3.7.1 {#release-of-canton-3-7-1}
+
+Canton 3.7.1 has been released on October 30, 2026.
+
+### Summary {#summary-3-7-1}
+
+This patch release introduces configuration options for GCP KMS key deletion notice periods.
+
+### What’s New {#whats-new-3-7-1}
+
+#### Minor Improvements {#minor-improvements-3-7-1}
+- GCP KMS key deletion notice periods can now be configured via `destroyScheduledDuration`, and values must be within 24h and 120 days. The default remains 30 days, matching the previous default value.
+
+### Compatibility {#compatibility-3-7-1}
+
+The following Canton protocol versions are supported:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Canton protocol versions   | 36, 37          |
+
+Canton has been tested against the following versions of its dependencies:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Java Runtime               | OpenJDK 64-Bit Server VM (build 21.0.12+2-nixos, mixed mode, sharing)               |
+| Postgres                   | Recommended: PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) – Also tested: PostgreSQL 14.24 (Debian 14.24-1.pgdg13+2), PostgreSQL 15.19 (Debian 15.19-1.pgdg13+2), PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2), PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2), PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2)           |
+
+## Release of Canton 3.7.0 {#release-of-canton-3-7-0}
 
 Canton 3.7.0 has been released on October 29, 2026.
 
-## Summary
+### Summary {#summary-3-7-0}
 
 This minor release introduces protocol version 37 as a new protocol version. Synchronizers on protocol version 36 are not affected. The main themes:
 
-- [Multi-synchronizer support](#multi-synchronizer-without-feature-flag) with no feature flag required, and Ledger API changes for multi-synchronizer applications (see [Breaking changes](#breaking-changes)).
-- [New `v31` topology transactions](#new-v31-topology-transactions) for `PartyToParticipant` mappings. Applications that decode `PartyToParticipant` transactions may need to act (see the [migration guide](#migration-guide-for-external-signers-of-partytoparticipant-transactions)).
-- [Lower CantonBFT ordering latency and faster catch-up and onboarding](#cantonbft).
-- [Traffic purchase for participants before they register with the sequencer](#traffic-purchase-for-members-that-are-not-registered-yet), and [traffic cost estimation for reassignments](#traffic-cost-estimation-for-reassignments).
-- [Tighter bounds on protocol, topology, and ACS commitment collections](#new-collection-size-limits).
-- [Sequencer and topology states larger than 2 GB can now be exported and imported](#file-based-console-commands-for-sequencer-initialization-and-topology-snapshots).
+- [Multi-synchronizer support](#multi-synchronizer-without-feature-flag-3-7-0) with no feature flag required, and Ledger API changes for multi-synchronizer applications (see [Breaking changes](#breaking-changes-3-7-0)).
+- [New `v31` topology transactions](#new-v31-topology-transactions-3-7-0) for `PartyToParticipant` mappings. Applications that decode `PartyToParticipant` transactions may need to act (see the [migration guide](#migration-guide-for-external-signers-of-partytoparticipant-transactions-3-7-0)).
+- [Lower CantonBFT ordering latency and faster catch-up and onboarding](#cantonbft-3-7-0).
+- [Traffic purchase for participants before they register with the sequencer](#traffic-purchase-for-members-that-are-not-registered-yet-3-7-0), and [traffic cost estimation for reassignments](#traffic-cost-estimation-for-reassignments-3-7-0).
+- [Tighter bounds on protocol, topology, and ACS commitment collections](#new-collection-size-limits-3-7-0).
+- [Sequencer and topology states larger than 2 GB can now be exported and imported](#file-based-console-commands-for-sequencer-initialization-and-topology-snapshots-3-7-0).
 
-## What's New
+### What's New {#whats-new-3-7-0}
 
-### Application developers
+#### Application developers {#application-developers-3-7-0}
 
-#### New v31 topology transactions
+<a id="new-v31-topology-transactions-3-7-0" />
+##### New v31 topology transactions
 
 Protocol version 37 adds `v31` topology transactions (`com.digitalasset.canton.protocol.v31.TopologyTransaction`). In `v31`, the `PartyToParticipant` mapping gives each hosting participant a hosting state instead of the old onboarding flag. All other mappings are unchanged. A participant can be:
 
@@ -37,15 +287,16 @@ Synchronizers on protocol version 37 accept both `v30` and `v31` transactions. A
 
 **Moving a hosting entry backward** to an earlier state, such as taking an already-Active participant back to Onboarding, is rejected on protocol version 37. A party is not meant to be "un-onboarded" this way: the standard way to remove a participant's hosting is to remove it and have it nominated again from scratch.
 
-The one exception is that a `v30`-format transaction can still move an Active entry back to Onboarding, but only if the mapping already stored for that entry is also `v30`. This is preserved so that a node replaying history from a predecessor synchronizer after a [logical synchronizer upgrade](/global-synchronizer/production-operations/logical-synchronizer-upgrade) does not reject a transaction that was valid when it was originally made. The exception applies only to validating and replicating existing history (see [Topology: propose_delta no longer moves an Active validator back to Onboarding](#topology-propose_delta-no-longer-moves-an-active-validator-back-to-onboarding) in Breaking changes).
+The one exception is that a `v30`-format transaction can still move an Active entry back to Onboarding, but only if the mapping already stored for that entry is also `v30`. This is preserved so that a node replaying history from a predecessor synchronizer after a [logical synchronizer upgrade](/global-synchronizer/production-operations/logical-synchronizer-upgrade) does not reject a transaction that was valid when it was originally made. The exception applies only to validating and replicating existing history (see [Topology: propose_delta no longer moves an Active validator back to Onboarding](#topology-propose-delta-no-longer-moves-an-active-validator-back-to-onboarding-3-7-0) in Breaking changes).
 
-**Ledger API topology events:** `ParticipantAuthorizationOnboarding`, `ParticipantAuthorizationAdded`, and `ParticipantAuthorizationRevoked` are not new in this release. Canton 3.5.1 introduced them for party replication ([3.5.1 release notes](/global-synchronizer/release-notes/canton-releases/3-5-1#party-replication-onboarding-topology-event-is-exposed-on-ledger-api)). Now, in `v31`, the Nominated and Freezing states are representable: a hosting entry reaching Onboarding or Active still fires `ParticipantAuthorizationOnboarding` or `ParticipantAuthorizationAdded` the same way it does today, and an entry being removed from Onboarding or Active still fires `ParticipantAuthorizationRevoked`.
+**Ledger API topology events:** `ParticipantAuthorizationOnboarding`, `ParticipantAuthorizationAdded`, and `ParticipantAuthorizationRevoked` are not new in this release. Canton 3.5.1 introduced them for party replication ([3.5.1 release notes](/global-synchronizer/release-notes/canton-releases/3-5#party-replication-onboarding-topology-event-is-exposed-on-ledger-api-3-5-1)). Now, in `v31`, the Nominated and Freezing states are representable: a hosting entry reaching Onboarding or Active still fires `ParticipantAuthorizationOnboarding` or `ParticipantAuthorizationAdded` the same way it does today, and an entry being removed from Onboarding or Active still fires `ParticipantAuthorizationRevoked`.
 
 **Why a node sometimes skips a topology change instead of sending it.** This only matters if you use the Nominated or Freezing hosting states, which 3.7.0 does not support yet. A node automatically sends the topology transactions in its authorized store, the console's default store, to every synchronizer it is connected to. A synchronizer on protocol version 36 cannot express Nominated or Freezing, since its format only has the onboarding flag. The node therefore does not send a `PartyToParticipant` change with such an entry to that synchronizer, and logs a warning instead. It does not retry, because a retry could never succeed and would block every later topology change the node sends to that synchronizer. Because serials must follow on, that synchronizer then also rejects later changes to the party's mapping from the authorized store. Propose mappings with Nominated or Freezing entries directly in the target synchronizer's store instead.
 
-Applications that create or decode `PartyToParticipant` transactions need to act. See [Migration guide for external signers of PartyToParticipant transactions](#migration-guide-for-external-signers-of-partytoparticipant-transactions) next, and [GenerateExternalPartyTopology returns v31 topology transactions on protocol version 37](#generateexternalpartytopology-returns-v31-topology-transactions-on-protocol-version-37) in Breaking changes.
+Applications that create or decode `PartyToParticipant` transactions need to act. See [Migration guide for external signers of PartyToParticipant transactions](#migration-guide-for-external-signers-of-partytoparticipant-transactions-3-7-0) next, and [GenerateExternalPartyTopology returns v31 topology transactions on protocol version 37](#generateexternalpartytopology-returns-v31-topology-transactions-on-protocol-version-37-3-7-0) in Breaking changes.
 
-#### Migration guide for external signers of PartyToParticipant transactions
+<a id="migration-guide-for-external-signers-of-partytoparticipant-transactions-3-7-0" />
+##### Migration guide for external signers of PartyToParticipant transactions
 
 For applications that create `PartyToParticipant` (PTP) topology transactions, or decode them to show a user before signing. Protocol version 36 accepts only `v30` PTP transactions. Protocol version 37 accepts both `v30` and `v31` topology transactions, and validators create `v31` by default unless asked for `v30`.
 
@@ -67,17 +318,20 @@ Protocol version 37 accepts `v30` PTP transactions as a transition aid. Plan the
 - To co-sign, sign the transaction you received. Do not rebuild it as `v30`. A `v30` and a `v31` proposal of the same change never combine.
 - While a party has a Nominated or Freezing entry, `v30` PTP transactions for it are rejected with `TOPOLOGY_HOSTING_STATES_NOT_EXPRESSIBLE`, since `v30` cannot express these states.
 
-#### Synchronizer record time to offset conversion
+<a id="synchronizer-record-time-to-offset-conversion-3-7-0" />
+##### Synchronizer record time to offset conversion
 
 A new Ledger API endpoint in the `StateService` converts a pair of synchronizer ID and record time into a participant offset, making requests across participants easier.
 
 Synthetic synchronizer events, such as repair-related events, are put on the same record time as the last observed synchronizer event at the time of their creation, so multiple participant offsets can exist for a single record time. The endpoint returns the first offset at the requested record time, or the last offset before it if none exists at that exact time. If updates at the requested record time were already partially pruned, the request is rejected with `RECORD_TIME_NOT_FOUND`.
 
-#### Traffic cost estimation for reassignments
+<a id="traffic-cost-estimation-for-reassignments-3-7-0" />
+##### Traffic cost estimation for reassignments
 
 When `CostEstimationHints` are passed to `PrepareSubmission`, the `CostEstimation` of the response now also contains `reassignment_costs`: one `ReassignmentCost` per reassignment the submission requires, with the source and target synchronizer, the reassigned contract IDs, and the estimated traffic cost of the unassignment and assignment requests and responses. `total_traffic_cost_estimation` includes these costs. The JSON API exposes the same fields.
 
-#### New collection size limits
+<a id="new-collection-size-limits-3-7-0" />
+##### New collection size limits
 
 Starting with protocol version 37, the following collections are bounded. Messages exceeding a limit are rejected. The configurable limits are static synchronizer parameters.
 
@@ -99,9 +353,10 @@ Starting with protocol version 37, the following collections are bounded. Messag
 
 The signing key limit applies to `OwnerToKeyMapping`, `PartyToKeyMapping`, and the party signing keys in `PartyToParticipant`. These defaults only apply when set through the console. When bootstrapping a synchronizer on protocol version 37 directly through the API, use protobuf version 32 of `StaticSynchronizerParameters`, which carries the new limit fields, and set values for the new limits explicitly.
 
-During submission, the engine emits limit metrics for transactions and transaction views (see [New synchronizer limit metrics](#new-synchronizer-limit-metrics) in [Performance Enhancements](#performance-enhancements) for the full list).
+During submission, the engine emits limit metrics for transactions and transaction views (see [New synchronizer limit metrics](#new-synchronizer-limit-metrics-3-7-0) in [Performance Enhancements](#performance-enhancements-3-7-0) for the full list).
 
-#### dpm: Git-hosted DAR dependencies
+<a id="dpm-git-hosted-dar-dependencies-3-7-0" />
+##### dpm: Git-hosted DAR dependencies
 
 Daml projects can now declare dependencies on prebuilt `.dar` files stored in a Git repository, alongside the existing options of SDK-provided packages, OCI registry packages, and local DAR files. This closes a gap where teams relied on custom download scripts, checked-in binary artifacts, or manually managed paths to bring in external DARs.
 
@@ -164,21 +419,25 @@ data-dependencies:
 - Reach for a Git-hosted DAR dependency when an external `.dar` is not available as an SDK-provided package (`daml-prim`, `daml-stdlib`, `daml-script`) or published to an OCI registry, and the alternative is a custom download script, a checked-in binary artifact, or a manually managed local path. The Development Fund's own validation milestone used representative Splice DARs stored in Git as the proof case for exactly this scenario.
 - Use it for commit-pinned reproducibility across local and CI environments. A branch or tag ref resolves and pins to a commit SHA on install, so a CI runner and a developer's machine resolve to the identical artifact without separate download tooling.
 
-#### Improved dpm test output
+<a id="improved-dpm-test-output-3-7-0" />
+##### Improved dpm test output
 
 `dpm test` output is easier to read and act on. The test summary now appears at the end of the output, so pass and fail results are visible at once, and its header shows the pass and fail counts, for example "Test Summary: 2 failed, 3 passed". When tests fail, only the failed tests are listed in the summary. Tests are grouped by file, with file paths relative to the project root, and diagnostics show the file path, script name, and error message instead of the verbose LSP format. Colored output is detected from the terminal. Coverage statistics are hidden by default. Pass `--show-coverage` to display them.
 
-#### Participant Query Store (PQS)
+<a id="participant-query-store-pqs-3-7-0" />
+##### Participant Query Store (PQS)
 
 No changes to the Participant Query Store in this release.
 
-#### Daml Shell
+<a id="daml-shell-3-7-0" />
+##### Daml Shell
 
 No changes to Daml Shell in this release.
 
-### Validator operators
+#### Validator operators {#validator-operators-3-7-0}
 
-#### Multi-synchronizer without feature flag
+<a id="multi-synchronizer-without-feature-flag-3-7-0" />
+##### Multi-synchronizer without feature flag
 
 Starting with protocol version 37, the `EnableMultiSynchronizer` feature flag is no longer needed to enable multi-synchronizer. Any stakeholder can submit the assignment as soon as the unassignment completes. The `assignment_exclusivity` field of unassigned events is not set, and the synchronizer parameter `assignmentExclusivityTimeout` has no effect.
 
@@ -187,11 +446,12 @@ This builds on Canton's existing support for connecting a single validator to mu
 - New participant configuration `canton.participants.<participant>.parameters.reassignments-config.enable-automatic-assignment` (default `true`). When `true`, the participant tries to complete reassignments initiated by other participants by submitting their assignment, and retries pending reassignments on reconnection to a synchronizer.
 - New participant configuration `canton.participants.<participant>.parameters.reassignments-config.automatic-assignment-delay` (default `60s`). The automatic assignment submits after a delay drawn between this value and twice this value, counted from the sequencing time of the unassignment on the local clock.
 
-Before protocol version 37, the creating package of the contract was used for contract authentication during contract assignment. From protocol version 37, separate source and target validation packages can be specified at the protocol level. To be valid, these validation packages must be upgradable packages for the contract and be vetted on the respective synchronizer. See [Source and target validation packages can be overridden](#source-and-target-validation-packages-can-be-overridden) below for how to set them.
+Before protocol version 37, the creating package of the contract was used for contract authentication during contract assignment. From protocol version 37, separate source and target validation packages can be specified at the protocol level. To be valid, these validation packages must be upgradable packages for the contract and be vetted on the respective synchronizer. See [Source and target validation packages can be overridden](#source-and-target-validation-packages-can-be-overridden-3-7-0) below for how to set them.
 
-Related changes elsewhere in these notes: the active contract set now excludes incomplete reassignments by default (see [StateService excludes incomplete reassignments by default](#stateservice-excludes-incomplete-reassignments-by-default) in Breaking changes), automatic reassignments get their own submission IDs (see [Submission IDs of automatic reassignments](#submission-ids-of-automatic-reassignments)), applications can estimate reassignment traffic costs (see [Traffic cost estimation for reassignments](#traffic-cost-estimation-for-reassignments)), and new metrics track reassignments (see [Validator reassignment metrics](#validator-reassignment-metrics) in Performance Enhancements).
+Related changes elsewhere in these notes: the active contract set now excludes incomplete reassignments by default (see [StateService excludes incomplete reassignments by default](#stateservice-excludes-incomplete-reassignments-by-default-3-7-0) in Breaking changes), automatic reassignments get their own submission IDs (see [Submission IDs of automatic reassignments](#submission-ids-of-automatic-reassignments-3-7-0)), applications can estimate reassignment traffic costs (see [Traffic cost estimation for reassignments](#traffic-cost-estimation-for-reassignments-3-7-0)), and new metrics track reassignments (see [Validator reassignment metrics](#validator-reassignment-metrics-3-7-0) in Performance Enhancements).
 
-#### Source and target validation packages can be overridden
+<a id="source-and-target-validation-packages-can-be-overridden-3-7-0" />
+##### Source and target validation packages can be overridden
 
 The following console commands now take optional `overrideSourceValidationPackageIds` and `overrideTargetValidationPackageIds` arguments:
 
@@ -202,17 +462,20 @@ The following console commands now take optional `overrideSourceValidationPackag
 
 The `UnassignCommand` Java binding also supports these additional fields.
 
-#### Traffic enforcement app: pruning of submission correlations
+<a id="traffic-enforcement-app-pruning-of-submission-correlations-3-7-0" />
+##### Traffic enforcement app: pruning of submission correlations
 
 Added the traffic enforcement admin endpoint `Prune` (JSON `POST /v2/traffic/prune`, console command `ledger_api.traffic.prune`). It prunes events and submission correlations, and reports the pruned event and correlation counts separately. The timestamp must be at least the participant's max deduplication duration (`canton.participants.<participant>.init.ledger-api.max-deduplication-duration`, default 7 days) in the past, or the request fails with `TRAFFIC_UNSAFE_TO_PRUNE`.
 
 **Warning:** prune only correlations of completed submissions. Pruning the correlation of an in-flight submission affects its traffic accounting.
 
-#### Traffic enforcement app: traffic top-ups from the ledger (experimental)
+<a id="traffic-enforcement-app-traffic-top-ups-from-the-ledger-experimental-3-7-0" />
+##### Traffic enforcement app: traffic top-ups from the ledger (experimental)
 
 The traffic enforcement app can credit traffic top-ups from `TrafficPurchaser` contracts on the ledger. Top-up ingestion is enabled by setting the trusted paymaster parties, which must be hosted on the participant, in `canton.participants.<participant>.traffic-accounting.traffic-enforcement-server.projection.top-up-paymasters` (default empty, disabled). Ingestion starts at the participant's pruning offset unless `projection.initial-top-up-offset-begin-exclusive` is set. A top-up that cannot be credited is reported with the error code `TRAFFIC_TOP_UP_NOT_CREDITED`, which carries the `update_id` and `offset` of the top-up.
 
-#### Key management operations are bound to a synchronizer
+<a id="key-management-operations-are-bound-to-a-synchronizer-3-7-0" />
+##### Key management operations are bound to a synchronizer
 
 The following console commands now take an optional `synchronizerId` argument:
 
@@ -226,23 +489,27 @@ The following console commands now take an optional `synchronizerId` argument:
 
 If omitted, Canton tries to auto-detect the synchronizer. This only succeeds when there is exactly one registered and connected synchronizer. It is a security best practice to have a distinct key per synchronizer. See [KMS Operations](/global-synchronizer/production-operations/kms-operations) for key-management guidance in production.
 
-#### Protocol version downgrades via LSU are forbidden
+<a id="protocol-version-downgrades-via-lsu-are-forbidden-3-7-0" />
+##### Protocol version downgrades via LSU are forbidden
 
 [Logical synchronizer upgrades](/global-synchronizer/production-operations/logical-synchronizer-upgrade) from a synchronizer running protocol version 37 or higher to a successor with a lower protocol version are now rejected. Both the topology manager and the topology processor reject such `LsuAnnouncement` topology mappings with the error `TOPOLOGY_INVALID_SUCCESSOR_PHYSICAL_SYNCHRONIZER_ID`.
 
-### Synchronizer operators
+#### Synchronizer operators {#synchronizer-operators-3-7-0}
 
-#### CantonBFT
+<a id="cantonbft-3-7-0" />
+##### CantonBFT
 
-[CantonBFT](/global-synchronizer/extension-synchronizers/bft-orderer) configuration defaults for ordering latency have improved. Starting with protocol version 37, state transfer responses can carry multiple commit certificates, allowing more efficient catch-up and onboarding. See [CantonBFT ordering and catch-up performance](#cantonbft-ordering-and-catch-up-performance) in [Performance Enhancements](#performance-enhancements) for details.
+[CantonBFT](/global-synchronizer/extension-synchronizers/bft-orderer) configuration defaults for ordering latency have improved. Starting with protocol version 37, state transfer responses can carry multiple commit certificates, allowing more efficient catch-up and onboarding. See [CantonBFT ordering and catch-up performance](#cantonbft-ordering-and-catch-up-performance-3-7-0) in [Performance Enhancements](#performance-enhancements-3-7-0) for details.
 
 There have been multiple observability improvements.
 
-#### Initialization changes for sequencers and mediators
+<a id="initialization-changes-for-sequencers-and-mediators-3-7-0" />
+##### Initialization changes for sequencers and mediators
 
-Rather than generating onboarding topology transactions during node initialization and storing them in the authorized store, sequencers and mediators now skip this step and generate them when needed. This ensures the transactions are generated in the right protocol version, which is not known during initialization. See [Sequencer and mediator onboarding transactions](#sequencer-and-mediator-onboarding-transactions) in Breaking changes for the console command to use instead of `identity_transactions()`.
+Rather than generating onboarding topology transactions during node initialization and storing them in the authorized store, sequencers and mediators now skip this step and generate them when needed. This ensures the transactions are generated in the right protocol version, which is not known during initialization. See [Sequencer and mediator onboarding transactions](#sequencer-and-mediator-onboarding-transactions-3-7-0) in Breaking changes for the console command to use instead of `identity_transactions()`.
 
-#### File-based console commands for sequencer initialization and topology snapshots
+<a id="file-based-console-commands-for-sequencer-initialization-and-topology-snapshots-3-7-0" />
+##### File-based console commands for sequencer initialization and topology snapshots
 
 New console commands stream state to or from a file, for states larger than 2 GB:
 
@@ -255,17 +522,19 @@ New console commands stream state to or from a file, for states larger than 2 GB
 
 `node.topology.transactions.import_topology_snapshot_fromV2` now supports files larger than 2 GB.
 
-#### Traffic purchase for members that are not registered yet
+<a id="traffic-purchase-for-members-that-are-not-registered-yet-3-7-0" />
+##### Traffic purchase for members that are not registered yet
 
 Traffic can now be purchased for a participant that is not yet registered with the sequencer, improving the onboarding process. It requires protocol version 37 or higher. See [Synchronizer Traffic](/global-synchronizer/deployment/synchronizer-traffic) for how traffic accounting and top-ups work generally.
 
 To support this, new `v31` versions of `SequencerSnapshot`, `SequencerPruningStatus`, `SequencerMemberStatus`, and `OnboardingStateForSequencerV2` have been added in `com.digitalasset.canton.sequencer.admin.v31`. Sequencer snapshots and onboarding states use them from protocol version 37 onwards. Earlier protocol versions keep using the `v30` messages and are not affected.
 
-## Breaking changes
+### Breaking changes {#breaking-changes-3-7-0}
 
-### Application developers
+#### Application developers {#application-developers-2-3-7-0}
 
-#### StateService excludes incomplete reassignments by default
+<a id="stateservice-excludes-incomplete-reassignments-by-default-3-7-0" />
+##### StateService excludes incomplete reassignments by default
 
 Incomplete reassignments (`IncompleteAssigned` and `IncompleteUnassigned` events) only matter to clients that work with contracts reassigned between multiple synchronizers. Most clients only need the active contracts. Until now, the snapshot always included these events.
 
@@ -291,13 +560,15 @@ Content-Type: application/json
 "includeIncompleteReassignments": true
 ```
 
-This affects all early adopters of the multi-synchronizer alpha feature (see [Multi-synchronizer without feature flag](#multi-synchronizer-without-feature-flag)). The `GetActiveContracts` stream continuation token and the `GetActiveContractsPage` page token formats have changed to take the new flag into account, so tokens issued by previous Canton versions are rejected with `INVALID_CONTINUATION_TOKEN` and `INVALID_ACS_PAGE_TOKEN` respectively.
+This affects all early adopters of the multi-synchronizer alpha feature (see [Multi-synchronizer without feature flag](#multi-synchronizer-without-feature-flag-3-7-0)). The `GetActiveContracts` stream continuation token and the `GetActiveContractsPage` page token formats have changed to take the new flag into account, so tokens issued by previous Canton versions are rejected with `INVALID_CONTINUATION_TOKEN` and `INVALID_ACS_PAGE_TOKEN` respectively.
 
-#### GenerateExternalPartyTopology returns v31 topology transactions on protocol version 37
+<a id="generateexternalpartytopology-returns-v31-topology-transactions-on-protocol-version-37-3-7-0" />
+##### GenerateExternalPartyTopology returns v31 topology transactions on protocol version 37
 
-For a synchronizer on protocol version 37, the Ledger API `GenerateExternalPartyTopology` returns the topology transactions to sign as `v31` `TopologyTransaction` (`com.digitalasset.canton.protocol.v31`). Applications that decode these transactions, for example to show them to the party before signing, must support `v31` (see [New v31 topology transactions](#new-v31-topology-transactions)), or set the new `protocol_version` field of the request to 36 to get `v30` transactions. See [Migration guide for external signers of PartyToParticipant transactions](#migration-guide-for-external-signers-of-partytoparticipant-transactions) above.
+For a synchronizer on protocol version 37, the Ledger API `GenerateExternalPartyTopology` returns the topology transactions to sign as `v31` `TopologyTransaction` (`com.digitalasset.canton.protocol.v31`). Applications that decode these transactions, for example to show them to the party before signing, must support `v31` (see [New v31 topology transactions](#new-v31-topology-transactions-3-7-0)), or set the new `protocol_version` field of the request to 36 to get `v30` transactions. See [Migration guide for external signers of PartyToParticipant transactions](#migration-guide-for-external-signers-of-partytoparticipant-transactions-3-7-0) above.
 
-#### Repair commands represent contracts depending on their reassignment counter
+<a id="repair-commands-represent-contracts-depending-on-their-reassignment-counter-3-7-0" />
+##### Repair commands represent contracts depending on their reassignment counter
 
 ACS imports and the repair `add`/`purge` commands used either Created/Archive events or Assigned/Unassigned events for all contracts, depending on `enable-all-ledger-api-reassignments`. Created/Archive events cannot carry a non-zero reassignment counter, so such contracts could not be imported when the flag was set to false.
 
@@ -308,11 +579,13 @@ The meaning of the participant parameter `canton.participants.<participant>.para
 
 **Impact and migration:** contracts with a non-zero reassignment counter can now be imported without enabling `enable-all-ledger-api-reassignments`. Ledger API consumers must be able to process Assigned and Unassigned events for such contracts.
 
-#### Submission IDs of automatic reassignments
+<a id="submission-ids-of-automatic-reassignments-3-7-0" />
+##### Submission IDs of automatic reassignments
 
 When a command requires automatic reassignments, the unassignments and assignments get their own submission IDs, derived from the command's submission ID as `<submissionId>-u<uuid>` and `<submissionId>-a<uuid>`, instead of reusing it. Such a command is rejected with the new error code `INVALID_SUBMISSION_ID` if its submission ID is longer than 221 characters.
 
-#### daml-script-runner, script-converter, and auth-utils no longer published to Maven Central
+<a id="daml-script-runner-script-converter-and-auth-utils-no-longer-published-to-maven-central-3-7-0" />
+##### daml-script-runner, script-converter, and auth-utils no longer published to Maven Central
 
 `com.daml:daml-script-runner`, `com.daml:script-converter`, and `com.daml:auth-utils` are no longer published to Maven Central, along with `com.daml:daml-script-stable-packages-lib` and `com.daml:timer-utils`.
 
@@ -320,33 +593,38 @@ These libraries back the `daml script` runner internally and are not intended as
 
 **Impact and migration:** this affects only projects that depend on these specific Maven coordinates directly, which is not the standard way to consume `daml-script`. Projects that use `dpm` or the SDK's `daml script` command are unaffected.
 
-### Validator operators
+#### Validator operators {#validator-operators-2-3-7-0}
 
-#### The repair service requires enable-repair-commands
+<a id="the-repair-service-requires-enable-repair-commands-3-7-0" />
+##### The repair service requires enable-repair-commands
 
 The validator serves the repair admin API (`ParticipantRepairService`) only if `canton.features.enable-repair-commands = true` (default `false`), matching the console repair commands. Set it on participants whose repair endpoints are called through the admin API.
 
-#### Topology: propose_delta no longer moves an Active validator back to Onboarding
+<a id="topology-propose-delta-no-longer-moves-an-active-validator-back-to-onboarding-3-7-0" />
+##### Topology: propose_delta no longer moves an Active validator back to Onboarding
 
 The submitting node rejects setting the onboarding flag of an Active `PartyToParticipant` entry on every protocol version, so `propose_delta` with `requiresPartyToBeOnboarded` no longer moves an Active validator back to Onboarding. Set `topology.disable-optional-topology-checks` to submit it anyway.
 
-#### Key export requires enable-key-download
+<a id="key-export-requires-enable-key-download-3-7-0" />
+##### Key export requires enable-key-download
 
 The admin API `VaultService.ExportKeyPair`, used by the console commands `keys.secret.download` and `download_to`, is only served if `canton.parameters.enable-key-download = true` (default `false`). Otherwise, calls fail with `FAILED_PRECONDITION`. The console commands still require `canton.features.enable-preview-commands = yes`. Enable key download only while exporting keys, not in production.
 
-#### Docker images no longer set non-standard-config
+<a id="docker-images-no-longer-set-non-standard-config-3-7-0" />
+##### Docker images no longer set non-standard-config
 
 The default `canton.parameters.non-standard-config = true` has been removed from the Docker images configuration, since it is not required for the default configuration. Deployments that rely on non-standard configuration options must set it explicitly.
 
-### Synchronizer operators
+#### Synchronizer operators {#synchronizer-operators-2-3-7-0}
 
-#### Sequencer and mediator onboarding transactions
+<a id="sequencer-and-mediator-onboarding-transactions-3-7-0" />
+##### Sequencer and mediator onboarding transactions
 
 Sequencers and mediators no longer store their onboarding topology transactions in the authorized store during initialization. Instead of the console command `node.topology.transactions.identity_transactions()`, use `node.topology.transactions.generate_onboarding_transactions(protocolVersion)`.
 
 With an offline root key, pass a `temporaryStore` seeded with the signed root certificate and a namespace delegation to an intermediate key on the node, or keep signing the transactions manually.
 
-## New Deprecations in this Release
+### New Deprecations in this Release {#new-deprecations-in-this-release-3-7-0}
 
 The traffic enforcement Ledger API endpoint `TrafficService.PruneEvents`, the JSON endpoint `POST /v2/traffic/events/prune`, and the console command `ledger_api.traffic.prune_events` are deprecated. Use `TrafficService.Prune` (`POST /v2/traffic/prune`, console `ledger_api.traffic.prune`) instead. They will be disabled by default in 3.8 and removed in 3.9.
 
@@ -360,17 +638,17 @@ Setting this now (default `true`) disables the deprecated endpoints early. Calls
 
 The sequencer configuration `canton.sequencers.<sequencer>.parameters.produce-post-ordering-topology-ticks` is deprecated and ignored with a warning. Post-ordering topology ticks are always produced.
 
-## Performance Enhancements
+### Performance Enhancements {#performance-enhancements-3-7-0}
 
-### CantonBFT ordering and catch-up performance
+#### CantonBFT ordering and catch-up performance {#cantonbft-ordering-and-catch-up-performance-3-7-0}
 
 Canton requests a pre-prepare via retransmission if a weak quorum of prepares is reached without having the pre-prepare.
 
 Starting with protocol version 37, state transfer responses can carry multiple commit certificates, allowing more efficient catch-up and onboarding.
 
-### New synchronizer limit metrics
+#### New synchronizer limit metrics {#new-synchronizer-limit-metrics-3-7-0}
 
-During submission, the engine emits limit metrics for transactions (with a `limit` label for the currently configured threshold), introduced alongside the [New collection size limits](#new-collection-size-limits) in What's New:
+During submission, the engine emits limit metrics for transactions (with a `limit` label for the currently configured threshold), introduced alongside the [New collection size limits](#new-collection-size-limits-3-7-0) in What's New:
 
 - `daml.participant.transaction-node.acting-parties`
 - `daml.participant.transaction-node.choice-authorizers`
@@ -392,7 +670,7 @@ And for transaction views:
 - `daml.participant.sync.protocol-messages.transaction-view.sub-views`
 - `daml.participant.sync.protocol-messages.transaction-view.tree-depth`
 
-### Ledger API pruning and streaming performance
+#### Ledger API pruning and streaming performance {#ledger-api-pruning-and-streaming-performance-3-7-0}
 
 Manual pruning over the Ledger API is now iterative, like scheduled pruning, with the maximum offset range of one iteration set by `canton.participants.<participant>.parameters.batching.max-pruning-batch-size`. Contract pruning is iterative as well, at most `canton.participants.<participant>.ledger-api.index-service.contract-pruning-batch-size` contracts per iteration (default 10,000).
 
@@ -408,9 +686,9 @@ The default is `true`.
 
 Improved the performance of Ledger API update and active contract streams, and of the paged updates endpoint (`GetUpdatesPage`). Improved the performance of Ledger API party queries, and party listings now reflect changes to the hosting of multi-hosted parties faithfully.
 
-### Validator reassignment metrics
+#### Validator reassignment metrics {#validator-reassignment-metrics-3-7-0}
 
-New validator reassignment metrics, for the reassignments described in [Multi-synchronizer without feature flag](#multi-synchronizer-without-feature-flag):
+New validator reassignment metrics, for the reassignments described in [Multi-synchronizer without feature flag](#multi-synchronizer-without-feature-flag-3-7-0):
 
 - `daml.participant.sync.reassignments.submitted`
 - `daml.participant.sync.reassignments.requests`
@@ -418,24 +696,24 @@ New validator reassignment metrics, for the reassignments described in [Multi-sy
 - `daml.participant.sync.reassignments.batch-size`
 - `daml.participant.sync.reassignments.unassignment.local-target-timestamp-lag`
 
-## Minor Improvements
+### Minor Improvements {#minor-improvements-3-7-0}
 
-### Application developers
+#### Application developers {#application-developers-3-3-7-0}
 
 - TypeScript codegen: `templateIdWithPackageId` and `interfaceIdWithPackageId` now use the bare package-id reference (`<package-id>:Module:Entity`) instead of a `#`-prefixed value, matching the identifiers returned by the ledger (for example the interface-view `interfaceId`) and the Java codegen.
 - TypeScript codegen: the generated `package.json` uses the camelCase `peerDependencies` key instead of `peer-dependencies`, matching [npm](https://docs.npmjs.com/cli/v12/configuring-npm/package-json#peerdependencies).
 - Fixed the transaction trace shown for unhandled exceptions. When an exception passed through a try-catch that did not handle it, the trace started at the choice enclosing the try-catch instead of the choice where the exception was thrown.
 
-### Validator operators
+#### Validator operators {#validator-operators-3-3-7-0}
 
 - The participant status report now tracks the health components of all connected synchronizers instead of only the last connected one.
 - `repair.purge` rejects contracts that are reassigned away from the synchronizer, or skips them when `ignoreAlreadyPurged` is set.
 - Topology: when a topology transaction submission loses the race against a concurrent submission for the same serial, a `TOPOLOGY_SERIAL_MISMATCH` is reported instead of a semantic error related to the transaction's content. The submitting node now logs an INFO when a topology transaction sent through the queue-based or store-based topology outbox is sequenced but rejected during topology validation.
-- The topology and offline root key scripts can build topology transactions of proto version `v31`, used from protocol version 37 (see [New v31 topology transactions](#new-v31-topology-transactions)).
+- The topology and offline root key scripts can build topology transactions of proto version `v31`, used from protocol version 37 (see [New v31 topology transactions](#new-v31-topology-transactions-3-7-0)).
 - KMS: added AWS KMS support for `Ed25519` signing keys, matching GCP KMS.
 - Dependency updates to address security vulnerabilities: Bouncy Castle 1.86, gRPC 1.85, Jackson 2.22.4, and OpenTelemetry and its instrumentation.
 
-## Compatibility
+### Compatibility {#compatibility-3-7-0}
 
 The following Canton protocol versions are supported:
 

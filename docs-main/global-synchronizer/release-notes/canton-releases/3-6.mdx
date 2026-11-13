@@ -1,13 +1,136 @@
 ---
-title: "3.6.1"
-description: "Canton 3.6.1 release notes."
+title: "3.6"
+description: "Canton 3.6 release notes."
 ---
 
-# Release of Canton 3.6.1
+{/* Generated from the RELEASE-NOTES.md files in public Canton release bundles. */}
+
+## Release of Canton 3.6.4 {#release-of-canton-3-6-4}
+
+Canton 3.6.4 has been released on October 22, 2026.
+
+### Summary {#summary-3-6-4}
+
+This is a security maintenance release that updates the canton docker base image.
+
+### What’s New {#whats-new-3-6-4}
+
+#### Security Improvements {#security-improvements-3-6-4}
+
+Bumped the docker base image to 1.0.17 which includes the updated version of CA CERT that excludes the compromised eMudhra root certificates and updated system dependencies.
+
+### Compatibility {#compatibility-3-6-4}
+
+The following Canton protocol versions are supported:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Canton protocol versions   | 34, 35, 36          |
+
+Canton has been tested against the following versions of its dependencies:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Java Runtime               | OpenJDK 64-Bit Server VM (build 21.0.12+2-nixos, mixed mode, sharing)               |
+| Postgres                   | Recommended: PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) – Also tested: PostgreSQL 14.24 (Debian 14.24-1.pgdg13+2), PostgreSQL 15.19 (Debian 15.19-1.pgdg13+2), PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2), PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2)           |
+
+## Release of Canton 3.6.3 {#release-of-canton-3-6-3}
+
+Canton 3.6.3 has been released on October 20, 2026.
+
+### Summary {#summary-3-6-3}
+
+This patch release fixes slow topology store lookups on Postgres that could cause high participant database load
+and make the ACS commitment processor fall behind on large topology states.
+
+### What’s New {#whats-new-3-6-3}
+
+#### Faster topology store lookups on Postgres {#faster-topology-store-lookups-on-postgres-3-6-3}
+<a id="background-3-6-3" />
+##### Background
+Some topology store queries filter topology transactions by a list of parties (UIDs) or namespaces. On Postgres,
+once that list had more than a handful of entries, the query planner switched from index lookups to a hash join
+over all topology transactions of the requested types. On large topology states this was orders of magnitude slower.
+It caused high participant database load and made the ACS commitment process fall behind.
+
+<a id="specific-changes-3-6-3" />
+##### Specific Changes
+- On Postgres, topology store queries that filter by parties or namespaces now do one index lookup per filter entry,
+  so their cost depends on the number of filter entries rather than on the size of the topology state.
+- H2 behavior is unchanged.
+
+<a id="impact-and-migration-3-6-3" />
+##### Impact and Migration
+Participants with large topology states see lower database load, and the ACS commitment processor no longer falls
+behind because of these queries. Query results are unchanged.
+
+### Compatibility {#compatibility-3-6-3}
+
+The following Canton protocol versions are supported:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Canton protocol versions   | 34, 35, 36          |
+
+Canton has been tested against the following versions of its dependencies:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Java Runtime               | OpenJDK 64-Bit Server VM (build 21.0.12+2-nixos, mixed mode, sharing)               |
+| Postgres                   | Recommended: PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) – Also tested: PostgreSQL 14.24 (Debian 14.24-1.pgdg13+2), PostgreSQL 15.19 (Debian 15.19-1.pgdg13+2), PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2), PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2)           |
+
+## Release of Canton 3.6.2 {#release-of-canton-3-6-2}
+
+Canton 3.6.2 has been released on October 15, 2026.
+
+### Summary {#summary-3-6-2}
+
+This patch release fixes a slow Ledger API query that could stall the initialization of the ACS commitment processor
+in Canton 3.6.1 by using index lookups.
+
+### What’s New {#whats-new-3-6-2}
+
+#### Event sequential id range lookup of Ledger API update streams with index scans {#event-sequential-id-range-lookup-of-ledger-api-update-streams-with-index-scans-3-6-2}
+<a id="background-3-6-2" />
+##### Background
+Canton 3.6.1 contains a slow database query that can cause SQL timeouts and stall the long-running initialization
+of the new ACS commitment processor. SVs and high-volume validators are the most likely to be affected.
+
+The slowdown came from how the Ledger API server mapped a requested offset range to the corresponding range of event
+sequential ids. The query aggregated over every `lapi_update_meta` row in the offset range, so its cost grew with
+the size of that range.
+
+<a id="specific-changes-3-6-2" />
+##### Specific Changes
+- The event sequential id range is now resolved with two index lookups on `lapi_update_meta`, so the cost no longer
+  depends on the size of the offset range.
+
+<a id="impact-and-migration-3-6-2" />
+##### Impact and Migration
+Starting an update stream over a large offset range is now cheaper. As a result, the ACS commitment processor
+initializes faster and is less likely to hit SQL timeouts. Ledger API results are unchanged, and no migration
+is required.
+
+### Compatibility {#compatibility-3-6-2}
+
+The following Canton protocol versions are supported:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Canton protocol versions   | 34, 35, 36          |
+
+Canton has been tested against the following versions of its dependencies:
+
+| Dependency                 | Version                    |
+|----------------------------|----------------------------|
+| Java Runtime               | OpenJDK 64-Bit Server VM (build 21.0.12+2-nixos, mixed mode, sharing)               |
+| Postgres                   | Recommended: PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) – Also tested: PostgreSQL 14.24 (Debian 14.24-1.pgdg13+2), PostgreSQL 15.19 (Debian 15.19-1.pgdg13+2), PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2), PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2)           |
+
+## Release of Canton 3.6.1 {#release-of-canton-3-6-1}
 
 Canton 3.6.1 has been released on October 05, 2026.
 
-## Summary
+### Summary {#summary-3-6-1}
 
 This minor release brings new features, scalability improvements, as well as many other improvements.
 
@@ -17,9 +140,9 @@ For scalability a complete redesign and new implementation of ACS commitments la
 
 Daml now offers a new external call feature that allows to perform deterministic calls to extension services, which is supported as part of LF 2.4 and protocol version 36.
 
-## What's New
+### What's New {#whats-new-3-6-1}
 
-### New ACS commitment pipeline
+#### New ACS commitment pipeline {#new-acs-commitment-pipeline-3-6-1}
 
 ACS commitments have been completely reimplemented.
 
@@ -80,13 +203,14 @@ With the new pipeline, journal garbage collection can now be controlled independ
 how frequently journal garbage collection shall be triggered if there is a continuous stream of ACS changes. Previously,
 this was tied to the reconciliation interval of the connected synchronizer.
 
-### Daml
+#### Daml {#daml-3-6-1}
 
-#### Daml-LF 2.3 is now the default target version
+<a id="daml-lf-2-3-is-now-the-default-target-version-3-6-1" />
+##### Daml-LF 2.3 is now the default target version
 
 A Daml project that does not specify an LF version in `daml.yaml` now compiles to Daml-LF 2.3 by default. Canton's convention is to make an LF version the default one release after it first ships, and 2.3 shipped in 3.5.
 
-A project previously compiled for LF 2.2, whether by an explicit `--target=2.2` or by relying on the prior default, will still operate. See [Canton 3.5.1: Targeting LF 2.3](https://docs.canton.network/global-synchronizer/release-notes/canton-releases/3-5-1#targeting-lf-2-3) for the original guidance.
+A project previously compiled for LF 2.2, whether by an explicit `--target=2.2` or by relying on the prior default, will still operate. See [Canton 3.5.1: Targeting LF 2.3](https://docs.canton.network/global-synchronizer/release-notes/canton-releases/3-5#targeting-lf-2-3-3-5-1) for the original guidance.
 
 *To restore the previous behavior:*
 
@@ -102,7 +226,8 @@ build-options:
   - --target=2.3
 ```
 
-#### Daml choices can now make external calls
+<a id="daml-choices-can-now-make-external-calls-3-6-1" />
+##### Daml choices can now make external calls
 
 Daml choices can call out to participant-configured extension services during interpretation, configured through `ExtensionServiceConfig` under:
 
@@ -122,7 +247,8 @@ For [externally signed](https://docs.canton.network/overview/reference/external-
 ExternalCallError (PreparationFailed | ExecutionFailed | InvalidOutput)
 ```
 
-#### Daml Script: cross-SDK dependencies
+<a id="daml-script-cross-sdk-dependencies-3-6-1" />
+##### Daml Script: cross-SDK dependencies
 
 Daml Script now supports dependencies on packages built with a different SDK version, through data-dependencies. All participating daml-script versions must be 3.6.0 or later. A 3.6.x script cannot depend on a 3.5.x script, and the script runner must be at least as up to date as the highest daml-script version in use.
 
@@ -136,22 +262,25 @@ Daml Script now supports dependencies on packages built with a different SDK ver
 | `ExternalCallErrorType` | `AnyExternalCallErrorType` |
 | `DevErrorType` | `AnyDevErrorType` |
 
-#### Daml Stdlib updates
+<a id="daml-stdlib-updates-3-6-1" />
+##### Daml Stdlib updates
 
 * `(:|)` and `(<|)` are added as synonyms for `DA.NonEmpty`, and `Show` is defined using the same representation.
 * `Logic.reduce` no longer incorrectly merges a nested Disjunction as a Conjunction.
 * `toNNF` in `DA.Logic` is now idempotent for stacked negations.
 * `toDNS` in `DA.Logic` is now idempotent for stacked negations.
 
-### Participant Query Store (PQS): renamed from Scribe
+#### Participant Query Store (PQS): renamed from Scribe {#participant-query-store-pqs-renamed-from-scribe-3-6-1}
 
-#### Overview
+<a id="overview-3-6-1" />
+##### Overview
 
 Scribe is renamed to Participant Query Store (PQS) across every deployment artifact. During the transition, both the new participant-query-store and the legacy scribe name, including their Docker images, are published side by side. Both configure the same pqs command and the same `java -jar pqs.jar` entrypoint, so existing deployments keep working while teams migrate to the new names. Environment variables using the new `PQS_` prefix, for example `PQS_TARGET_POSTGRES_HOST`, are now supported. The old `SCRIBE_` prefix still works as a fallback, but it now prints a deprecation warning. Migrate to `PQS_` going forward.
 
 The target release to remove the deprecated scribe artifacts and configurations is Canton 3.8.
 
-#### Action required: renamed deployment artifacts (breaking)
+<a id="action-required-renamed-deployment-artifacts-breaking-3-6-1" />
+##### Action required: renamed deployment artifacts (breaking)
 
 Anything that references Scribe's binary names, container metadata, or metric prefixes needs to be updated:
 
@@ -168,7 +297,8 @@ Anything that references Scribe's binary names, container metadata, or metric pr
 
 PQS configuration also no longer supplies default Postgres credentials. Supplying `--target-postgres-username` and `--target-postgres-password`, or the corresponding `PQS_TARGET_POSTGRES_USERNAME` and `PQS_TARGET_POSTGRES_PASSWORD` environment variables, is now mandatory.
 
-#### SQL and query changes
+<a id="sql-and-query-changes-3-6-1" />
+##### SQL and query changes
 
 Interface view rows no longer store `contract_key_hash`. Previously the hash of the underlying template's contract key was duplicated onto every interface view row, even though `contract_key` was already empty there. Both columns are now empty for interface views, and the hash remains available on the template row. Upgrading clears the hash from interface view rows already stored. SQL migration `V042__Clear_contract_key_hash_for_interface_views.sql` performs this cleanup, with impact under 1 minute.
 
@@ -180,58 +310,62 @@ A new `--target-postgres-properties-<key>=<value>` flag passes arbitrary `pgjdbc
 --target-postgres-properties-authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin
 ```
 
-#### Reliability improvements
+<a id="reliability-improvements-3-6-1" />
+##### Reliability improvements
 
 A performance optimization is that the core SQL functions now compute the nearest offset only once per query instead of repeatedly: `creates`, `exercises`, `active`, and `archives`.
 
 A timestamp (or duration) prune target older than all recorded history is now treated as a successful no-op instead of raising an error.
 
-### Experimental Post Quantum Cryptography
+#### Experimental Post Quantum Cryptography {#experimental-post-quantum-cryptography-3-6-1}
 
 Added experimental support for ML-DSA. Currently only ML-DSA-65 is supported. Experimental algorithms need to be explicitly enabled via a node's crypto configuration in `<node>.crypto.enable-experimental = true`.
 
-### Ledger API Improvements
+#### Ledger API Improvements {#ledger-api-improvements-3-6-1}
 
-#### Lookup by Transaction Hash
+<a id="lookup-by-transaction-hash-3-6-1" />
+##### Lookup by Transaction Hash
 
 The Ledger API update service now exposes a `GetUpdateByHash` endpoint. Given a transaction hash, it returns the corresponding transaction if the caller has visibility over it. The hash is available on externally-signed (Interactive Submission Service) transactions.
 
 - gRPC: `UpdateService.GetUpdateByHash`
 - JSON API: `POST /v2/updates/update-by-hash`
 
-#### Completion Lookup by Transaction Hash
+<a id="completion-lookup-by-transaction-hash-3-6-1" />
+##### Completion Lookup by Transaction Hash
 
 The Ledger API command completion service now exposes a `GetCompletionByHash` endpoint. Given a transaction hash, it returns the accepted completion (if any) and recent rejected completions for that hash. The hash is available on externally-signed (Interactive Submission Service) transactions.
 
 - gRPC: `CommandCompletionService.GetCompletionByHash`
 - JSON API: `POST /v2/commands/completion-by-hash`
 
-#### Party JWTs (self-signed JWTs)
+<a id="party-jwts-self-signed-jwts-3-6-1" />
+##### Party JWTs (self-signed JWTs)
 
 - The Ledger API now exposes a `GetJwks` endpoint. This can be used to obtain public keys for specific parties in JWK format.
     * gRPC: `JoseService.GetJwks`
     * JSON API: `GET /v2/jose/jwks/synchronizer/<synchronizer-id>/party/<party-id>`
 - A `type = party-jwt` can be added to `participants.<participant>.ledger-api.auth-services` to enable this feature.
 
-### New Sequencer Aggregator
+#### New Sequencer Aggregator {#new-sequencer-aggregator-3-6-1}
 
 Re-implemented the Sequencer Aggregator to be more resilient to misbehaving sequencers. Switching between the old and new implementation is controlled by the `sequencer-client.use-new-aggregator` configuration option, which defaults to `true`.
 One of the improvements allows the aggregator to detect sequencers that provide an incorrect event after that event has already reached consensus with sufficiently many other sequencers. A cache of past processed events is kept for that purpose, whose size is controlled by the `sequencer-client.past-events-cache-size` configuration option (default: 1000).
 
-### Support for Postgres 18
+#### Support for Postgres 18 {#support-for-postgres-18-3-6-1}
 
 Canton is now supported on Postgres 18.
 
 Heads-up: Postgres 14 is becoming end-of-life by Nov 2026 and support of PG14 will be removed in future Canton versions.
 
-### Traffic Enforcement App
+#### Traffic Enforcement App {#traffic-enforcement-app-3-6-1}
 - Add admin endpoint to prune events from the traffic enforcement event table - `PruneEvents`.
   This is used to keep the event table from growing indefinitely. This does not affect the account balance.
   WARNING: Affects de-duplication. If an event is pruned, de-duplication UpdateAccount requests on it will NOT be possible.
 - The configuration field for the traffic enforcement app has been renamed from `traffic-enforcement` to `traffic-accounting`.
   The old name is still accepted for backwards compatibility, but will be removed in a future release.
 
-### Synchronizer Limits
+#### Synchronizer Limits {#synchronizer-limits-3-6-1}
 
 Added `SynchronizerLimits` in the `StaticSynchronizerParameters`, which are size limits on various collections, globally enforced by all synchronizer members. These [limits](https://github.com/digital-asset/canton/blob/release-line-3.6/community/base/src/main/protobuf/com/digitalasset/canton/protocol/v31/sequencing.proto#L145-L180) are effective only starting with PV36.
 Synchronizer operators are required to choose explicit values for those limits when upgrading to PV36.
@@ -240,11 +374,11 @@ Note: when using the console to bootstrap a synchronizer, the console will autom
 However we strongly recommend to explicitly choose those values instead of relying on the defaults.
 When interactive with the gRPC API directly, limits must be explicitly set on the `StaticSynchronizerParameters` protobuf message when bootstrapping a synchronizer on PV36.
 
-### String Validation
+#### String Validation {#string-validation-3-6-1}
 
 Strings in protocol messages and APIs are strictly validated in protocol version 36 to be valid UTF16, not contain invalid escape characters or null characters. Invalid strings will be rejected during parsing.
 
-### Improved Sequencer Logging
+#### Improved Sequencer Logging {#improved-sequencer-logging-3-6-1}
 On the sequencer, the log line mentioning all events in a block now also can contain the outcome of the event.
 By setting `canton.sequencers.sequencer.parameters.enable-async-sequencer-logging = true`, the logging will be
 moved to the end of the block processing, but will include the outcome of the events in the block. The default
@@ -252,11 +386,11 @@ remains `false` to preserve the current behavior.
 Note that as part of this change, the sequencer-id of the traffic control metrics and of the block event processor
 metrics dropped the superfluous leading "SEQ::" string.
 
-## Heavy DB Migrations
+### Heavy DB Migrations {#heavy-db-migrations-3-6-1}
 
 The following DB migrations are applied automatically at startup and may have a impact on startup times the first time.
 
-### `lapi_events_party_to_participant` Database Migration
+#### `lapi_events_party_to_participant` Database Migration {#lapi-events-party-to-participant-database-migration-3-6-1}
 
 On upgrade, the participant database is migrated as follows:
 
@@ -265,30 +399,30 @@ On upgrade, the participant database is migrated as follows:
 - The `external_string` column of the `string_interning` table now enforces a `not null` constraint. This is a
   no-op for existing data, but prevents future inserts of null values.
 
-### Reassignment store database migration
+#### Reassignment store database migration {#reassignment-store-database-migration-3-6-1}
 
 On upgrade, a participant database migration updates the reassignment store: it backfills the new
 `stakeholders` column from the persisted contracts and drops the old `contracts` column. This runs
 automatically as part of the startup migration step. Its duration scales with the number of
 reassignments in the store, taking roughly 1 second per 10,000 reassignments.
 
-## Breaking changes
+### Breaking changes {#breaking-changes-3-6-1}
 
-### Removal of Deprecated Configuration keys
+#### Removal of Deprecated Configuration keys {#removal-of-deprecated-configuration-keys-3-6-1}
 
 - The following configuration keys were deprecated in 3.5 and no long exist in 3.6; and need to be removed from the configuration files:
     - `topology.use-new-processor
     - `topology.use-new-client`
 
-### Admin API
+#### Admin API {#admin-api-3-6-1}
 
 Canton console command `<sequencerReference>.setup.initialize_from_lsu_predecessor`, admin console command class `SequencerAdminCommands.InitializeFromLsuPredecessor` and the respective proto `InitializeSequencerFromLsuPredecessorRequest` now require to specify `synchronizerId` (logical) on the request.
 
-### Sequencer API
+#### Sequencer API {#sequencer-api-3-6-1}
 
 The sequencers now also enforce confirmation throughput caps. If throughput caps are configured, they will also apply to confirmations. The cap for confirmations can be configured with `confirmation-response.per-client-tps-cap`. It should be set slightly above the global confirmation request cap, as a member should not need to confirm more requests than can be submitted globally. The `confirmation-response.global-tps-cap` can be set to the maximum sequencer event capacity.
 
-### Error Codes
+#### Error Codes {#error-codes-3-6-1}
 
 (Potentially) Breaking: Aggregatable submissions are now rejected eagerly to
 preserve bandwidth. This means that the submission error code
@@ -314,7 +448,7 @@ threshold + extra verdicts to be sent immediately, while the rest of the
 mediators will wait a short amount of time. This allows to reduce the load on
 the sequencer by 30%, creating more capacity for other transactions.
 
-### Scala Console
+#### Scala Console {#scala-console-3-6-1}
 
 The following changes may impact bootstrap scripts or console usage:
 
@@ -323,13 +457,15 @@ The following changes may impact bootstrap scripts or console usage:
 - The `com.digitalasset.canton.config.NonNegativeNumeric.increment` method now returns an `Either[InvariantViolation, NonNegativeNumeric]` instead of a `NonNegativeNumeric`.
 - `NonEmpty` has moved from `com.daml.nonempty` to `com.digitalasset.nonempty`, and its scalaz type class instances have been replaced by cats ones. Separately, scalaz has been removed from the published Daml-LF modules: for example the `Order` and `Equal` instances on `Value.ContractId` are now a standard Scala `Ordering`.
 
-### Security
+#### Security {#security-3-6-1}
 
-#### TLS Versions
+<a id="tls-versions-3-6-1" />
+##### TLS Versions
 
 Public API servers now reject client connections using TLS 1.0 and 1.1. Clients must use **TLS 1.2 or higher**. This security enforcement aligns all public APIs with the existing Admin API requirement. For details on TLS version deprecations, see [RFC 8996](https://www.rfc-editor.org/info/rfc8996).
 
-#### TLS Default Cipher Suites
+<a id="tls-default-cipher-suites-3-6-1" />
+##### TLS Default Cipher Suites
 
 Updated the list of default cipher suites according to the current OWASP recommendations.
 
@@ -386,22 +522,25 @@ For full compatibility, set the entire old list of suites:
     ]
   ```
 
-### Metrics
+#### Metrics {#metrics-3-6-1}
 
-#### Ledger API and Indexer Metrics
+<a id="ledger-api-and-indexer-metrics-3-6-1" />
+##### Ledger API and Indexer Metrics
 
 - The indexer queue metrics `daml.participant.api.indexer.indexer_queue_blocked`, `daml.participant.api.indexer.indexer_queue_buffered` and `daml.participant.api.indexer.indexer_queue_uncommitted` are now exposed as gauges instead of meters.
 - The metric `daml.participant.api.services.pruning.contract_pruning_retried`, which tracks how many times contract pruning was retried, is now a histogram.
 - Removed the unused metrics `daml.participant.api.lapi.streams.transaction_trees_sent` and `daml.participant.api.index.transaction_trees_buffer_size`.
 
-#### ACS Commitment Metrics
+<a id="acs-commitment-metrics-3-6-1" />
+##### ACS Commitment Metrics
 
 ACS commitment metrics distinguish the synchronizer alias and distinguished counterparticipants via a label instead of including it in the metric name. Affected are the following metrics:
 - `daml.participant.sync.commitments.<synchronizer-alias>.counter-participant-latency.<participant>` -> `daml.participant.sync.commitments.counter-participant-latency`
 - `daml.participant.sync.commitments.<synchronizer-alias>.largest-counter-participant-latency` -> `daml.participant.sync.commitments.largest-counter-participant-latency`
 - `daml.participant.sync.commitments.<synchronizer-alias>.largest-distinguished-counter-participant-latency` -> `daml.participant.sync.commitments.largest-distinguished-counter-participant-latency`
 
-#### ACHS Processing Metrics
+<a id="achs-processing-metrics-3-6-1" />
+##### ACHS Processing Metrics
 
 Fine-grained metrics for Active Contracts Head Snapshot (ACHS) processing. Please note ACHS is disabled by default.
 
@@ -417,9 +556,10 @@ Fine-grained metrics for Active Contracts Head Snapshot (ACHS) processing. Pleas
     - `daml.participant.api.indexer.achs_processing.maintenance.add_activations_to_achs`
     - `daml.participant.api.indexer.achs_processing.maintenance.remove_deactivated_from_achs`
 
-### Configuration
+#### Configuration {#configuration-3-6-1}
 
-#### Renamed participant parameter `commit-after-failed-activeness-check`
+<a id="renamed-participant-parameter-commit-after-failed-activeness-check-3-6-1" />
+##### Renamed participant parameter `commit-after-failed-activeness-check`
 
 The participant parameter `commit-after-failed-activeness-check` has been renamed to
 `crash-after-failed-validation`, and its meaning is inverted. The default behavior is unchanged, so
@@ -432,19 +572,20 @@ no action is needed unless the parameter was set explicitly:
 
 The old name is no longer accepted, so a configuration that still sets it is rejected at startup.
 
-#### Minor Breaking Configuration Changes
+<a id="minor-breaking-configuration-changes-3-6-1" />
+##### Minor Breaking Configuration Changes
 
 - Unknown config keys are now making config parsing failing. This mechanism was already in place, but it didn't include all the config keys, which is now fixed.
 - Separated the config for support of dev and alpha protocol versions. In order to use pv=dev, you now have to specify `dev-version-support = true` instead of `alpha-version-support = true` (`canton.parameters.non-standard-config = true` is still needed).
 
-### Artifacts
+#### Artifacts {#artifacts-3-6-1}
 
 - `kms-driver-api` and `kms-driver-testing` are now published to Maven Central, and will no longer be available in Artifactory.
 - `canton-protobuf.zip` has been renamed to `canton-api.zip` to reflect that the archive now contains more than protobuf files.
 
-## Deprecations
+### Deprecations {#deprecations-3-6-1}
 
-### Legacy Ledger API / JSON API endpoints disabled by default (removal in 3.7)
+#### Legacy Ledger API / JSON API endpoints disabled by default (removal in 3.7) {#legacy-ledger-api-json-api-endpoints-disabled-by-default-removal-in-3-7-3-6-1}
 
 The Ledger API and Ledger JSON API endpoints and request fields that were deprecated in Canton 3.4 and 3.5
 remain available in Canton 3.6, but they are now **disabled by default**. Calls to them fail with the
@@ -492,7 +633,7 @@ Covered by `canton.participants.<participant>.features.deprecated.enable-depreca
 - `POST /v2/package-vetting`. Use `POST /v2/package-vetting/update` instead.
 - `GET /v2/state/active-contracts-page`. Use `POST /v2/state/active-contracts-page` instead.
 
-### Reminder: Legacy Ledger API / JSON API endpoints will be removed in version 3.7.
+#### Reminder: Legacy Ledger API / JSON API endpoints will be removed in version 3.7. {#reminder-legacy-ledger-api-json-api-endpoints-will-be-removed-in-version-3-7-3-6-1}
 
 The Ledger API and JSON API endpoints and request fields deprecated in Canton 3.4 and 3.5 (see "Legacy Ledger API /
 JSON API endpoints disabled by default" above) are disabled by default in 3.6 and can only be re-enabled temporarily
@@ -500,27 +641,27 @@ with `canton.participants.<participant>.features.deprecated.enable-deprecated-en
 `canton.participants.<participant>.features.deprecated.enable-deprecated-parameters-34` respectively
 `canton.participants.<participant>.features.deprecated.enable-deprecated-endpoints-35`. They will be removed in Canton 3.7.
 
-### Reminder: Support for scope-based access tokens will be removed in version 3.7
+#### Reminder: Support for scope-based access tokens will be removed in version 3.7 {#reminder-support-for-scope-based-access-tokens-will-be-removed-in-version-3-7-3-6-1}
 - "Scope-based" access tokens, i.e. JWTs without any audience specified, have been deprecated in version 3.5.
 - Versions 3.5 and 3.6 allow configurations using the default or explicitly configured target audiences, and log a warning for non-compliant configurations.
 - In release 3.7, support for "scope-based" tokens will be removed entirely to enforce a valid `aud` field in every incoming JWT.
   The `scope` field will be repurposed to serve exclusively as an additional, optional claim for fine-grained permissions.
 
-### Logback upgraded to 1.6 deprecates conditionals
+#### Logback upgraded to 1.6 deprecates conditionals {#logback-upgraded-to-1-6-deprecates-conditionals-3-6-1}
 
 The `<if condition=` syntax is now deprecated due to [security vulnerabilities](https://github.com/qos-ch/logback/releases/tag/v_1.5.37). The recommended style is to use the `<condition ...><if>` syntax.
 
 For more information on conditional configuration see:
 https://logback.qos.ch/manual/configuration-conditional.html
 
-### Minor Deprecations
+#### Minor Deprecations {#minor-deprecations-3-6-1}
 
 - `StaticSynchronizerParameters.defaultsWithoutKMS` has been deprecated in favor of `StaticSynchronizerParameters.defaults`. Supported cryptographic schemes now have parity between KMS and non-KMS configurations.
 - The `ledger-api-server-parameters.contract-id-seeding` configuration parameter is deprecated and no longer used. The contract ID seeding now uses the same random source as the rest of Canton, which is the equivalent of the `strong` type.
 - Ledger JSON API `/v2/state/active-contracts-page` is now available via POST; the GET variant that expects a request body is deprecated.
 - Deprecated configuration settings: `canton.participants.<participant>.parameters.ledger-api-server.indexer.use-weighted-batching` and `canton.participants.<participant>.parameters.ledger-api-server.indexer.submission-batch-insertion-size`. These are no longer supported.
 
-## Minor Improvements
+### Minor Improvements {#minor-improvements-3-6-1}
 
 - Mediator: Fix for the mediator verdict sender to correctly stop retrying to send verdicts if the sequencer
   reports that the verdict has already been successfully aggregated.
@@ -630,7 +771,7 @@ https://logback.qos.ch/manual/configuration-conditional.html
 - Parsing of protobuf messages carrying an unknown version number is now failing.
 - Participant: fixed the memory growth during ACS import caused by the repair indexer keeping all imported contract activations in an in-memory cache until the end of the import.
 
-## Compatibility
+### Compatibility {#compatibility-3-6-1}
 
 The following Canton protocol versions are supported:
 
