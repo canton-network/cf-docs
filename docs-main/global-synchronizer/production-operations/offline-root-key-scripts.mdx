@@ -1,0 +1,242 @@
+---
+title: "Take a Node's Root Key Offline"
+sidebarTitle: "Offline Root Key Scripts"
+description: "Move an already-initialized node's database-stored root namespace key offline using console scripts, and operate with it offline"
+---
+
+Every Canton node has a **root namespace key**. It defines the node's identity and, ultimately, authorizes all of its topology changes. By default, Canton generates this key and stores it in the node's database alongside its other keys.
+
+This page documents three console scripts that take a node's existing, database-stored root key offline after the fact:
+
+- `take-root-key-offline.canton` delegates day-to-day signing to an **intermediate namespace key**, exports the root key encrypted, and deletes it from the node.
+- `join-synchronizer.canton` lets a participant with its root key offline join a new synchronizer, which a plain `synchronizers.connect` cannot do.
+- `revoke-intermediate-key.canton` revokes a compromised intermediate key using revocations pre-signed while the root key was still available, without bringing the root key back online.
+
+The intermediate key is delegated with the restriction `CanSignAllButNamespaceDelegations`: it can sign everything except new namespace delegations, so only the root key can add or change delegations.
+
+All three scripts are Canton console scripts (`.canton` files), found in the `scripts/offline-root-key` directory of the Canton release, and are run with:
+
+```bash
+./bin/canton run <script> -c <remote console config of the node>
+```
+
+or loaded into a running console REPL:
+
+```scala
+val script = os.Path("/path/to/<script>.canton")
+interp.load.module(script)
+```
+
+<Note>
+**This is not the the [procedure](/global-synchronizer/production-operations/key-management#offline-root-namespace-key) to initialize a new node with its root key offline.** That procedure (`prepare-cert.sh` / `assemble-cert.sh`) generates a root key that is never stored on the node, before the node is ever initialized. The scripts on this page do the opposite: they take a root key that already lives in a running node's database and move it out. Use the ceremony when you are initializing a new node and want its root key to never touch the node at all. Use the scripts on this page to retire the root key of a node that already has one in its database.
+</Note>
+
+## Prerequisites
+
+- A **remote console** configuration for the node. The scripts address the node by its console name (`NODE_NAME`).
+- On the node, `canton.parameters.enable-key-download = true` in its configuration. This is needed to export the root key:
+
+```scala
+canton.parameters {
+  # allow downloading private keys from the nodes
+  enable-key-download = yes
+}
+```
+
+- The node must be **connected to at least one synchronizer**. `take-root-key-offline.canton` refuses otherwise, because it cannot verify that the intermediate delegation is effective.
+- The root key must be a **database key, not a KMS key**. KMS keys cannot be exported, and the script refuses them.
+- A plan for where to store **two separate outputs with two separate passwords**: the encrypted root key export, and the encrypted, pre-signed revocations. Getting hold of one must not give access to the other, so keep them in different places with different passwords.
+- To see progress while a script runs, pass `--log-level-stdout=INFO`:
+
+```bash
+./bin/canton run take-root-key-offline.canton -c remote-<node>.conf --log-level-stdout=INFO
+```
+
+The scripts log through the console logger. By default only warnings reach stdout; `INFO` lines otherwise only go to the log file.
+
+## Take the root key offline
+
+Applies to participants, sequencers, and mediators. Run with `take-root-key-offline.canton`.
+
+| Variable | Meaning |
+|----------|---------|
+| `NODE_NAME` | Console name of the node. |
+| `ROOT_KEY_PASSWORD` | Encrypts the root key export. Read it with `read -rs` so it doesn't land in shell history. |
+| `EXPORT_DIR` | Directory where the encrypted root key is written. |
+| `REVOCATION_PASSWORD` | Encrypts the pre-signed revocations. Must differ from `ROOT_KEY_PASSWORD`. |
+| `REVOCATION_DIR` | Directory where the encrypted revocations are written. Must not be the same as, inside, or around `EXPORT_DIR` (symlinks are resolved before checking). |
+| `CONFIRM_DELETE` | `yes` deletes the root key at the end of the run. Anything else leaves it in place. |
+
+<Warning>
+**Deleting the root key is irreversible on this node.** Always run with `CONFIRM_DELETE=no` first (a dry run), secure the files it produces, and only then re-run with `CONFIRM_DELETE=yes`.
+</Warning>
+
+The script runs the same six steps whether or not it deletes the key at the end, logging progress as `N/6`:
+
+1. **`1/6` Checking the root namespace key** — confirms the root key is present in the vault and is not a KMS key.
+2. **`2/6` Creating the intermediate key and namespace delegation** — creates a signing key restricted to namespace usage, and proposes the `CanSignAllButNamespaceDelegations` delegation to it on **every synchronizer the node knows**. If an intermediate key is already delegated and present in the vault, the script reuses it instead of creating a new one.
+3. **`3/6` Waiting for the delegation** — polls for up to 5 minutes until the delegation is effective on every synchronizer.
+4. **`4/6` Pre-signing the revocation** — for **each synchronizer**, signs (with the root key) a revocation of the intermediate delegation, and encrypts it with `REVOCATION_PASSWORD`. These revocations are written to disk but never submitted.
+5. **`5/6` Exporting the root key** — downloads the root key pair, password-encrypted with `ROOT_KEY_PASSWORD` (Argon2id + AES-128-GCM).
+6. **`6/6` Deleting the root key** — only if `CONFIRM_DELETE=yes`. Otherwise this step is skipped and logged as such.
+
+### Example run
+
+```bash
+read -rs ROOT_KEY_PASSWORD && export ROOT_KEY_PASSWORD
+export NODE_NAME=participant1
+export EXPORT_DIR=/secure/tmp
+read -rs REVOCATION_PASSWORD && export REVOCATION_PASSWORD
+export REVOCATION_DIR=/other/secure
+export CONFIRM_DELETE=no
+
+./bin/canton run take-root-key-offline.canton -c remote-participant1.conf --log-level-stdout=INFO
+```
+
+A dry run (`CONFIRM_DELETE=no`) creates and delegates the intermediate key, pre-signs the revocations, and exports the root key, but leaves the root key on the node. Once you have secured the export and the revocations (see below), re-run with the **same environment variables** and `CONFIRM_DELETE=yes`. The script resumes from where the dry run stopped: it reuses the intermediate delegation and the files already written, after validating them, and never overwrites a file.
+
+### Files written
+
+```
+EXPORT_DIR/<node>-root-namespace-<root key fingerprint>.key.enc
+REVOCATION_DIR/<node>-revoke-intermediate-<intermediate fingerprint>-<synchronizer id>.tx.enc
+```
+
+(The synchronizer ID in the file name has every character other than letters, digits, `.`, `_`, and `-` replaced with `_`.)
+
+<Warning>
+**Secure the two outputs separately before confirming deletion.** Store the root key export and its password in one place, and the revocations and their password somewhere else, with different access. Anyone who can decrypt the revocations should not thereby be able to decrypt the root key export, and vice versa.
+</Warning>
+
+<Note>
+**A revocation is only valid while the delegation it targets is unchanged** — it targets the delegation's next serial number. If the delegation changes (for example, you re-delegate a different intermediate key by hand), the old revocation files become useless and you need to re-run `take-root-key-offline.canton` with the root key available to produce new ones.
+</Note>
+
+### Re-running
+
+The script is safe to re-run with the same environment variables. For each file it already finds, it checks that file before reusing it:
+
+- The export must decrypt with `ROOT_KEY_PASSWORD` and hold the root key you expect.
+- A revocation must decrypt with `REVOCATION_PASSWORD` and revoke the *current* delegation (matching its serial number).
+
+If a file doesn't check out, the script stops with an error ending in "Move it away and re-run." This check is what makes the dry-run-then-confirm flow safe — re-running the script never silently overwrites a revocation or export that may already be in use elsewhere.
+
+## Operating with the root key offline
+
+Once the root key is deleted, the node's Authorized store can no longer authorize anything (no key in the vault is authorized there):
+
+- **Topology commands that default to the Authorized store** (party-to-participant mappings, vetted packages, owner-to-key mappings, trust certificates, and others) need an explicit `store = <synchronizer id>` argument. Without it, they fail to authorize.
+- **Node key rotation keeps working** and is synchronizer-scoped:
+
+```scala
+node.keys.secret.rotate_node_keys(synchronizerId = mySynchronizerId)
+```
+
+- **A participant cannot join a new synchronizer with a plain `synchronizers.connect`**. It fails with `CANNOT_ISSUE_SYNCHRONIZER_TRUST_CERTIFICATE`, because issuing the synchronizer trust certificate would require a key authorized in the Authorized store. Use `join-synchronizer.canton` instead (next section).
+
+## Join a new synchronizer
+
+**Participants only.** Run with `join-synchronizer.canton` after the root key is offline.
+
+| Variable | Meaning |
+|----------|---------|
+| `NODE_NAME` | Console name of the participant. |
+| `SYNCHRONIZER_ALIAS` | Alias to register for the new synchronizer. |
+| `SEQUENCER_URL` | Sequencer URL, for example `https://sequencer.example:443`. Not needed if the alias is already registered. |
+
+```bash
+export NODE_NAME=participant1
+export SYNCHRONIZER_ALIAS=mysynchronizer
+export SEQUENCER_URL=https://sequencer.example:443
+
+./bin/canton run join-synchronizer.canton -c remote-participant1.conf --log-level-stdout=INFO
+```
+
+The script prepares the participant's onboarding transactions with the intermediate key instead of the Authorized store:
+
+1. **`1/4` Registering the alias without connecting** — registers the synchronizer with `initializeFromTrustedSynchronizer = true`, so the participant does not try to issue its own trust certificate, then looks up the new synchronizer's ID and protocol version.
+2. **`2/4` Copying the namespace delegations** — from a synchronizer the participant is already connected to **with the same protocol version**, and checks that a delegated intermediate key is present in the vault.
+3. **`3/4` Preparing the onboarding transactions** — generates the onboarding transactions and the trust certificate in a temporary topology store, signed by the intermediate key, and attaches them to the registration.
+4. **`4/4` Connecting** — connects to the new synchronizer and waits until the delegation is effective there.
+
+Notes on specific situations:
+
+- **A connection that needs more than a URL** (several sequencers, TLS certificates): register the alias first with `synchronizers.register_by_config(config, performHandshake = false)`, then run the script without `SEQUENCER_URL`.
+- **After a failed `connect`**, the alias is left registered. The script reuses that registration rather than registering again — registering again with a different config is rejected with "does not subsume the existing synchronizer config".
+- **Different protocol version**: the script stops. The namespace delegations would need to be re-signed with the root key for that protocol version.
+- **Re-running when already connected** does nothing.
+
+<Note>
+**The revocations pre-signed by `take-root-key-offline.canton` do not cover a synchronizer joined afterward.** To get one, restore the root key (see below) and re-run `take-root-key-offline.canton` with the **same** `EXPORT_DIR`/`REVOCATION_DIR`. It reuses the existing files, writes a revocation for the new synchronizer, and deletes the root key again with `CONFIRM_DELETE=yes`.
+</Note>
+
+## Revoke a compromised intermediate key
+
+Applies to all node types. Run with `revoke-intermediate-key.canton` if the intermediate key is compromised. **The root key is not needed** — this uses the revocations pre-signed while the root key was still available.
+
+| Variable | Meaning |
+|----------|---------|
+| `NODE_NAME` | Console name of the node. |
+| `REVOCATION_PASSWORD` | Password the revocations were encrypted with. |
+| `REVOCATION_FILES` | Comma-separated paths to the `.tx.enc` revocation files. |
+
+```bash
+read -rs REVOCATION_PASSWORD && export REVOCATION_PASSWORD
+export NODE_NAME=participant1
+export REVOCATION_FILES=/other/secure/a.tx.enc,/other/secure/b.tx.enc
+
+./bin/canton run revoke-intermediate-key.canton -c remote-participant1.conf --log-level-stdout=INFO
+```
+
+1. **`1/3` Decrypting** each revocation file with `REVOCATION_PASSWORD`.
+2. **`2/3` Checking** that each one revokes an intermediate delegation of this node's namespace, is signed by the root key, and matches one of the node's synchronizers (by file name).
+3. **`3/3` Submitting** each revocation to its synchronizer, and checking that the delegation is gone. A delegation already revoked is skipped, so re-running is safe.
+
+<Warning>
+**Revoking is an emergency stop, not a rotation.** After a revocation succeeds, the node cannot authorize any topology changes until the root key is restored and a new intermediate key is delegated (see [Restore the root key](#restore-the-root-key-and-rotate-the-intermediate-key) below).
+</Warning>
+
+<Note>
+**Partial coverage fails loudly, after doing what it can.** If the intermediate delegation is active on a synchronizer for which no revocation was supplied — typically because the node joined that synchronizer after the revocations were signed — the script logs a warning, applies every revocation it does have, and then exits with an error listing what is still active. To clear the remaining delegation, restore the root key and revoke it there directly.
+</Note>
+
+## Restore the root key and rotate the intermediate key
+
+If you need to make topology changes directly again, or to pre-sign a revocation for a synchronizer joined after the root key went offline, restore the root key from its export:
+
+```scala
+node.keys.secret.upload_from(
+  "<export file>",
+  name = Some("<name for the restored key>"),
+  password = Some("<ROOT_KEY_PASSWORD>"),
+)
+```
+
+Then run `take-root-key-offline.canton` again, with **new** `EXPORT_DIR`/`REVOCATION_DIR` values (or the same ones, if you are only adding a revocation for a newly joined synchronizer), to delegate a fresh intermediate key and take the root key offline again.
+
+## Troubleshooting
+
+| Message | Meaning | What to do |
+|---------|---------|-------------|
+| `REVOCATION_PASSWORD must differ from ROOT_KEY_PASSWORD` | The two passwords must not match. | Choose a different `REVOCATION_PASSWORD`. |
+| `REVOCATION_DIR (...) must not be the same as, inside or around EXPORT_DIR (...)` | The two directories must be kept apart, even via symlinks. | Point `REVOCATION_DIR` somewhere unrelated to `EXPORT_DIR`. |
+| `Root key ... is not in the vault (already offline?). Nothing to do.` | The root key has already been removed from this node. | Nothing to do, unless this is unexpected — in which case the key may need to be restored first. |
+| `Root key ... is a KMS key (...). It can't be exported.` | The root key is managed by a KMS, not the node's database. | This procedure does not apply; manage the key through your KMS instead. |
+| `The node doesn't know any synchronizer. Connect it first, otherwise the delegation can't be verified.` | `take-root-key-offline.canton` needs at least one synchronizer to verify the delegation becomes effective. | Connect the node to a synchronizer, then re-run. |
+| `Delegation not effective on: ... . Root key NOT exported or deleted.` | The intermediate delegation didn't become effective within 5 minutes on every synchronizer the node knows. | Investigate connectivity/sequencing to the listed synchronizer(s), then re-run — the script resumes and reuses the proposed delegation. |
+| `... can't be read with ROOT_KEY_PASSWORD: ... Move it away and re-run.` | The existing export file doesn't decrypt with the given password, or holds a different key. | Move the file aside (it may belong to a different run or password) and re-run. |
+| `... can't be read with REVOCATION_PASSWORD: ... Move it away and re-run.` | A revocation file doesn't decrypt with the given password. | Move the file aside and re-run. |
+| `... doesn't revoke the current delegation (serial ...) in .... Move it away and re-run.` | An existing revocation file no longer matches the current intermediate delegation's serial. | Move the file aside and re-run with the root key available, to pre-sign a fresh revocation. |
+| Intermediate key generation fails (for example, the node's KMS doesn't allow creating keys) | `take-root-key-offline.canton` cannot create the intermediate key itself. | Register a pre-generated key with `keys.secret.register_kms_signing_key`, delegate it from the node's namespace with `CanSignAllButNamespaceDelegations`, and re-run — the script will reuse it. |
+| `CANNOT_ISSUE_SYNCHRONIZER_TRUST_CERTIFICATE` (from a plain `synchronizers.connect`) | The participant's root key is offline, so it cannot issue its own trust certificate via the Authorized store. | Use `join-synchronizer.canton` instead of `synchronizers.connect`. |
+| `... is not registered: set SEQUENCER_URL, or register it beforehand` | `join-synchronizer.canton` needs a sequencer URL for an alias that isn't registered yet. | Set `SEQUENCER_URL`, or register the alias first with `synchronizers.register_by_config(config, performHandshake = false)` for connections that need more than a URL. |
+| `Not connected to any synchronizer with protocol version .... The namespace delegations must be re-signed with the root key for this protocol version.` | `join-synchronizer.canton` could only find a delegation source with a different protocol version than the new synchronizer. | Restore the root key and sign a delegation for that protocol version directly, or connect to a synchronizer on the matching protocol version first. |
+| `No intermediate key delegated on ... is in the vault of ...` | None of the intermediate keys delegated on the source synchronizer are present in this node's vault. | Confirm you're running the script against the correct node, with the intermediate key it was delegated to. |
+| `does not subsume the existing synchronizer config` | A failed `connect` left the alias registered, and it was then registered again by hand with a different config. | Don't re-register by hand after a failed connect; re-run `join-synchronizer.canton`, which reuses the existing registration. |
+| `Failed to read ...` / `... doesn't revoke an intermediate key of ...` / `... is not signed by the root key ...` / `... was not signed for any store of the node: ...` | `revoke-intermediate-key.canton` rejected a supplied file as not a valid, applicable revocation. | Check `REVOCATION_PASSWORD` and that the listed files are the revocations produced for this node. |
+| `Applied the revocations, but no revocation was supplied for the active delegation(s): ...` | One or more synchronizers have an active intermediate delegation with no matching revocation (partial coverage). | Every other listed revocation has already been applied. Restore the root key and revoke the remaining delegation(s) directly. |
+
+## Related pages
+
+- [Key Management](/global-synchronizer/production-operations/key-management#offline-root-namespace-key) — the HSM/OpenSSL ceremony for generating a root key that never touches the node, and general key rotation/restriction commands.
+- [KMS Operations](/global-synchronizer/production-operations/kms-operations) — managing keys through an external KMS, including registering pre-generated keys.
