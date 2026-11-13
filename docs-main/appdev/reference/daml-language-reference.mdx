@@ -58,7 +58,7 @@ import DamlSnippetsSUMLISTEXAMPLE from '/snippets/daml-docs/daml_Snippets_SUM_LI
 ## Overview: Template Structure
 This page covers what a template looks like: what parts of a template there are, and where they go.
 
-For the structure of a Daml file *outside* a template, see `file-structure`.
+For the structure of a Daml file *outside* a template, see [Reference: Daml File Structure](#reference-daml-file-structure).
 
 ### Template Outline Structure
 Here’s the structure of a Daml template:
@@ -218,21 +218,21 @@ For example: `contractFetched <- fetch someContractId`
 ## Reference: Templates
 This page gives reference information on templates:
 
-For the structure of a template, see `structure`.
+For the structure of a template, see [Overview: Template Structure](#overview-template-structure).
 
 ### Template Name
 <DamlReferenceTemplateIntroSnippet />
 
 - This is the name of the template. It's preceded by `template` keyword. Must begin with a capital letter.
 - This is the highest level of nesting.
-- The name is used when creating a contract of this template (usually, from within a choice).
+- The name is used when [creating](#create) a contract of this template (usually, from within a choice).
 
 ### Template Parameters
 <DamlReferenceTemplateParamsSnippet />
 
-- `with` keyword. The parameters are in the form of a record type.
-- Passed in when creating a contract from this template. These are then in scope inside the template body.
-- A template parameter can't have the same name as any choice arguments inside the template.
+- `with` keyword. The parameters are in the form of a [record type](#records-and-record-types).
+- Passed in when [creating](#create) a contract from this template. These are then in scope inside the template body.
+- A template parameter can't have the same name as any [choice arguments](#choice-arguments) inside the template.
 - For all parties involved in the contract (whether they're a `signatory`, `observer`, or `controller`) you must pass them in as parameters to the contract, whether individually or as a list (`[Party]`).
 
 ### Implicit Record
@@ -342,7 +342,7 @@ Within a project where the warning has been turned off via the `daml.yaml` file,
 
 - `signatory` keyword. After `where`. Followed by at least one `Party`.
 
-- Signatories are the parties (see the `Party` type) who must consent to the creation of this contract. They are the parties who would be put into an *obligable position* when this contract is created.
+- Signatories are the parties (see the [Party](#built-in-types) type) who must consent to the creation of this contract. They are the parties who would be put into an *obligable position* when this contract is created.
 
   Daml won't let you put someone into an obligable position without their consent. So if the contract will cause obligations for a party, they *must* be a signatory. **If they haven't authorized it, you won't be able to create the contract.** In this situation, you may see errors like:
 
@@ -358,9 +358,9 @@ Within a project where the warning has been turned off via the `daml.yaml` file,
 <DamlReferenceTemplateObsSnippet />
 
 - `observer` keyword. After `where`. Followed by at least one `Party`.
-- Observers are additional stakeholders, so the contract is visible to these parties (see the `Party` type).
+- Observers are additional stakeholders, so the contract is visible to these parties (see the [Party](#built-in-types) type).
 - Optional. You can have many, either as a comma-separated list or reusing the keyword. You could pass in a list (of type `[Party]`).
-- Use when a party needs visibility on a contract, or be informed or contract events, but is not a signatory or controller.
+- Use when a party needs visibility on a contract, or be informed or contract events, but is not a [signatory](#signatory-parties) or [controller](#controllers).
 - If you start your choice with `choice` rather than `controller` (see [Choices](#choices) below), you must make sure to add any potential controller as an observer. Otherwise, they will not be able to exercise the choice, because they won't be able to see the contract.
 
 ### Choices
@@ -369,13 +369,13 @@ Within a project where the warning has been turned off via the `daml.yaml` file,
 - A right that the contract gives the controlling party. Can be *exercised*.
 - This is essentially where all the logic of the template goes.
 - By default, choices are *consuming*: that is, exercising the choice archives the contract, so no further choices can be exercised on it. You can make a choice non-consuming using the `nonconsuming` keyword.
-- See `choices` for full reference information.
+- See [Reference: Choices](#reference-choices) for full reference information.
 
 ### Serializable Types
 Every parameter to a template, choice argument, and choice result must have a *serializable type*. This does not merely mean "convertible to bytes"; it has a specific meaning in Daml. The serializability rule serves three purposes:
 
 1.  Offer a stable means to store ledger values permanently.
-2.  Provide a sensible encoding of them over the `ledger-api`.
+2.  Provide a sensible encoding of them over the [Ledger API](/sdks-tools/api-reference/ledger-api).
 3.  Provide sensible *types* that directly match their Daml counterparts in languages like Java for language codegen.
 
 For example, certain kinds of type parameters Daml offers are compatible with (1) and (2), but have no proper counterpart in (3), so they are disallowed. Similarly, function types have sensible Java counterparts, satisfying (3), but no reliable way to store or share them via the API, thus failing (1) and (2).
@@ -416,7 +416,7 @@ Users should remove any agreement declarations from their code, as this feature 
 
 - Used to make a template an instance of an existing interface.
 - The clause must start with the keywords `interface instance`, followed by the name of the interface, then the keyword `for` and the name of the template (which must match the enclosing declaration), and finally the keyword `where`, which introduces a block where **all** the methods of the interface must be implemented.
-- See `interfaces` for full reference information on interfaces, or section [Interface Instances](#interface-instances) for interface instances specifically.
+- See [Reference: Interfaces](#reference-interfaces) for full reference information on interfaces, or section [Interface Instances](#interface-instances) for interface instances specifically.
 
 
 {/* COPIED_END */}
@@ -427,7 +427,7 @@ Users should remove any agreement declarations from their code, as this feature 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/choices.rst" hash="a391ce22" */}
 
 ## Reference: Choices
-This page gives reference information on choices. For information on the high-level structure of a choice, see `structure`.
+This page gives reference information on choices. For information on the high-level structure of a choice, see [Overview: Template Structure](#overview-template-structure).
 
 ### Choice Name
 <DamlReferenceChoiceNameSnippet />
@@ -493,14 +493,14 @@ If no qualifier is present, choices are *consuming*: the contract is archived be
 <DamlReferenceChoiceParamsSnippet />
 
 - `with` keyword.
-- Choice arguments are similar in structure to [Template Parameters](#template-parameters): a record type.
-- A choice argument can't have the same name as any parameter to the template the choice is in.
+- Choice arguments are similar in structure to [Template Parameters](#template-parameters): a [record type](#records-and-record-types).
+- A choice argument can't have the same name as any [parameter to the template](#template-parameters) the choice is in.
 - Optional - only if you need extra information passed in to exercise the choice.
 
 ### Choice Body
 - Introduced with `do`
 - The logic in this section is what is executed when the choice gets exercised.
-- The choice body contains `Update` expressions. For detail on this, see `updates`.
+- The choice body contains `Update` expressions. For detail on this, see [Reference: Updates](#reference-updates).
 - By default, the last expression in the choice is returned. You can return multiple updates in tuple form or in a custom data type. To return something that isn't of type `Update`, use the `return` keyword.
 
 
@@ -511,11 +511,11 @@ If no qualifier is present, choices are *consuming*: the contract is archived be
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/updates.rst" hash="f8b9a0ff" */}
 
 ## Reference: Updates
-This page gives reference information on Updates. For the structure around them, see `structure`.
+This page gives reference information on Updates. For the structure around them, see [Overview: Template Structure](#overview-template-structure).
 
 ### Background
 - An `Update` is ledger update. There are many different kinds of these, and they're listed below.
-- They are what can go in a choice body.
+- They are what can go in a [choice body](#choice-body).
 
 ### Binding Variables
 ```haskell
@@ -589,8 +589,8 @@ exerciseByKey @ContractType contractKey NameOfChoiceOnContract with choiceArgume
 ```
 
 - `exerciseByKey` function.
-- Like `exercise`, but the contract is specified by contract key, instead of contract ID.
-- For details see Reference: Contract Keys: exerciseByKey
+- Like `exercise`, but the contract is specified by [contract key](/appdev/modules/m3-contract-keys), instead of contract ID.
+- For details see [Reference: Contract Keys: exerciseByKey](/appdev/modules/m3-contract-keys#exercisebykey)
 
 ### fetch
 ```haskell
@@ -609,8 +609,8 @@ fetchedContract <- fetchByKey @ContractType contractKey
 ```
 
 - `fetchByKey` function.
-- Like `fetch`, but fetches the contract with that contract key, instead of the contract ID.
-- For details see [Contract Keys](/appdev/modules/m3-contract-keys#fetchbykey).
+- Like `fetch`, but fetches the contract with that [contract key](/appdev/modules/m3-contract-keys), instead of the contract ID.
+- For details see [Reference: Contract Keys: fetchByKey](/appdev/modules/m3-contract-keys#fetchbykey).
 
 ### visibleByKey
 ```haskell
@@ -618,8 +618,8 @@ isVisible <- visibleByKey @ContractType contractKey
 ```
 
 - `visibleByKey` function.
-- Use this to check whether a contract with the given contract key exists.
-- For details see Reference: Contract Keys: visibleByKey
+- Use this to check whether a contract with the given [contract key](/appdev/modules/m3-contract-keys) exists.
+- For details see [Contract Keys: Contract Lookups](/appdev/modules/m3-contract-keys#contract-lookups)
 
 ### lookupByKey
 ```haskell
@@ -627,8 +627,8 @@ fetchedContractId <- lookupByKey @ContractType contractKey
 ```
 
 - `lookupByKey` function.
-- Use this to confirm that a contract with the given contract key exists.
-- For details see Reference: Contract Keys: lookupByKey
+- Use this to confirm that a contract with the given [contract key](/appdev/modules/m3-contract-keys) exists.
+- For details see [Reference: Contract Keys: lookupByKey](/appdev/modules/m3-contract-keys#lookupbykey)
 
 ### abort
 ```haskell
@@ -887,7 +887,7 @@ An algebraic data type is a composite type: a type formed by a combination of ot
 #### Product Types
 The following data constructor is not valid in Daml: `data AlternativeCoordinate a b = AlternativeCoordinate a b`. This is because data constructors can only have one argument.
 
-To get around this, wrap the values in a record: `data Coordinate a b = Coordinate {first: a; second: b}`.
+To get around this, wrap the values in a [record](#records-and-record-types): `data Coordinate a b = Coordinate {first: a; second: b}`.
 
 These kinds of types are called *product* types.
 
@@ -900,7 +900,7 @@ An example is the built-in data type `Bool`. This is defined by `data Bool = Tru
 
 Please note that all types which you intend to use as template or choice arguments need to derive at least from `(Eq, Show)`.
 
-A very useful sum type is `data Optional a = None | Some a deriving (Eq,Show)`. It is part of the Daml standard library.
+A very useful sum type is `data Optional a = None | Some a deriving (Eq,Show)`. It is part of the [Daml standard library](/appdev/reference/daml-standard-library/index).
 
 `Optional` captures the concept of a box, which can be empty or contain a value of type `a`.
 
@@ -928,7 +928,7 @@ As an example, the following is an expression for a `Text`:
 Notice the use of nested pattern matching above.
 
 <Note>
-An underscore was used in place of a variable name. The reason for this is that Daml Studio produces a warning for all variables that are not being used. This is useful in detecting unused variables. You can suppress the warning by naming the variable with an initial underscore.
+An underscore was used in place of a variable name. The reason for this is that [Daml Studio](/sdks-tools/development-tools/daml-studio) produces a warning for all variables that are not being used. This is useful in detecting unused variables. You can suppress the warning by naming the variable with an initial underscore.
 </Note>
 
 
@@ -990,7 +990,7 @@ To write infix expressions in prefix form, wrap the operators in parentheses. Fo
 | Operator             | Works for                                                                                                                |
 |----------------------|--------------------------------------------------------------------------------------------------------------------------|
 | `<`, `<=`, `>`, `>=` | `Bool`, `Text`, `Int`, `Decimal`, `Party`, `Time`                                                                        |
-| `==`, `/=`           | `Bool`, `Text`, `Int`, `Decimal`, `Party`, `Time`, and identifiers of contracts stemming from the same contract template |
+| `==`, `/=`           | `Bool`, `Text`, `Int`, `Decimal`, `Party`, `Time`, and [identifiers of contracts](#contract-identifiers) stemming from the same contract template |
 
 ### Logical Operators
 The logical operators in Daml are:
@@ -1030,7 +1030,7 @@ This page gives reference information on functions in Daml.
 Daml is a functional language. It lets you apply functions partially and also have functions that take other functions as arguments. This page discusses these *higher-order functions*.
 
 ### Defining Functions
-In `expressions`, the `tubeSurfaceArea` function was defined as:
+In [Reference: Expressions](#reference-expressions), the `tubeSurfaceArea` function was defined as:
 
 <DamlTubeSurfaceAreaL1416 />
 
@@ -1081,7 +1081,7 @@ A function is *parametrically polymorphic* if it behaves uniformly for all types
 
 where `a`, `b`, and `c` are any data types. Both `compose ((+) 4) ((*) 2) 3 == 10` and `compose not ((&&) True) False` evaluate to `True`. Note that `((+) 4)` has type `Int -> Int`, whereas `not` has type `Bool -> Bool`.
 
-You can find many other generic functions including this one in the Daml standard library.
+You can find many other generic functions including this one in the [Daml standard library](/appdev/reference/daml-standard-library/index).
 
 <Note>
 Daml currently does not support generic functions for a specific set of types, such as `Int` and `Decimal` numbers. For example, `sum (x: a) (y: a) = x + y` is undefined when `a` equals the type `Party`. *Bounded polymorphism* might be added to Daml in a later version.
@@ -1149,7 +1149,7 @@ The rest of this page will focus on how to import a Daml package in other Daml p
 ```
 
 ### Inspecting DARs
-Refer to the section on decoding DARs and DALF files.
+Refer to the [section on decoding DARs and DALF files](/appdev/reference/daml-lf-reference#inspecting-a-dar-file).
 
 ### Import Daml Packages
 There are two ways to import a Daml package in a project: via `dependencies`, and via `data-dependencies`. They each have certain advantages and disadvantages. To summarize:
@@ -1378,7 +1378,7 @@ An interface declaration is somewhat similar to a template declaration.
 - Interface choices can only be exercised on values of the corresponding interface type. To exercise an interface choice on a template value, first convert it using the `toInterface` function.
 - Interface methods can be used to define the controller of a choice (e.g. `method1`) as well as the actions that run when the choice is *exercised* (e.g. `method2` and `method3`).
 - As for template choices, the `choice` keyword can be optionally prefixed with the `nonconsuming` keyword to specify that the contract will not be consumed when the choice is exercised. If not specified, the choice will be `consuming`. Note that the `preconsuming` and `postconsuming` qualifiers are not supported on interface choices.
-- See `choices` for full reference information, but note that controller-first syntax is not supported for interface choices.
+- See [Reference: Choices](#reference-choices) for full reference information, but note that controller-first syntax is not supported for interface choices.
 
 #### Empty Interfaces
 <DamlInterfacesEMPTYINTERFACE />
