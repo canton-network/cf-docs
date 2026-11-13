@@ -81,7 +81,7 @@ The error categories allow you to group errors such that application logic can b
 
 {/* GENERATED_CANTON_ERROR_CODES_START */}
 
-{/* GENERATED_FROM source="digital-asset/canton" ref="v3.7.2" asset="canton-open-source-3.7.2.tar.gz" digest="sha256:dc90cb3497f8cddc86298e1d8c6f1c2a5c4bf6c9e4b35b2c641f0d94fa732092" error_code_count="452" */}
+{/* GENERATED_FROM source="digital-asset/canton" ref="v3.7.3" asset="canton-open-source-3.7.3.tar.gz" digest="sha256:366277df57096edc690ebe4bae11c66ff2d9a9d7ad8660493b6da2f62cfd622e" error_code_count="455" */}
 
 ## Error Codes Inventory
 
@@ -1937,6 +1937,15 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidGivenCurrentSystemStateResourceMissing`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status NOT_FOUND including a detailed error message.
 
+<div id="error-code-get_remote_acs_failed" />
+
+#### `GET_REMOTE_ACS_FAILED`
+
+- **Explanation:** The party ACS could not be read remotely from the source participant on the synchronizer
+- **Resolution:** Refer to the cause for details.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
 <div id="error-code-internal_invariant_violation" />
 
 #### `INTERNAL_INVARIANT_VIOLATION`
@@ -1985,12 +1994,30 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
+<div id="error-code-party_acs_import_after_activation" />
+
+#### `PARTY_ACS_IMPORT_AFTER_ACTIVATION`
+
+- **Explanation:** The participant has processed events past the party's activation on it. Since then, it may have processed archivals or unassignments of the party's contracts that the snapshot still contains. The import then fails at such a contract, or makes an archived contract active again if its archival has been removed.
+- **Resolution:** Restore the participant from a backup taken before the activation and retry the import while it is disconnected from all synchronizers. Only if no contract in the snapshot has been archived or unassigned since the activation, import anyway with the force flag IMPORT_PARTY_ACS_FORCE_FLAG_ALLOW_IMPORT_AFTER_ACTIVATION.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
 <div id="error-code-party_acs_import_missing_onboarding_mapping" />
 
 #### `PARTY_ACS_IMPORT_MISSING_ONBOARDING_MAPPING`
 
-- **Explanation:** Cannot import the party ACS because this participant either lacks a party-to-participant mapping entirely, or the existing mapping is missing the required onboarding flag.
-- **Resolution:** Authorize a party-to-participant mapping for this participant with the onboarding flag set and retry the import.
+- **Explanation:** Cannot import the party ACS because this participant either lacks a party-to-participant mapping entirely, or is neither Onboarding nor Freezing in the existing mapping.
+- **Resolution:** Authorize a party-to-participant mapping in which this participant is Onboarding, or in which it is Freezing for a replication of the party, and retry the import.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+<div id="error-code-party_not_in_freezing_hosting_state" />
+
+#### `PARTY_NOT_IN_FREEZING_HOSTING_STATE`
+
+- **Explanation:** The party is not in hosting state `Freezing` on the local participant and the specified synchronizer
+- **Resolution:** Refer to the cause for details.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
@@ -2545,8 +2572,8 @@ The error categories allow you to group errors such that application logic can b
 
 #### `TRAFFIC_TOP_UP_NOT_CREDITED`
 
-- **Explanation:** This error indicates that a traffic purchase was committed on the ledger, but its traffic was not credited because its choice result does not have the shape TEA expects.
-- **Resolution:** Check that the TEA version matches the deployed traffic purchase Daml model, then credit the affected account through the TEA API. The error metadata contains `update_id` and `offset`.
+- **Explanation:** This error indicates that a credit was published on the ledger through PublishCredit, but its traffic was not credited because its arguments or acting parties do not match what TEA expects.
+- **Resolution:** Check that the TEA version matches the deployed traffic credit Daml model and verify the credit's validity before crediting the affected account through the TEA API. The error metadata contains `update_id` and `offset`.
 - **Category:** `SystemInternalAssumptionViolated`
 - **Conveyance:** This error is logged with log-level ERROR on the server side. It is exposed on the API with grpc-status INTERNAL without any details for security reasons.
 
@@ -3674,8 +3701,8 @@ The error categories allow you to group errors such that application logic can b
 
 #### `TOPOLOGY_CONFIRMING_THRESHOLD_CANNOT_BE_REACHED`
 
-- **Explanation:** This error indicates that the confirming threshold is higher than the number of hosting nodes, which will result in a non functional party.
-- **Resolution:** Decrease the threshold or increase the number of hosting nodes.
+- **Explanation:** This error indicates that the confirming threshold is higher than the number of hosting nodes with Submission or Confirmation permission, which will result in a non functional party.
+- **Resolution:** Decrease the threshold or increase the number of hosting nodes with Submission or Confirmation permission.
 - **Category:** `InvalidGivenCurrentSystemStateResourceExists`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status ALREADY_EXISTS including a detailed error message.
 
