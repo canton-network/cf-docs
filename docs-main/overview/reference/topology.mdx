@@ -65,7 +65,7 @@ A namespace is defined by a root certificate, which declares that the signing pu
 
 Canton can also bootstrap multi-signature namespaces where there is no single controlling key(see `decentralization`).
 
-Similar to other public key infrastructure systems, Canton supports intermediate certificates that delegate authorization rights on behalf of a namespace to additional keys(see `topology-authorization-chains`).
+Similar to other public key infrastructure systems, Canton supports intermediate certificates that delegate authorization rights on behalf of a namespace to additional keys(see [Authorization chains](#authorization-chains)).
 
 ### Unique identifiers
 
@@ -83,7 +83,7 @@ A party identifier is the same as a UID, that is, an identifier (`alice`) within
 
 ## Structure of topology transactions
 
-Topology transactions make up the topology state, which is maintained as a key-value map. Individual topology transactions always affect exactly one key. They modify the value, provided they are well-formed and well-authorized. A topology transaction is considered well-formed if it passes all the checks that can be checked independent of the current topology state, and is considered well-authorized if it passes all the checks that depend on the topology state as of the topology transaction's effective time (see `topology-effectiveness`).
+Topology transactions make up the topology state, which is maintained as a key-value map. Individual topology transactions always affect exactly one key. They modify the value, provided they are well-formed and well-authorized. A topology transaction is considered well-formed if it passes all the checks that can be checked independent of the current topology state, and is considered well-authorized if it passes all the checks that depend on the topology state as of the topology transaction's effective time (see [Validity / effectiveness](#validity-effectiveness)).
 
 ### Topology mappings
 
@@ -127,9 +127,9 @@ Section "Binding topology transactions to Synchronizers" \<[https://github.com/D
 
 ### Namespace definition and delegation
 
-As outlined in the section `topology-namespaces`, a namespace is defined by a self-signed root certificate. Concretely, the root certificate is a self-signed `NamespaceDelegation` (NSD) where the namespace, the target key, and the key used for signing the transaction are the same. This is expressed as `NSD(namespace=ROOT_KEY, target=ROOT_KEY, signedBy=ROOT_KEY)`. This key can be used to sign all other topology transactions on behalf of that namespace.
+As outlined in the section [Namespaces](#namespaces), a namespace is defined by a self-signed root certificate. Concretely, the root certificate is a self-signed `NamespaceDelegation` (NSD) where the namespace, the target key, and the key used for signing the transaction are the same. This is expressed as `NSD(namespace=ROOT_KEY, target=ROOT_KEY, signedBy=ROOT_KEY)`. This key can be used to sign all other topology transactions on behalf of that namespace.
 
-A Canton key holder can also delegate authorization power to other keys. See `topology-authorization-chains` and `topology-key-revocation` for more details on those subjects.
+A Canton key holder can also delegate authorization power to other keys. See [Authorization chains](#authorization-chains) and [Key revocation](#key-revocation) for more details on those subjects.
 
 The `NamespaceDelegation` topology mapping allows you to restrict the target signing key to only be used for certain topology transactions. There are three kinds of restrictions:
 
@@ -201,7 +201,7 @@ When a Canton node receives a proposal, it first merges the signatures of any pr
 
 Proposals have no timestamp of expiration. This means that a proposal is pending until enough signatures have been submitted to make it fully authorized, or the Canton node successfully validates a fully authorized topology transaction for the same unique key.
 
-#### Example
+#### Example<span id="topology-proposals-example"></span>
 
 The starting point is a `PartyToParticipant` mapping for party `Alice::abc123` and its hosting Participant Node `P1::abc123` at serial `1`. The owner of the party now wants the Participant Node `P2::xyz789` to host the party as well. Therefore, the party's owner submits a proposal of the mapping that includes `P2::xyz789` as a hosting Participant Node with serial `2`. According to the authorization rules defined by the `PartyToParticipant` mapping, the key holders of both namespaces `abc123` and `xyz789` must authorize this change. Since the party's owner can only provide the signature for the namespace `abc123`, the Canton nodes store the topology transaction with serial `2` as a proposal. Once the new hosting Participant Node's key holder submits their signature for this topology transaction to the Synchronizer, the Canton nodes merge the signatures and store the now fully authorized `PartyToParticipant` mapping after successful validation.
 
@@ -259,7 +259,7 @@ The downside of this simple approach is that any topology transaction puts a tem
 
 ### Future dating
 
-One way to work around the problem of topology transactions pausing the processing of messages in the various protocol layers is to make topology transactions effective at some point in the future. The concept of *effective time* was already introduced in the section `topology-effectiveness`. While a topology transaction is sequenced at time `t`, it only becomes effective after the *topology change delay* `ε`. The time `t+ε` gives the lower bound for the effective time. If the topology change delay hasn't been changed recently, the effective time is equal to the lower bound `t+ε`. The topology change delay is a dynamic Synchronizer parameter in the topology state and can be changed by the Synchronizer owners. Therefore the actual topology change delay used for the calculation of the effective time must be read from the topology state during the validation of topology transactions.
+One way to work around the problem of topology transactions pausing the processing of messages in the various protocol layers is to make topology transactions effective at some point in the future. The concept of *effective time* was already introduced in the section [Validity / effectiveness](#validity-effectiveness). While a topology transaction is sequenced at time `t`, it only becomes effective after the *topology change delay* `ε`. The time `t+ε` gives the lower bound for the effective time. If the topology change delay hasn't been changed recently, the effective time is equal to the lower bound `t+ε`. The topology change delay is a dynamic Synchronizer parameter in the topology state and can be changed by the Synchronizer owners. Therefore the actual topology change delay used for the calculation of the effective time must be read from the topology state during the validation of topology transactions.
 
 <div className="todo">
 
@@ -283,7 +283,7 @@ link to dynamic Synchronizer parameters reference. \<[https://github.com/DACH-NY
 
 ## Authorization
 
-The section `topology-signatures` mentions that topology mappings define the rules that determine the required authorizers for the topology transaction to be considered fully authorized, and states that key holders express this authorization by disseminating a cryptographic signature over the topology transaction to the Synchronizer.
+The section [Signatures](#signatures) mentions that topology mappings define the rules that determine the required authorizers for the topology transaction to be considered fully authorized, and states that key holders express this authorization by disseminating a cryptographic signature over the topology transaction to the Synchronizer.
 
 This section goes into more detail about these aspects.
 
@@ -293,11 +293,11 @@ Each type of topology mapping changes a certain aspect of the Synchronizer's top
 
 For definitions of all mappings and the respective authorization rules, please refer to <a href={topologyProtoUrl}>topology.proto</a>.
 
-Some topology mappings define more than one required authorizer for certain changes. A common scenario is the hosting of a party on a Participant Node that is not owned by the same key holder as the party. This scenario was shown in the example for evolving topology mappings (see `topology-proposals-example`). On the one hand, hosting a party gives the Participant Node access to data in Daml transactions that pertains to the party. Therefore, the party's key holder must express its consent that it wishes the Participant Node to receive and process the party's Daml transactions. On the other hand, the Participant Node's key holders must consent to host the party, because hosting a party incurs network and storage cost, as well as the obligation to comply with the two-phase commit protocol for Daml transactions that involve the party.
+Some topology mappings define more than one required authorizer for certain changes. A common scenario is the hosting of a party on a Participant Node that is not owned by the same key holder as the party. This scenario was shown in the example for evolving topology mappings (see [Example](#topology-proposals-example)). On the one hand, hosting a party gives the Participant Node access to data in Daml transactions that pertains to the party. Therefore, the party's key holder must express its consent that it wishes the Participant Node to receive and process the party's Daml transactions. On the other hand, the Participant Node's key holders must consent to host the party, because hosting a party incurs network and storage cost, as well as the obligation to comply with the two-phase commit protocol for Daml transactions that involve the party.
 
 ### Authorization chains
 
-As described in the section `topology-namespaces` and `topology-delegation`, the root certificate of a namespace serves as the trust anchor. For security reasons, it is recommended to keep the root namespace key in secure cold storage to reduce the risk of unauthorized access to the key. This is especially important, as the root namespace key cannot be rolled, because generating a new key would effectively create a new namespace. Therefore, Canton supports the implementation of this recommended security practice, by allowing Canton key holders to delegate authorization rights to other keys that are not the root namespace key.
+As described in the section [Namespaces](#namespaces) and [Namespace definition and delegation](#namespace-definition-and-delegation), the root certificate of a namespace serves as the trust anchor. For security reasons, it is recommended to keep the root namespace key in secure cold storage to reduce the risk of unauthorized access to the key. This is especially important, as the root namespace key cannot be rolled, because generating a new key would effectively create a new namespace. Therefore, Canton supports the implementation of this recommended security practice, by allowing Canton key holders to delegate authorization rights to other keys that are not the root namespace key.
 
 With only the root certificate for the namespace, the first namespace delegation must be signed by root key: `NamespaceDelegation(namespace=ROOT_KEY, target=KEY1, signedBy=ROOT_KEY)`. The key holder for the namespace represented by `ROOT_KEY` can now use `KEY1` to sign other topology transactions, including further namespace delegations to additional keys, and move the private key `ROOT_KEY` off of the live system.
 
