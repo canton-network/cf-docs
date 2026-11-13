@@ -89,7 +89,7 @@ Additionally to this, some indexes have to be built by the database to serve the
 Please note that we do have plans to remove the storage duplication between the sync service and the indexer. Ideally, will be able to reduce the storage on the participant for this example from `5\*Y` down to \`3\*Y\`: once for the unencrypted created contract and twice for the two encrypted transaction views.
 </Note>
 
-Generally, to recover used storage, a participant and a synchronizer can be pruned. Pruning is available through a set of console commands and allows removal of past events and archived contracts based on a timestamp. The storage usage of a Canton deployment can be kept constant by continuously removing obsolete data. Non-repudiation and auditability of the unpruned history are preserved due to the bilateral commitments.
+Generally, to recover used storage, a participant and a synchronizer can be pruned. Pruning is available through a [set of console commands](/global-synchronizer/production-operations/pruning) and allows removal of past events and archived contracts based on a timestamp. The storage usage of a Canton deployment can be kept constant by continuously removing obsolete data. Non-repudiation and auditability of the unpruned history are preserved due to the bilateral commitments.
 
 ## Set Up Canton to Get the Best Performance
 
@@ -115,7 +115,7 @@ Measure memory usage, CPU usage and disk throughput and improve your hardware as
 
 Try to make sure that the latency between a Canton node and its database is very low (ideally in the order of microseconds). The latency between Canton nodes has a much lower impact on throughput than the latency between a Canton node and its database.
 
-Please check the Postgres persistence section for tuning instructions.
+Please check the [Postgres persistence section](/global-synchronizer/production-operations/performance-optimization#postgres) for tuning instructions.
 
 ### Configuration
 
@@ -235,7 +235,7 @@ canton.sequencers.sequencer.public-api.limits.active = {
 
 <div id="size_of_connection_pools">
 
-**Size of connection pools.** Make sure that every node uses a connection pool to communicate with the database. This avoids the extra cost of creating a new connection on every database query. Canton chooses a suitable connection pool by default, but for performance sensitive applications you may want to optimize. Configure the maximum number of connections such that the database is fully loaded, but not overloaded. Allocating too many database connections will lead to resource waste (each thread costs), context switching and contention on the database system, slowing the overall system down. If this occurs, the query latencies reported by Canton go up (check the troubleshooting guide).
+**Size of connection pools.** Make sure that every node uses a connection pool to communicate with the database. This avoids the extra cost of creating a new connection on every database query. Canton chooses a suitable connection pool by default, but for performance sensitive applications you may want to optimize. Configure the maximum number of connections such that the database is fully loaded, but not overloaded. Allocating too many database connections will lead to resource waste (each thread costs), context switching and contention on the database system, slowing the overall system down. If this occurs, the query latencies reported by Canton go up ([check the troubleshooting guide](/global-synchronizer/troubleshooting-guide/diagnose-canton-nodes#how-to-diagnose-slow-database-queries)).
 
 </div>
 
@@ -587,7 +587,7 @@ submit p do
 forA_ cids (`exerciseCmd` Foo)
 ```
 
-2.  CPU and memory issues: Use the Daml profiler to analyze Daml code execution.
+2.  CPU and memory issues: Use the [Daml profiler](/sdks-tools/development-tools/daml-profiler) to analyze Daml code execution.
 3.  Once you feel interpretation is not the bottleneck, scale up your machine.
 
 <Tip>
@@ -607,7 +607,7 @@ Profile the JVM and monitor your databases to see where the bottlenecks occur.
 The Active Contract Set (ACS) size makes up the load related to the number of active contracts in the system at any one time. It means the totality of all the contracts that have been created but not yet archived. ACS size may come from a deliberate Daml workflow design, but the size may also be unexpected when insufficient care is given to supporting and auxiliary contract lifetimes.
 
 <Tip>
-See the documentation on Daml contracts for more information.
+See the documentation on [Daml contracts](/appdev/modules/m3-contract-templates) for more information.
 </Tip>
 
 When the ACS size is in the high 100s GBs or TBs, local database access performance may deteriorate. We will look at potential issues around large ACS size and possible solutions.
@@ -664,7 +664,7 @@ A contract is considered pending when you do not know if the output has been con
 
 You need to wait while the sequencer is processing a transaction in order to confirm that an input was consumed from a consuming input request. If you do not get confirmation back from the first transaction before submitting a second transaction on the same contract, the sequence is not guaranteed. The only way to avoid this conflict is to control the sequence of those two transactions.
 
-Ledger state is read in the following places within the Daml Execution Model :
+Ledger state is read in the following places within the [Daml Execution Model](/appdev/modules/m3-design-patterns#daml’s-execution-model) :
 
 1.  A client submits a command based on the client’s latest view of the state of the shared ledger. The command might include references to `ContractIds` that the client believes are active.
 2.  During interpretation, ledger state is used to look up active contracts.
