@@ -50,6 +50,29 @@ Stop the environment:
 
 <DamlDocsSdksToolsDevelopmentToolsLocalnetL61 />
 
+### Start LocalNet without the QuickStart application
+
+If you only need the network, for example to deploy and test your own DAR, you can start LocalNet without `make setup` and `make build`. This needs Docker with the Compose plugin, but not Nix, direnv, a JDK or Node.js.
+
+From the `quickstart/` directory of the cn-quickstart repository, point `LOCALNET_DIR` at the LocalNet module and set `IMAGE_TAG` to the Splice version that cn-quickstart pins in `.env`:
+
+```bash
+export LOCALNET_DIR=$PWD/docker/modules/localnet
+export IMAGE_TAG=$(grep '^SPLICE_VERSION=' .env | cut -d= -f2)
+
+docker compose --env-file $LOCALNET_DIR/compose.env \
+               --env-file $LOCALNET_DIR/env/common.env \
+               -f $LOCALNET_DIR/compose.yaml \
+               -f $LOCALNET_DIR/resource-constraints.yaml \
+               --profile sv \
+               --profile app-provider \
+               --profile app-user up -d
+```
+
+Stop it and remove its data with the same command, replacing `up -d` with `down -v`. To check when the validators are ready, see [Health Checks](#health-checks).
+
+If a host port is already taken, `docker compose up` exits with `address already in use`. LocalNet's PostgreSQL binds port 5432, which clashes with a local PostgreSQL server. Set `DB_PORT` to a free port before you run the command, for example `export DB_PORT=5440`. The web UIs need ports 2000, 3000 and 4000 for the `nginx` container. If one of those is taken, `nginx` doesn't start and the UIs are unavailable, but the validators and their Ledger APIs still run.
+
 ## Network Topology
 
 ```mermaid
@@ -145,6 +168,39 @@ For example, the App User's Ledger API is at `localhost:2901`, and the App Provi
 The Admin API and PostgreSQL ports are exposed for development convenience. Do not expose these ports in non-local deployments.
 </Warning>
 
+## Authenticating to the Ledger API
+
+Each validator's JSON Ledger API is at `http://localhost:<prefix>975`: `2975` for the App User, `3975` for the App Provider and `4975` for the Super Validator. The gRPC Ledger API is on `<prefix>901`.
+
+The LocalNet started by the command above, and cn-quickstart with OAuth2 turned off in `make setup`, accept JWTs signed with a shared secret. Every Ledger API request needs a token with these values:
+
+- **Algorithm**: HS256 (`unsafe-jwt-hmac-256`)
+- **Secret**: `unsafe`
+- **Audience (`aud`)**: `https://canton.network.global`
+- **Subject (`sub`)**: `ledger-api-user`, which is an admin user on every validator
+
+The env files in `docker/modules/localnet/env/` write the audience as `${AUTH_APP_PROVIDER_AUDIENCE:-https://canton.network.global}`. Use the resolved value; a token that carries the expression itself is rejected with HTTP 401. LocalNet sets no maximum token lifetime.
+
+This creates a token valid for one hour, using only the Python standard library:
+
+```bash
+TOKEN=$(python3 - <<'EOF'
+import base64, hashlib, hmac, json, time
+b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+header = b64(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+claims = b64(json.dumps({"sub": "ledger-api-user", "aud": "https://canton.network.global", "exp": int(time.time()) + 3600}).encode())
+signature = b64(hmac.new(b"unsafe", f"{header}.{claims}".encode(), hashlib.sha256).digest())
+print(f"{header}.{claims}.{signature}")
+EOF
+)
+
+curl http://localhost:3975/v2/parties -H "Authorization: Bearer $TOKEN"
+```
+
+`ledger-api-user` is an admin, so it can upload DARs, allocate parties and manage users. Admin rights don't let it submit commands as a party or read a party's contracts. Give it `CanActAs` or `CanReadAs` for each party first, for example by setting `"userId": "ledger-api-user"` when you allocate the party. See [Use the JSON Ledger API with authentication](/appdev/modules/m4-json-api-tutorial#use-the-json-ledger-api-with-authentication).
+
+With OAuth2 turned on, the App Provider and App User participants validate tokens issued by the bundled Keycloak instead, and the shared secret doesn't work on them. See [Keycloak in the QuickStart](/appdev/quickstart/keycloak).
+
 ## Configuration Options
 
 ### Deployment Profiles
@@ -176,6 +232,14 @@ Verify that validators are healthy:
 <DamlDocsSdksToolsDevelopmentToolsLocalnetL197 />
 
 An empty response indicates a healthy service.
+
+Each validator's JSON Ledger API also answers on `/livez` and `/readyz`. Both return HTTP 200 once the API accepts requests:
+
+```bash
+curl -f http://localhost:2975/readyz  # App User
+curl -f http://localhost:3975/readyz  # App Provider
+curl -f http://localhost:4975/readyz  # Super Validator
+```
 
 {/* COPIED_START source="splice:docs/src/app_dev/testing/localnet.rst" hash="a3270359" */}
 

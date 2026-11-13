@@ -136,6 +136,33 @@ External-party command submission goes through two endpoints rather than the sta
 
 See [Validator API](/sdks-tools/api-reference/splice-validator-api) for the surrounding external-signing flow.
 
+## Identifier Formats
+
+Template and interface identifiers come in two forms:
+
+- **Package-name form**: `#<package-name>:<Module>:<Entity>`, for example `#simple-asset:SimpleAsset:SimpleAsset`. It names the package, not a specific version of it.
+- **Package-ID form**: `<package-id>:<Module>:<Entity>`, where the package ID is the hash of one specific package version.
+
+The fields don't all accept both forms. Since Canton 3.5:
+
+| Field | Package-name form | Package-ID form |
+|---|---|---|
+| `templateId` in `CreateCommand` and `ExerciseCommand`, including an interface ID when you exercise a choice through an interface | Accepted | Accepted |
+| `TemplateFilter.templateId` and `InterfaceFilter.interfaceId` in event filters, such as active-contract queries | Accepted | Rejected |
+| `templateId` in returned events and `interfaceId` in `interfaceViews` | Not used | Always returned |
+
+A filter with a package-ID identifier fails with HTTP 400:
+
+```text
+INVALID_FIELD: The submitted command has a field with invalid value: Invalid field packageId: Received an identifier with package ID <package-id>, but expected a package name.
+```
+
+This catches anyone who copies a `templateId` from a response into a query filter. Use the package-name form for every identifier you write yourself. To build it from a returned event, combine the event's `packageName` field with the module and entity part of its `templateId`: an event with `"packageName": "simple-asset"` and `"templateId": "1d14bc...:SimpleAsset:SimpleAsset"` becomes `#simple-asset:SimpleAsset:SimpleAsset`.
+
+<Note>
+The OpenAPI descriptions of `TemplateFilter.templateId` and `InterfaceFilter.interfaceId` say that both formats are supported. Participants running Canton 3.5 and later reject the package-ID form in filters, as shown in the table above.
+</Note>
+
 ## Configuration
 
 The JSON API is configured via the `http-ledger-api` section of the participant node's configuration. In cn-quickstart LocalNet deployments, it is pre-configured and available at `http://localhost:7575`.
