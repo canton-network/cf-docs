@@ -29,7 +29,7 @@ import GrpcExerciseByKeyMySimpleTemplateFull from '/snippets/daml-docs/grpc_Exer
 
 ## What is the Ledger API
 
-The **Ledger API** is an API that's exposed by any Participant Node. Users access and manipulate the ledger state through the Ledger API. There are two protocols available for the Ledger API: gRPC and JSON. The core services are implemented using [gRPC]() and [Protobuf](). There is a translation layer that additionally exposes all the Ledger API services as JSON Ledger API.
+The **Ledger API** is an API that's exposed by any Participant Node. Users access and manipulate the ledger state through the Ledger API. There are two protocols available for the Ledger API: gRPC and JSON. The core services are implemented using [gRPC](https://grpc.io/) and [Protobuf](https://developers.google.com/protocol-buffers/). There is a translation layer that additionally exposes all the Ledger API services as JSON Ledger API.
 
 For a high level introduction to the services see [The gRPC Ledger API Services](/sdks-tools/api-reference/ledger-api-services#the-grpc-ledger-api-services).
 
@@ -37,15 +37,15 @@ You may also want to read the protobuf documentation of the API, which explains 
 
 ## How to Access the Ledger API
 
-You can access the gRPC Ledger API via the Java bindings.
+You can access the gRPC Ledger API via the [Java bindings](/sdks-tools/language-bindings/java-client-libraries#install).
 
 If you don't use a language that targets the JVM, you can use gRPC to generate the code to access the Ledger API in several programming languages that support the `proto` standard.
 
-If you don't want to use the gRPC API, you can also use the JSON Ledger API. This API is formally described using an openapi and asyncapi descriptions. You can use any language that supports OpenAPI standard to generate the clients using the OpenAPI [Generators]().
+If you don't want to use the gRPC API, you can also use the JSON Ledger API. This API is formally described using an openapi and asyncapi descriptions. You can use any language that supports OpenAPI standard to generate the clients using the OpenAPI [Generators](https://openapi-generator.tech/docs/generators).
 
 ## Daml-LF
 
-When you compile Daml source into a .dar file, the underlying format is Daml-LF. Daml-LF is similar to Daml, but is stripped down to a core set of features. The relationship between the surface Daml syntax and Daml-LF is loosely similar to that between Java and JVM bytecode.
+When you [compile Daml source into a .dar file](/appdev/modules/m3-building-packaging#how-to-build-daml-archive-dar-files), the underlying format is Daml-LF. Daml-LF is similar to Daml, but is stripped down to a core set of features. The relationship between the surface Daml syntax and Daml-LF is loosely similar to that between Java and JVM bytecode.
 
 As a user, you don't need to interact with Daml-LF directly. But internally, it's used for:
 
@@ -63,7 +63,7 @@ Otherwise, it can be helpful to know what the types in your Daml code look like 
 
 For example, if you are writing an application that creates some Daml contracts, you need to construct values to pass as parameters to the contract. These values are determined by the Daml-LF types in that contract template. This means you need an idea of how the Daml-LF types correspond to the types in the original Daml model.
 
-For the most part the translation of types from Daml to Daml-LF should not be surprising. This page goes through all the cases in detail.
+For the most part the translation of types from Daml to Daml-LF should not be surprising. [This page goes through all the cases in detail](#how-daml-types-are-translated-to-daml-lf).
 
 
 {/* COPIED_END */}
@@ -115,7 +115,7 @@ This page shows how types in Daml are translated into Daml-LF. It should help yo
 
 ## Primitive types
 
-Built-in data types in Daml have straightforward mappings to Daml-LF.
+[Built-in data types](/appdev/reference/daml-language-reference#built-in-types) in Daml have straightforward mappings to Daml-LF.
 
 This section only covers the serializable types, as these are what client applications can interact with via the generated Daml-LF. (Serializable types are ones whose values can exist on the ledger. Function types, `Update` and `Scenario` types and any types built up from these are excluded, and there are several other restrictions.)
 
@@ -134,11 +134,11 @@ Most built-in types have the same name in Daml-LF as in Daml. These are the exac
 | `Optional`          | `Optional`             |
 | `ContractId`        | `ContractId`           |
 
-Be aware that only the Daml primitive types exported by the Prelude module map to the Daml-LF primitive types above. That means that, if you define your own type named `Party`, it will not translate to the Daml-LF primitive `Party`.
+Be aware that only the Daml primitive types exported by the [Prelude](/appdev/reference/daml-standard-library/prelude) module map to the Daml-LF primitive types above. That means that, if you define your own type named `Party`, it will not translate to the Daml-LF primitive `Party`.
 
 ## Tuple types
 
-Daml tuple type constructors take types `T1, T2, …, TN` to the type `(T1, T2, …, TN)`. These are exposed in the Daml surface language through the Prelude module.
+Daml tuple type constructors take types `T1, T2, …, TN` to the type `(T1, T2, …, TN)`. These are exposed in the Daml surface language through the [Prelude](/appdev/reference/daml-standard-library/prelude) module.
 
 The equivalent Daml-LF type constructors are `daml-prim:DA.Types:TupleN`, for each particular N (where 2 \<= N \<= 20). This qualified name refers to the package name (`ghc-prim`) and the module name (`GHC.Tuple`).
 
@@ -152,11 +152,11 @@ Daml-LF has three kinds of data declarations:
 - **Variant** or **sum** types, which define a number of alternatives
 - **Enum**, which defines simplified **sum** types without type parameters nor argument.
 
-Data type declarations in Daml (starting with the `data` keyword) are translated to record, variant or enum types. It’s sometimes not obvious what they will be translated to, so this section lists many examples of data types in Daml and their translations in Daml-LF.
+[Data type declarations in Daml](/appdev/reference/daml-language-reference#data-constructors) (starting with the `data` keyword) are translated to record, variant or enum types. It’s sometimes not obvious what they will be translated to, so this section lists many examples of data types in Daml and their translations in Daml-LF.
 
 ### Record declarations
 
-This section uses the syntax for Daml records with curly braces.
+This section uses the syntax for Daml [records](/appdev/reference/daml-language-reference#records-and-record-types) with curly braces.
 
 | Daml declaration                           | Daml-LF translation                        |
 |--------------------------------------------|--------------------------------------------|
@@ -212,7 +212,7 @@ The second gotcha is that a constructor in a data type declaration can have at m
 
 ### Restrictions for upgrades
 
-The flavour of a datatype's Daml-LF representation restricts the ways in which it can be upgraded via smart contract upgrades: only records can add fields, and only variants and enums can add new constructors. It is not possible to change the flavour of a datatype once it has been chosen.
+The flavour of a datatype's Daml-LF representation restricts the ways in which it can be upgraded via [smart contract upgrades](/appdev/deep-dives/smart-contract-upgrade#smart-contract-upgrade): only records can add fields, and only variants and enums can add new constructors. It is not possible to change the flavour of a datatype once it has been chosen.
 
 Therefore, the ideal choice of the flavour of a datatype strongly depends on what upgrade behaviours are planned for it. For example, the following datatype:
 
@@ -289,11 +289,11 @@ record Foo.Bat ↦ { bat1: Int64 } // New variant constructor's underlying datat
 
 In short: If the datatype is planned to gradually add more constructors over time, it should be defined as a variant. If the datatype is planned to add fields over time, it should be defined as a record. If the datatype is planned to do both, it should be defined as a variant with fields.
 
-More information about restrictions imposed on different flavours of datatypes by smart contract upgrades is available in Limitations in Upgrading Variants.
+More information about restrictions imposed on different flavours of datatypes by smart contract upgrades is available in [Limitations in Upgrading Variants](/appdev/deep-dives/smart-contract-upgrade#limitations-in-upgrading-variants).
 
 ## Type synonyms
 
-Type synonyms (starting with the `type` keyword) are eliminated during conversion to Daml-LF. The body of the type synonym is inlined for all occurrences of the type synonym name.
+[Type synonyms](/appdev/reference/daml-language-reference#type-synonyms) (starting with the `type` keyword) are eliminated during conversion to Daml-LF. The body of the type synonym is inlined for all occurrences of the type synonym name.
 
 For example, consider the following Daml type declarations.
 
@@ -307,7 +307,7 @@ record User ↦ { name: Text }
 
 ## Template Types
 
-A template declaration in Daml results in one or more data type declarations behind the scenes. These data types, detailed in this section, are not written explicitly in the Daml program but are created by the compiler.
+A [template declaration](/appdev/reference/daml-language-reference#template-name) in Daml results in one or more data type declarations behind the scenes. These data types, detailed in this section, are not written explicitly in the Daml program but are created by the compiler.
 
 They are translated to Daml-LF using the same rules as for record declarations above.
 
@@ -557,7 +557,7 @@ In this case, the compilation process unpacks the `mypkg-1.0.0` DAR, finds its p
 
 In general, any time a DAR is compiled for a package that has further DAR dependencies, those DAR dependencies are unpacked and all of their DALF files are copied into the new output DAR. However, while DALF files are copied over, the dependency DARs' manifest files are not copied over, and neither are the source code and interface files. Only the source code and interface files for the primary package of a DAR can show up in a DAR.
 
-For more information on how to open up and inspect the DAR files and DALF files, refer to the documentation on how to parse Daml archive files.
+For more information on how to open up and inspect the DAR files and DALF files, refer to the documentation on [how to parse Daml archive files](#how-to-parse-daml-archive-files).
 
 
 {/* COPIED_END */}
@@ -619,7 +619,7 @@ mypkg-1.0.0-<mypkg-package-id> "<mypkg-package-id>"
 
 The first section reports all of the files in DAR, and the second section reports the package name and package ID for every DALF in the archive.
 
-More information on the exact structure of the zip file is available in the explanation on Daml packages and archive files.
+More information on the exact structure of the zip file is [available in the explanation on Daml packages and archive files](#structure-of-an-archive-file).
 
 ## Inspecting a DAR file as JSON
 
