@@ -1,0 +1,144 @@
+---
+title: 'Multi-Synchronizer DvP'
+description: 'Settle a delivery-versus-payment trade whose legs start on two synchronizers, using external parties and single-party submissions.'
+---
+
+This example settles a trade in one transaction on the Global Synchronizer: Alice pays 100 Canton Coin from the Global Synchronizer, and Bob delivers 20 `TestToken` from an app synchronizer. Canton moves the inputs to the Global Synchronizer through [automatic reassignment](/overview/reference/reassignment-protocol#automatic-synchronizer-router).
+
+## Parties and assets
+
+| Party | Participant | Role |
+|---|---|---|
+| Alice | `app-user` | Pays Canton Coin, receives `TestToken` |
+| Bob | `app-provider` | Delivers `TestToken`, receives Canton Coin |
+| TradingApp | `app-user` | Settlement venue |
+| TokenAdmin | `app-provider` | `TestToken` issuer and registry operator |
+| Charlie | `app-user` | Receives `TestToken` from Alice after settlement |
+
+All parties are external parties, and every step is a single-party submission. The `app-user` and `app-provider` participants connect to both the Global Synchronizer and `app-synchronizer`.
+
+| Leg | Sender → receiver | Asset | Starts on |
+|---|---|---|---|
+| `leg-0` | Alice → Bob | 100 Canton Coin (instrument `Amulet`) | Global Synchronizer |
+| `leg-1` | Bob → Alice | 20 `TestToken` | `app-synchronizer` |
+
+Before the trade, Alice taps Canton Coin. TokenAdmin starts the `TestToken` registry, mints 500 `TestToken` on `app-synchronizer`, and transfers them to Bob. Every SDK is configured with the `TestToken` registry URL as well as the Canton Coin registry. The trade then follows the token standard [allocation](/appdev/deep-dives/token-standard#allocation) flow: Alice proposes, Bob accepts, and the TradingApp initiates settlement.
+
+## Run the example
+
+You need Node.js 24, Corepack, and Docker. LocalNet uses about 6 GB of Docker memory. Run the example from a clone of the wallet repository.
+
+```bash
+git clone https://github.com/canton-network/wallet.git
+cd wallet
+corepack enable
+pnpm install
+pnpm fetch:all
+pnpm generate:all
+pnpm build:all
+pnpm start:localnet
+pnpm --filter docs-wallet-integration-guide-examples run run-17
+pnpm stop:localnet
+```
+
+`pnpm start:localnet` starts a LocalNet with the Global Synchronizer and `app-synchronizer`. A successful run logs `TradingApp: OTCTrade settled — 100 Amulet transferred to Bob, 20 TestToken transferred to Alice`.
+
+## Discover the synchronizers
+
+Read the connected synchronizers from the participant and select each one by its LocalNet alias, `global` or `app-synchronizer`. `resolveGlobalSynchronizerId` is a helper in the same file that returns the ID of the `global` entry.
+
+{/* include ../../examples/scripts/17-multi-sync/_setup.ts */}
+```typescript
+    const connectedSyncResponse = await aliceSdk.ledger.connectedSynchronizers()
+    const allSynchronizers = connectedSyncResponse.connectedSynchronizers ?? []
+    if (allSynchronizers.length < 2)
+        throw new Error(
+            `Expected at least 2 connected synchronizers (global + app), found ${allSynchronizers.length}`
+        )
+
+    const globalSynchronizerId = resolveGlobalSynchronizerId(allSynchronizers)
+    const appSynchronizerId = allSynchronizers.find(
+        (s) => s.synchronizerAlias === 'app-synchronizer'
+    )?.synchronizerId
+
+    if (!appSynchronizerId)
+        throw new Error(
+            'App synchronizer not found — start localnet in multi-sync mode (the default; do not pass --no-multi-sync).'
+        )
+```
+
+## Vet packages and host parties on both synchronizers
+
+On `app-user` and `app-provider`, the example uploads and vets the `TestToken` and trading-app DARs once per synchronizer with `sdk.ledger.dar.upload(darBytes, packageId, synchronizerId, true)`. Each party is allocated on the Global Synchronizer and also registered on `app-synchronizer`.
+
+{/* include ../../examples/scripts/17-multi-sync/_setup.ts */}
+```typescript
+        aliceSdk.party.external
+            .create(aliceKey.publicKey, {
+                partyHint: 'Alice',
+                synchronizerId: globalSynchronizerId,
+                additionalSynchronizerIds: [appSynchronizerId],
+            })
+            .sign(aliceKey.privateKey)
+            .execute(),
+```
+
+## Allocate each leg where its asset lives
+
+Every submission sets `synchronizerId`. Alice allocates Canton Coin on the Global Synchronizer. Bob allocates `TestToken` on `app-synchronizer`, where his holding is.
+
+{/* include ../../examples/scripts/17-multi-sync/_token_allocation.ts */}
+```typescript
+    await bobSdk.ledger
+        .prepare({
+            partyId: bob.partyId,
+            commands: [command],
+            disclosedContracts,
+            synchronizerId: appSynchronizerId,
+        })
+        .sign(bob.keyPair.privateKey)
+        .execute({ partyId: bob.partyId })
+```
+
+## Settle on the Global Synchronizer
+
+The TradingApp waits until both allocations are visible with `token.v1.allocation.scan`. It then exercises `OTCTrade_Settle` with `synchronizerId` set to the Global Synchronizer. `allocationsWithContext` pairs each allocation with the execute choice context from its registry. Canton reassigns Bob's allocation from `app-synchronizer` as part of the submission, and both legs settle in one transaction.
+
+{/* include ../../examples/scripts/17-multi-sync/_trade_settle.ts */}
+```typescript
+    const submitSettlement = () =>
+        tradingAppSdk.ledger
+            .prepare({
+                partyId: tradingApp.partyId,
+                commands: [
+                    OTCTrade.commands.exercise.otcTrade.settle({
+                        contractId: otcTradeCid,
+                        choiceArgument: {
+                            allocationsWithContext,
+                        },
+                    }),
+                ],
+                disclosedContracts,
+                synchronizerId: globalSynchronizerId,
+            })
+            .sign(tradingApp.keyPair.privateKey)
+            .execute({ partyId: tradingApp.partyId })
+```
+## Transfer the token on the app synchronizer
+
+Alice's settled `TestToken` holding is on the Global Synchronizer. The `TestToken` registry's transfer factory is on `app-synchronizer`, so Alice submits her transfer to Charlie there. Canton reassigns the holding as part of the submission.
+
+{/* include ../../examples/scripts/17-multi-sync/_token_transfer.ts */}
+```typescript
+    await aliceSdk.ledger
+        .prepare({
+            partyId: alice.partyId,
+            commands: [transferCommand],
+            disclosedContracts: transferDisclosed,
+            synchronizerId: appSynchronizerId,
+        })
+        .sign(alice.keyPair.privateKey)
+        .execute({ partyId: alice.partyId })
+```
+
+The full example is in [`17-multi-sync`](https://github.com/canton-network/wallet/tree/main/docs/wallet-integration-guide/examples/scripts/17-multi-sync).
