@@ -8,6 +8,8 @@ import tarfile
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -160,11 +162,17 @@ def test_fetch_release_note_markdown_reads_release_bundle(monkeypatch) -> None:
     assert module.fetch_release_note_markdown(source=source) == markdown.decode("utf-8")
 
 
-def test_update_release_page_downloads_only_missing_release_pages(monkeypatch, tmp_path: Path) -> None:
+def test_update_release_page_downloads_only_missing_releases(monkeypatch, tmp_path: Path) -> None:
     module = load_script_module()
+    release_index = tmp_path / "canton.mdx"
     release_dir = tmp_path / "canton-releases"
     release_dir.mkdir()
     sources = (
+        module.ReleaseNoteSource(
+            module.Version.parse("3.5.11"),
+            "https://example.com/3.5.11.tar.gz",
+            "3.5.11/RELEASE-NOTES.md",
+        ),
         module.ReleaseNoteSource(
             module.Version.parse("3.5.12"),
             "https://example.com/3.5.12.tar.gz",
@@ -176,7 +184,13 @@ def test_update_release_page_downloads_only_missing_release_pages(monkeypatch, t
             "3.5.13/RELEASE-NOTES.md",
         ),
     )
-    module.release_page_path(release_dir, sources[0]).write_text("existing\n", encoding="utf-8")
+    release_index.write_text(
+        "---\ntitle: \"Canton\"\n---\n\n## Release of Canton 3.5.12 {#release-of-canton-3-5-12}\n\nOn page.\n",
+        encoding="utf-8",
+    )
+    module.legacy_release_page_path(release_dir, sources[0]).write_text(
+        "---\ntitle: \"3.5.11\"\n---\n\n# Release of Canton 3.5.11\n\nLegacy page.\n", encoding="utf-8"
+    )
     downloaded: list[tuple[module.ReleaseNoteSource, ...]] = []
     monkeypatch.setattr(module, "release_note_sources", lambda **_kwargs: sources)
     monkeypatch.setattr(
@@ -184,11 +198,11 @@ def test_update_release_page_downloads_only_missing_release_pages(monkeypatch, t
         "read_source_markdown",
         lambda *, sources: downloaded.append(tuple(sources)) or {},
     )
-    monkeypatch.setattr(module, "write_release_pages", lambda **_kwargs: True)
+    monkeypatch.setattr(module, "write_release_page", lambda **_kwargs: (True, ()))
     monkeypatch.setattr(module, "update_docs_json", lambda **_kwargs: False)
 
     module.update_release_page(
-        release_index=tmp_path / "canton.mdx",
+        release_index=release_index,
         release_dir=release_dir,
         legacy_release_page=tmp_path / "legacy" / "index.mdx",
         legacy_release_dir=tmp_path / "legacy",
@@ -200,38 +214,92 @@ def test_update_release_page_downloads_only_missing_release_pages(monkeypatch, t
         dry_run=False,
     )
 
-    assert downloaded == [(sources[1],)]
+    assert downloaded == [(sources[2],)]
 
 
-def test_release_index_markdown_links_each_release_newest_first() -> None:
+def test_release_section_demotes_headings_and_qualifies_ids() -> None:
     module = load_script_module()
-    sources = (
-        module.ReleaseNoteSource(
-            module.Version.parse("3.5.4"),
-            "https://www.canton.io/releases/canton-open-source-3.5.4.tar.gz",
-            "canton-open-source-3.5.4/RELEASE-NOTES.md",
-        ),
-        module.ReleaseNoteSource(
-            module.Version.parse("3.5.6"),
-            "https://www.canton.io/releases/canton-open-source-3.5.6.tar.gz",
-            "canton-open-source-3.5.6/RELEASE-NOTES.md",
-        ),
-    )
+    markdown = """# Release of Canton 3.5.6
 
-    assert module.release_index_markdown(sources) == """---
-title: "Canton"
-description: "Release notes for Canton."
----
+## Summary
 
-{/* Generated from the RELEASE-NOTES.md files in public Canton release bundles. */}
+See [breaking changes](#breaking-changes) and [the second note](#note-2).
 
-Canton release notes are reproduced below from the published Canton release bundles.
+## Breaking changes
 
-## Releases
+### Note
 
-- [Canton 3.5.6](/global-synchronizer/release-notes/canton-releases/3-5-6)
-- [Canton 3.5.4](/global-synchronizer/release-notes/canton-releases/3-5-4)
+### Note
+
+```
+# not a heading
+```
 """
+
+    section = module.release_section(markdown, module.Version.parse("3.5.6"))
+    resolved = module.resolve_release_links({module.Version.parse("3.5.6"): section})
+
+    assert resolved[module.Version.parse("3.5.6")] == """## Release of Canton 3.5.6 {#release-of-canton-3-5-6}
+
+### Summary {#summary-3-5-6}
+
+See [breaking changes](#breaking-changes-3-5-6) and [the second note](#note-2-3-5-6).
+
+### Breaking changes {#breaking-changes-3-5-6}
+
+#### Note {#note-3-5-6}
+
+#### Note {#note-2-3-5-6}
+
+```
+# not a heading
+```"""
+
+
+def test_release_section_anchors_deep_headings_with_an_element() -> None:
+    module = load_script_module()
+    version = module.Version.parse("3.5.6")
+    markdown = "# Release of Canton 3.5.6\n\nSee [deep](#deep-heading).\n\n#### Deep heading\n\nText.\n"
+
+    section = module.release_section(markdown, version)
+    resolved = module.resolve_release_links({version: section})[version]
+
+    assert '<a id="deep-heading-3-5-6" />\n##### Deep heading\n' in resolved
+    assert "[deep](#deep-heading-3-5-6)" in resolved
+    assert module.assign_heading_ids(resolved, version) == resolved
+
+
+def test_resolve_release_links_points_cross_release_links_at_the_combined_page() -> None:
+    module = load_script_module()
+    older = module.Version.parse("3.5.1")
+    newer = module.Version.parse("3.6.1")
+    sections = {
+        older: module.release_section("# Release of Canton 3.5.1\n\n## Targeting LF 2.3\n", older),
+        newer: module.release_section(
+            "# Release of Canton 3.6.1\n\n"
+            "See [LF 2.3](https://docs.canton.network/global-synchronizer/release-notes/canton-releases/3-5-1#targeting-lf-2-3)"
+            " and [3.5.1](/global-synchronizer/release-notes/canton-releases/3-5-1).\n",
+            newer,
+        ),
+    }
+
+    resolved = module.resolve_release_links(sections)
+
+    assert (
+        "[LF 2.3](https://docs.canton.network/global-synchronizer/release-notes/canton#targeting-lf-2-3-3-5-1)"
+        in resolved[newer]
+    )
+    assert "[3.5.1](/global-synchronizer/release-notes/canton#release-of-canton-3-5-1)" in resolved[newer]
+    assert module.resolve_release_links(resolved) == resolved
+
+
+def test_resolve_release_links_rejects_unknown_anchors() -> None:
+    module = load_script_module()
+    version = module.Version.parse("3.5.6")
+    section = module.release_section("# Release of Canton 3.5.6\n\nSee [missing](#missing).\n", version)
+
+    with pytest.raises(ValueError, match="#missing"):
+        module.resolve_release_links({version: section})
 
 
 def test_normalized_release_markdown_escapes_mdx_angle_placeholders_outside_code() -> None:
@@ -254,28 +322,31 @@ canton.participants.<participant>.config
 ```"""
 
 
-def test_update_release_page_writes_index_pages_and_nav(monkeypatch, tmp_path: Path) -> None:
+def test_update_release_page_writes_one_page_nav_and_redirects(monkeypatch, tmp_path: Path) -> None:
     module = load_script_module()
     release_index = tmp_path / "docs-main" / "global-synchronizer" / "release-notes" / "canton.mdx"
     release_dir = tmp_path / "docs-main" / "global-synchronizer" / "release-notes" / "canton-releases"
     legacy_release_dir = tmp_path / "docs-main" / "global-synchronizer" / "release-notes" / "canton"
     legacy_release_page = legacy_release_dir / "index.mdx"
     docs_json = tmp_path / "docs-main" / "docs.json"
-    release_index.parent.mkdir(parents=True)
+    release_dir.mkdir(parents=True)
     release_index.write_text(
         """---
 title: "Canton"
 ---
 
-# Release of Canton 3.5.3
+## Releases
 
-Old.
+- [Canton 3.5.3](/global-synchronizer/release-notes/canton-releases/3-5-3)
 """,
+        encoding="utf-8",
+    )
+    (release_dir / "3-5-3.mdx").write_text(
+        '---\ntitle: "3.5.3"\n---\n\n# Release of Canton 3.5.3\n\n## Summary\n\nReviewed 353.\n',
         encoding="utf-8",
     )
     legacy_release_dir.mkdir(parents=True)
     legacy_release_page.write_text("stale index\n", encoding="utf-8")
-    (legacy_release_dir / "3-5-3.mdx").write_text("stale release\n", encoding="utf-8")
     docs_json.write_text(
         """{
   "navigation": {
@@ -287,8 +358,13 @@ Old.
             "group": "Release Notes",
             "pages": [
               "global-synchronizer/release-notes/splice",
-              "global-synchronizer/release-notes/canton",
-              "global-synchronizer/release-notes/canton/3-5-3"
+              {
+                "group": "Canton",
+                "pages": [
+                  "global-synchronizer/release-notes/canton",
+                  "global-synchronizer/release-notes/canton-releases/3-5-3"
+                ]
+              }
             ]
           }
         ]
@@ -300,14 +376,20 @@ Old.
             "group": "Canton Network",
             "pages": [
               "global-synchronizer/release-notes/splice",
-              "global-synchronizer/release-notes/canton",
-              "global-synchronizer/release-notes/canton/3-5-3"
+              {
+                "group": "Canton",
+                "pages": [
+                  "global-synchronizer/release-notes/canton",
+                  "global-synchronizer/release-notes/canton-releases/3-5-3"
+                ]
+              }
             ]
           }
         ]
       }
     ]
-  }
+  },
+  "redirects": []
 }
 """,
         encoding="utf-8",
@@ -323,51 +405,72 @@ Old.
             "https://www.canton.io/releases/canton-open-source-3.5.4.tar.gz",
             "canton-open-source-3.5.4/RELEASE-NOTES.md",
         ),
-        module.ReleaseNoteSource(
-            module.Version.parse("3.5.6"),
-            "https://www.canton.io/releases/canton-open-source-3.5.6.tar.gz",
-            "canton-open-source-3.5.6/RELEASE-NOTES.md",
-        ),
     )
     monkeypatch.setattr(module, "release_note_sources", lambda **_kwargs: sources)
     monkeypatch.setattr(
         module,
         "read_source_markdown",
-        lambda **_kwargs: {
-            sources[0]: "# Release of Canton 3.5.3\n\nRelease 353.\n",
-            sources[1]: "# Release of Canton 3.5.4\n\nRelease 354.\n",
-            sources[2]: "# Release of Canton 3.5.6\n\nRelease 356.\n",
+        lambda *, sources: {
+            source: "# Release of Canton 3.5.4\n\n## Summary\n\nRelease 354.\n" for source in sources
         },
     )
 
-    update = module.update_release_page(
-        release_index=release_index,
-        release_dir=release_dir,
-        legacy_release_page=legacy_release_page,
-        legacy_release_dir=legacy_release_dir,
-        docs_json=docs_json,
-        source_config_path=tmp_path / "source-artifacts.json",
-        release_repo="digital-asset/canton",
-        min_version=module.Version.parse("3.5.0"),
-        version_prefix=None,
-        dry_run=False,
-    )
+    def run() -> object:
+        return module.update_release_page(
+            release_index=release_index,
+            release_dir=release_dir,
+            legacy_release_page=legacy_release_page,
+            legacy_release_dir=legacy_release_dir,
+            docs_json=docs_json,
+            source_config_path=tmp_path / "source-artifacts.json",
+            release_repo="digital-asset/canton",
+            min_version=module.Version.parse("3.5.0"),
+            version_prefix=None,
+            dry_run=False,
+        )
+
+    update = run()
 
     assert update.previous_versions == ("3.5.3",)
-    assert update.current_versions == ("3.5.3", "3.5.4", "3.5.6")
+    assert update.current_versions == ("3.5.3", "3.5.4")
     assert update.changed is True
     assert not legacy_release_page.exists()
-    assert not (legacy_release_dir / "3-5-3.mdx").exists()
-    assert (release_dir / "3-5-3.mdx").exists()
-    assert "/global-synchronizer/release-notes/canton-releases/3-5-6" in release_index.read_text(encoding="utf-8")
-    assert (release_dir / "3-5-4.mdx").read_text(encoding="utf-8").startswith(
-        '---\ntitle: "3.5.4"\ndescription: "Canton 3.5.4 release notes."\n---\n\n# Release of Canton 3.5.4'
-    )
-    assert "# Release of Canton 3.5.6\n\nRelease 356.\n" in (release_dir / "3-5-6.mdx").read_text(
-        encoding="utf-8"
-    )
-    docs = docs_json.read_text(encoding="utf-8")
-    assert '"group": "Canton"' in docs
-    assert '"global-synchronizer/release-notes/canton"' in docs
-    assert '"global-synchronizer/release-notes/canton-releases/3-5-6"' in docs
-    assert '"global-synchronizer/release-notes/canton/3-5-3"' not in docs
+    assert not release_dir.exists()
+    assert release_index.read_text(encoding="utf-8") == """---
+title: "Canton"
+description: "Release notes for Canton."
+---
+
+{/* Generated from the RELEASE-NOTES.md files in public Canton release bundles. */}
+
+Canton release notes are reproduced below from the published Canton release bundles.
+
+## Release of Canton 3.5.4 {#release-of-canton-3-5-4}
+
+### Summary {#summary-3-5-4}
+
+Release 354.
+
+## Release of Canton 3.5.3 {#release-of-canton-3-5-3}
+
+### Summary {#summary-3-5-3}
+
+Reviewed 353.
+"""
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    assert docs["navigation"]["products"][0]["groups"][0]["pages"] == [
+        "global-synchronizer/release-notes/splice",
+        "global-synchronizer/release-notes/canton",
+    ]
+    assert docs["navigation"]["products"][1]["pages"][0]["pages"] == [
+        "global-synchronizer/release-notes/splice",
+        "global-synchronizer/release-notes/canton",
+    ]
+    assert docs["redirects"] == [
+        {
+            "source": "/global-synchronizer/release-notes/canton-releases/3-5-3",
+            "destination": "/global-synchronizer/release-notes/canton#release-of-canton-3-5-3",
+        }
+    ]
+
+    assert run().changed is False
