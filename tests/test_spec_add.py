@@ -32,7 +32,7 @@ OUTPUT_REL = Path("docs-main/snippets/external/splice/main")
 SOURCE_FILE = "apps/app/src/pack/examples/sv-helm/spec-values.yaml"
 SOURCE_TEXT = "a: 1\n# SWEEP_START\nsweep:\n  enabled: true\n# SWEEP_END\nb: 2\n"
 DEEP_FILE = (
-    "cluster/helm/splice-cometbft/templates/extra/long/path/to/some/deeply/nested/"
+    "cluster/helm/splice-global-domain/templates/extra/long/path/to/some/deeply/nested/"
     "component-values-template.yaml"
 )
 EXTRA_FILES = {
@@ -239,7 +239,7 @@ def test_s7_base_rule_reproduces_existing_splice_names() -> None:
         if len(base_name(REPO, s["sourceFilepath"], marker)) <= 100:
             assert derive_name(REPO, s["sourceFilepath"], marker) == s["snippetName"]
             compared += 1
-    assert compared == 7, "seven of the thirteen splice names are within the 100-character threshold"
+    assert compared == 6, "six of the twelve splice names are within the 100-character threshold"
 
 
 def test_s7_long_path_is_shortened_deterministically(cfdocs: Path, src: Path) -> None:
