@@ -17,15 +17,15 @@ Building and operating a production-level Canton Network application requires ca
 
 Frontends enable human end-users to efficiently interact with the business processes of a Canton Network application. Apps designed purely for system-to-system integration solutions may not require a frontend, but all other apps need one.
 
-To achieve non-repudiation, all actions taken by an end-user in the name of an app provider or an app user organization must be submitted via that organization’s participant node from a frontend under their control. Otherwise, the organization could dispute a transaction record, claiming that it does not correspond to the actions performed by the end-user. To ensure the best possible non-repudiation guarantees, the app provider and each app user should host the app frontend on a web server under their control. For the same reason, each organization’s frontend should be configured to log in via that organization’s IAM. The IAM issues access tokens that can be used to submit commands to the organization’s participant node. Note that frontends don't directly communicate with the ledger. The frontends send commands to the backends, which in turn send commands to the ledger.
+To achieve non-repudiation, all actions taken by an end-user in the name of an [app provider](/appdev/modules/m4-app-architecture#roles) or an [app user](/appdev/modules/m4-app-architecture#roles) organization must be submitted via that organization’s [participant node](/overview/reference/participant-overview) from a frontend under their control. Otherwise, the organization could dispute a transaction record, claiming that it does not correspond to the actions performed by the end-user. To ensure the best possible non-repudiation guarantees, the app provider and each app user should host the app frontend on a web server under their control. For the same reason, each organization’s frontend should be configured to log in via that organization’s IAM. The IAM issues access tokens that can be used to submit commands to the organization’s participant node. Note that frontends don't directly communicate with the ledger. The frontends send commands to the backends, which in turn send commands to the ledger.
 
 ### Daml Model
 
-Daml models define the cross-organization workflows and serve as API definitions for the components interacting with these workflows. They are compiled into DAR files, also known as Daml packages. The DAR files must be uploaded to all Canton participant nodes of app users.
+Daml models define the cross-organization workflows and serve as API definitions for the components interacting with these workflows. They are compiled into [DAR files](/appdev/modules/m3-building-packaging#how-to-build-daml-archive-dar-files), also known as Daml packages. The DAR files must be uploaded to all Canton participant nodes of app users.
 
 ### Backend
 
-The backends interact directly with the Ledger API to manage access to participant nodes. The backends utilize Daml parties to represent the app provider and the app users, and Daml contracts to represent the state of the workflows between these organizations.
+The backends interact directly with the [Ledger API](/sdks-tools/api-reference/ledger-api) to manage access to participant nodes. The backends utilize Daml parties to represent the app provider and the app users, and Daml contracts to represent the state of the workflows between these organizations.
 
 Daml parties act on the ledger and read data from it at the organization level. Note that a backend does not have to be implemented as a single monolithic component. It’s a logical component that can be implemented using a micro-services architecture, or any other service architecture preferred by the development team.
 
@@ -47,12 +47,12 @@ These considerations differ for the read path (reading data from the ledger) and
 
 ##### Read
 
-On the read path, the most important consideration is to read ledger data using the Participant Query Store (PQS). Leveraging application-specific indices ensures that queries are implemented in a way that scales to the application’s needs. PQS extends and compliments capabilities available through Ledger API.
+On the read path, the most important consideration is to read ledger data using the [Participant Query Store (PQS)](/sdks-tools/development-tools/pqs). Leveraging application-specific indices ensures that queries are implemented in a way that scales to the application’s needs. PQS extends and compliments capabilities available through Ledger API.
 
-- Ledger API is optimized for exposing the current state of the ledger and the changes to it without filtering. Canton Network applications typically have application-specific query needs, which often include retrieval of individual contracts.
-- PQS is designed to serve as an operational datastore, providing flexible and efficient query capabilities for ledger data on the participant node. With PQS, you can retrieve ledger data using SQL over a JDBC connection, for example. This makes implementing the read path as simple and standard as implementing any other web service backed by an SQL database.
+- [Ledger API](/sdks-tools/api-reference/ledger-api) is optimized for exposing the current state of the ledger and the changes to it without filtering. Canton Network applications typically have application-specific query needs, which often include retrieval of individual contracts.
+- [PQS](/sdks-tools/development-tools/pqs) is designed to serve as an operational datastore, providing flexible and efficient query capabilities for ledger data on the participant node. With PQS, you can retrieve ledger data using SQL over a JDBC connection, for example. This makes implementing the read path as simple and standard as implementing any other web service backed by an SQL database.
 
-PQS has access to all data it is configured and allowed to ingest from the Private Contract Store (PCS) but does not implement any additional access control for PQS clients. However, when presenting the retrieved data to upstream components, it is necessary to ensure that appropriate end-user authentication and access controls are enforced by the API service. Delegating the implementation of end-user access controls to the developers of the Canton Network application backend, rather than including them in PQS, allows access controls to be implemented at any level of granularity. Crucially, it allows access controls to be based on intra-organizational business requirements. This enables different users within the same organization to access different datasets, as opposed to constraining access control to the schemas encoded in the Daml model, which focus on inter-organizational access control.
+PQS has access to all data it is configured and allowed to ingest from the [Private Contract Store (PCS)](/overview/reference/participant-overview) but does not implement any additional access control for PQS clients. However, when presenting the retrieved data to upstream components, it is necessary to ensure that appropriate end-user authentication and access controls are enforced by the API service. Delegating the implementation of end-user access controls to the developers of the Canton Network application backend, rather than including them in PQS, allows access controls to be implemented at any level of granularity. Crucially, it allows access controls to be based on intra-organizational business requirements. This enables different users within the same organization to access different datasets, as opposed to constraining access control to the schemas encoded in the Daml model, which focus on inter-organizational access control.
 
 PQS supports accessing both the Active Contract Set (ACS) and the ledger history within the pruning window of PQS. It is recommended to choose the pruning window based on business needs and the expected data volume. If required, PQS can serve as a flexible source of filtered events for analytical processing or to populate a data warehouse. PQS stores both contracts and the exercise events that justify the contracts’ creation and archival.
 
@@ -70,7 +70,7 @@ On the write path, the most important consideration when implementing higher-lev
 
   A simple way of achieving this is to make the command sent to the ledger consume some of its input. For example, exercising a consuming choice on the contract that led to sending the command.
 
-  Another technique is to use command deduplication. Participant nodes provide a mechanism known as command deduplication in the Ledger API to ensure that they execute a command at most once. The participant node stores the command ID and deduplicates later submissions with the same command ID. For details on the mechanics of command deduplication, see the Ledger API documentation.
+  Another technique is to use command deduplication. Participant nodes provide a mechanism known as command deduplication in the [Ledger API](/sdks-tools/api-reference/ledger-api) to ensure that they execute a command at most once. The participant node stores the command ID and deduplicates later submissions with the same command ID. For details on the mechanics of command deduplication, see [Command Deduplication](/appdev/deep-dives/command-deduplication).
 
 ##### Serve reference data contracts
 
@@ -126,8 +126,8 @@ There are various integration options:
 
 There is no one-size-fits-all architecture for Canton Network applications. Instead, a continuum of possible architectures exists. Each architectural choice involves trade-offs, and selecting the most appropriate option depends on specific business needs. To weigh the trade-offs, consider three distinct architectures:
 
-- App Provider Operates the Backend
-- App User Operates the Backend Built by the App Provider
+- [App Provider](/appdev/modules/m4-app-architecture#roles) Operates the Backend
+- [App User](/appdev/modules/m4-app-architecture#roles) Operates the Backend Built by the App Provider
 - Each Organization Builds and Operates Its Own Backend
 
 ### App Provider Operates the Backend
