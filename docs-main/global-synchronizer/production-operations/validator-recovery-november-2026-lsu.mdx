@@ -1,0 +1,324 @@
+---
+title: "Recovering Stuck Validators after the November 2026 LSU"
+description: "Recover a validator node that missed the MainNet logical synchronizer upgrade of 2026-11-07"
+---
+
+This page describes how to recover a validator node that is stuck on the predecessor physical synchronizer after the MainNet [logical synchronizer upgrade](/global-synchronizer/production-operations/logical-synchronizer-upgrade) (LSU) on 2026-11-07.
+
+## Why is my validator stuck?
+
+Your validator is stuck if it was running a Splice version prior to 0.8.3 (Canton 3.5.18) because the Canton version before did not correctly recognize the LSU announcement and therefore kept processing timestamps coming from the synchronizer. This moved the internal clocks beyond the clocks of the successor synchronizer.
+
+When the participant then tries to move over to the new synchronizer, it finds that the clock ticks overlap. Since this should not happen, it stops processing.
+
+Check the two options listed below for recovery.
+
+## Recover from backup
+
+The simplest and safest recovery option is recovering from a DB backup more recent than 30 days but taken **before** the LSU announcement/freeze time (i.e. `2026-11-06T14:00:00Z` on MainNet), upgrading to a recent Splice version (e.g. 0.9.4 on MainNet) and allowing it to replay the events. Follow the documented steps in [Restoring a validator from backups](/global-synchronizer/production-operations/validator-disaster-recovery#restoring-a-validator-from-backups).
+
+It is _strongly_ recommended to restore from a backup if you can and only follow the instructions below if you do not have an applicable backup.
+
+## Recover without a backup
+
+### Does this apply to you?
+
+This procedure probably applies to you if, at the time of the LSU announcement:
+
+- you failed to upgrade on time, and therefore your validator was running an outdated Splice version 0.8.2 or before,
+- and you did not have any backup of the databases of your node, so you could not recover your node by upgrading and replaying a recent backup from before the LSU freeze time.
+
+If your validator only holds Canton Coin and CNS entries (no other Daml applications or tokens, no external parties and no multi-hosted parties), the recovery from an identities backup in step 8 already restores everything. In that case follow steps 1 to 3, 7 and 8, leave the validator app running after step 8 (skip the warning in that step), skip steps 9 to 14, and continue with step 15. You can still take the exports of steps 4 to 6 as a safety net.
+
+### What the Procedure Does
+
+This procedure helps you create a new validator node that migrates the namespace keys and parties of the broken node onto a new validator connected to the successor LSU synchronizer. CC contracts are imported using the Scan API, whereas the external parties and non-CC contracts are restored from exports taken from the stuck node.
+
+**NOTE:** The stuck node can be decommissioned afterwards.
+
+### Limitations
+
+#### Loss of update history
+
+The new node is provisioned only with the active contracts of your parties via ACS imports. Consequently, the Ledger API update history up to the point where a party is onboarded on the new validator is lost, in particular:
+
+- archived contracts and non-consuming events
+- creates where a party hosted on the node is an observer
+- contracts where a party was only a non-stakeholder informee on (i.e. they were disclosed to the party)
+- command completions
+
+**NOTE:** Keep the backup from step 1 if you need this history for audit purposes. However, such updates spanning between the LSU upgrade time and the new validator onboarding time will not be visible.
+
+#### Ledger API client applications need to rebuild their state
+
+The new node has a different Ledger API update lineage, most importantly with changed offsets. Additionally, Ledger API update and command completion history is not preserved. Client applications (wallet backends, PQS, custom indexers, etc.) MUST therefore rebuild their internal data storage from the new validator from scratch.
+
+#### New participant ID
+
+The new node gets a new participant ID. Party IDs do not change. Traffic that was bought for the old participant ID stays with that ID, so the new participant needs its own traffic.
+
+#### Contracts archived after the LSU without your node
+
+The exports of steps 4 and 5 contain the contracts as the stuck node saw them at the LSU upgrade time. A contract that was archived on the synchronizer since then without a confirmation from your node (possible where your parties are only observers) is imported as active again. Such contracts show up as ACS commitment mismatches in step 13.
+
+### Steps
+
+#### Pre-requirements
+
+Turn on debug logging in the [Canton console](/global-synchronizer/canton-console/essential-commands) for all participant sessions:
+
+```
+participant.health.set_log_level(Level.DEBUG)
+```
+
+The following steps require enabling repair and preview commands in the Canton console sessions. Do so by passing the following config options to the [console configuration file](/global-synchronizer/reference/canton-console-reference):
+
+```
+canton.features.enable-repair-commands=yes
+canton.features.enable-preview-commands=yes
+```
+
+The preview commands are needed for the key download in step 1 and for inspecting ACS commitments after step 13.
+
+If you already ran `participant.synchronizers.perform_manual_lsu`, `participant.repair.perform_late_lsu` or the SQL statements of an earlier recovery runbook on the stuck node, first restore the database backup taken before them. To check, run the following on the stuck participant:
+
+```
+participant.synchronizers.list_registered().map { case (_, psid, _) => psid }
+```
+
+The output must only show the physical synchronizer from before the LSU (on MainNet its ID ends in `::35-6`). If it shows the successor (`::36-7` on MainNet), restore the backup or contact DA support before you continue.
+
+#### Step 1. Backup your validator
+
+Perform a full backup of your validator as outlined in [Backups of postgres instances](/global-synchronizer/production-operations/validator-backups#backups-of-postgres-instances).
+
+Step 8 also needs a backup of the node identities (see [Backup of Node Identities](/global-synchronizer/production-operations/validator-backups#backup-of-node-identities)). Fetch it now, because the validator app is not started again after step 2. If the validator app cannot provide it, create it from the participant with the console script in [Obtaining an Identities Backup from a Participant Database Backup](/global-synchronizer/production-operations/validator-disaster-recovery#obtaining-an-identities-backup-from-a-participant-database-backup). That script downloads the private keys, and it needs to be adapted if your keys are stored in an external KMS.
+
+#### Step 2. Stop the validator app
+
+Stop the validator app.
+
+**NOTE:** It must never be started again in order to avoid reconnecting the participant to the synchronizer.
+
+**HINT:** As a safety net, add an invalid entry to its configuration so that it fails to start if launched by accident.
+
+#### Step 3. Disconnect the participant node from the synchronizer
+
+Prevent the participant from reconnecting when it restarts by setting the following environment variable on the participant (see [Helm chart configuration](/global-synchronizer/reference/configuration-reference#helm-chart-configuration); on Docker Compose, set the same variable for the participant container):
+
+```yaml
+additionalEnvVars:
+  - name: ADDITIONAL_CONFIG_NO_RECONNECT
+    value: canton.participants.participant.parameters.connect-to-synchronizers-on-startup = false
+```
+
+If the participant does not start with this setting because its Canton version does not have it yet, remove the variable. The `manualConnect = true` flag set below also prevents reconnects on restarts.
+
+Then, in the Canton console:
+
+```
+participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = true),
+  validation = SequencerConnectionValidation.Disabled)
+
+// Disconnect the synchronizer
+participant.synchronizers.disconnect_all()
+
+// There should be no connected sync anymore, also after a restart
+participant.synchronizers.list_connected()
+```
+
+#### Step 4. Export ACS for all locally-hosted parties
+
+Next, export the contracts of all locally-hosted parties:
+
+```
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+val offset = participant.ledger_api.state.end()
+
+val (hosted, multiHosted) = (participant.topology.party_to_participant_mappings
+  .list(syncId, filterParticipant = participant.id.filterString)
+  .map(_.item)
+  // Multi-hosted parties may have their ACS evolved.
+  // Hence they need to be treated differently than parties only hosted on this participant
+  // See step 12 for migrating multi-hosted parties
+  .partition(_.participants.sizeIs == 1))
+
+val keyMapped = participant.topology.party_to_key_mappings.list(syncId).map(_.item.party).toSet
+def isExternal(m: PartyToParticipant) = m.partySigningKeysWithThreshold.isDefined || keyMapped(m.partyId)
+
+val internal = hosted.filterNot(isExternal).map(_.partyId).filter(_.uid.namespace == participant.id.uid.namespace)
+val external = hosted.map(_.partyId).filterNot(internal.contains)
+
+import java.nio.file.{Files, Paths}
+
+Files.writeString(Paths.get("internal-parties.txt"), internal.map(_.toProtoPrimitive).mkString("\n"))
+Files.writeString(Paths.get("external-parties.txt"), external.map(_.toProtoPrimitive).mkString("\n"))
+Files.writeString(Paths.get("multi-hosted-parties.txt"), multiHosted.map(_.partyId.toProtoPrimitive).mkString("\n"))
+
+println(s"Internal parties (steps 8 and 10): ${internal.mkString(", ")}")
+println(s"External parties (step 11): ${external.mkString(", ")}")
+println(s"Multi-hosted parties (step 12): ${multiHosted.map(_.partyId).mkString(", ")}")
+
+// An empty party set would export the contracts of all hosted parties
+require(internal.nonEmpty, "No internal party found. Contact DA support")
+participant.repair.export_acs(
+  parties = internal.toSet,
+  ledgerOffset = offset,
+  exportFilePath = "acs-internal.gz",
+  excludedStakeholders = Set.empty,
+  synchronizerId = Some(syncId),
+)
+```
+
+#### Step 5. Export ACS for external parties
+
+Next, create one ACS export per externally hosted party.
+
+```
+external.zipWithIndex.foreach { case (party, i) =>
+  participant.repair.export_acs(
+    parties = Set(party),
+    ledgerOffset = offset,
+    exportFilePath = s"acs-external-$i.gz",
+    excludedStakeholders = Set.empty,
+    synchronizerId = Some(syncId),
+  )
+}
+```
+
+**NOTE:** Contracts with multiple stakeholders hosted on the participant will appear in several ACS exports. They will however be correctly deduplicated at import time.
+
+#### Step 6. Download all DARs
+
+```
+// Export existing DARs to "dars" directory on the machine running the console
+participant.dars.list().foreach(d => participant.dars.download(d.mainPackageId, "dars"))
+```
+
+#### Step 7. Export user management data
+
+Optionally, inspect user management and the IDP configuration state from your old participant, by using the `UserManagementService.ListUsers/ListUserRights` and `IdentityProviderConfigService.ListIdentityProviderConfigs`.
+
+You can save this data to later restore the state after successfully recovering your participant.
+
+#### Step 8. Deploy a new validator using "recovery from an identities backup"
+
+Follow the [Recovery from an identities backup: Re-onboard a validator and recover balances of all users it hosts](/global-synchronizer/production-operations/validator-disaster-recovery#recovery-from-an-identities-backup-re-onboard-a-validator-and-recover-balances-of-all-users-it-hosts) procedure to migrate to a new validator node on the LSU successor synchronizer.
+
+<Warning>
+This procedure connects the new validator to the synchronizer: that is how the parties are migrated and their CC contracts imported. Once the validator app is up and its log shows `ACS import complete`, stop the validator app and keep it stopped until step 14 is done. Then prevent the new participant from reconnecting on restarts, as in step 3 (the configuration override and/or):
+
+```
+participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = true))
+```
+</Warning>
+
+After this step, you have recovered the CC holdings of your internal parties.
+
+**NOTE:** The validator app does not migrate external parties and multi-hosted parties, and it may unhost them from the stuck participant (see [Parties not migrated automatically](/global-synchronizer/production-operations/validator-disaster-recovery#parties-not-migrated-automatically)). They are handled in steps 11 and 12.
+
+#### Step 9. Upload exported DARs
+
+```
+// Re-connect synchronizer to allow vetting the DARs
+participant.synchronizers.reconnect_all()
+// Uploads and vets every DAR downloaded in step 6
+new java.io.File("dars").listFiles().filter(_.getName.endsWith(".dar")).foreach(f => participant.dars.upload(f.getPath))
+participant.synchronizers.disconnect_all()
+```
+
+#### Step 10. Import ACS for internal parties
+
+Requires step 8 to be complete (the parties are hosted on the new node and their CC contracts imported) and the validator app to be stopped.
+
+The import leaves out the contracts shared with the DSO party: step 8 already imported their current state from Scan, and the export of step 4 only has their state at the LSU upgrade time.
+
+```
+import java.nio.file.{Files, Paths}
+
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+// Replace the placeholder with the DSO party ID, e.g. from <scan-url>/api/scan/v0/dso-party-id
+val dso = PartyId.tryFromProtoPrimitive("<DSO party ID>")
+val internal = Files.readString(Paths.get("internal-parties.txt")).linesIterator.map(PartyId.tryFromProtoPrimitive).toSet
+val hostedHere = participant.topology.party_to_participant_mappings.list(syncId, filterParticipant = participant.id.filterString).map(_.item.partyId).toSet
+
+val exportedInternalNotYetHosted = internal -- hostedHere
+
+require(exportedInternalNotYetHosted.isEmpty, s"Internal party migration failed. Missing $exportedInternalNotYetHosted. Check for errors and contact DA support")
+
+participant.synchronizers.disconnect_all()
+participant.repair.import_acs(syncId, "acs-internal.gz", workflowIdPrefix = "recovery-internal", excludedStakeholders = Set(dso))
+participant.synchronizers.reconnect_all()
+```
+
+If the check reports a party that you allocated on the stuck node after the LSU announcement, that party is not known to the synchronizer and was not migrated. Contact DA support in that case.
+
+After this step, you have recovered the remaining assets (non-CC holdings) of your internal parties.
+
+#### Step 11. Import ACS for each external party
+
+An external party can only be hosted on the new node with a party-to-participant mapping signed with the party's own key. Hence, its ACS can only be imported once the owner provided its onboarding signature.
+
+For onboarding the external party to the new validator node, follow the steps in [Recover the Coin balance of an external party](/global-synchronizer/production-operations/validator-disaster-recovery#recover-the-coin-balance-of-an-external-party), but stop before importing the ACS from the Scan API as its contents are already included in the export generated in step 5.
+
+<Warning>
+Onboarding of external parties must happen in a timely manner to avoid crashing the node later due to ACS mismatches. To avoid such risky situations, consider onboarding the late external party on a separate node.
+</Warning>
+
+```
+val external = Files.readString(Paths.get("external-parties.txt")).linesIterator.map(PartyId.tryFromProtoPrimitive).toSeq
+
+val hostedHere = (participant.topology.party_to_participant_mappings
+  .list(syncId, filterParticipant = participant.id.filterString)
+  .map(_.item.partyId).toSet)
+
+participant.synchronizers.disconnect_all()
+external.zipWithIndex.filter { case (party, _) => hostedHere(party) }.foreach { case (_, i) =>
+  participant.repair.import_acs(syncId, s"acs-external-$i.gz", workflowIdPrefix = s"recovery-external-$i")
+}
+participant.synchronizers.reconnect_all()
+```
+
+**NOTE:** After this step, you have recovered the assets of your single hosted external parties.
+
+#### Step 12. Import ACS for each multi-hosted party
+
+If your participant co-hosted a multi-hosted party, it can be imported similarly to a regular external party, by exporting its ACS on the stuck node (as in step 5, which does not export these parties itself) and importing it on the new node (as in step 11) once the party is hosted there. These parties are listed in `multi-hosted-parties.txt`, written in step 4.
+
+However, since a multi-hosted party may have already been migrated to the LSU successor by a threshold of hosting participants, its ACS might have evolved compared to the state of your participant. In that case, obtain the ACS export from one of the co-hosting participants and import it by adapting the statements in step 11.
+
+**NOTE:** After this step, you should have recovered the assets of all parties hosted on your validator node.
+
+#### Step 13. ACS checks
+
+After ACS imports are done, to validate the contracts migration was successful, check the ACS commitments status on your new participant, by inspecting the logs for `ACS_COMMITMENT_MISMATCH` or `ACS_MISMATCH_NO_SHARED_CONTRACTS` errors once a few reconciliation intervals have passed (i.e. on MainNet the reconciliation interval is 30 minutes).
+
+If there are any, check the [troubleshooting guide](/global-synchronizer/production-operations/validator-disaster-recovery#limitations-and-troubleshooting) or contact DA support.
+
+<Warning>
+DO NOT submit commands before ensuring there are no warnings or errors in the participant's logs.
+</Warning>
+
+#### Step 14. Re-enable auto-connect to synchronizer
+
+Next, re-enable reconnects on the new participant (remove the configuration override of step 8 and restart, and/or run the statement below), then start the validator app.
+
+```
+participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = false))
+```
+
+#### Step 15. Rebuild Ledger API app data
+
+The Ledger API state on the new validator starts fresh at the point where the ACSes are imported and the node is connected to the new synchronizer.
+
+Offsets are also re-initialized, hence Ledger API clients must rebuild their state from the new participant, starting with an ACS snapshot.
+
+If your application is built on top of [PQS](/sdks-tools/development-tools/pqs), drop its database and re-start it against the new participant.
+
+#### Step 16. Checks and troubleshooting
+
+Generally, observe the [troubleshooting guide](/global-synchronizer/production-operations/validator-disaster-recovery#limitations-and-troubleshooting) for recovering a node from key. If you encounter difficulties, contact DA support.
+
+#### Step 17. Import Ledger API users
+
+Finally, set up Ledger API IDP and user management, using the Ledger API `UserManagementService` and `IdentityProviderConfigService`. You can use the data extracted in step 7.
