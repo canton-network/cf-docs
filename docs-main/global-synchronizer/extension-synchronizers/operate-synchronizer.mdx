@@ -1,8 +1,491 @@
 ---
 title: "Operate a synchronizer"
-description: "Placeholder page for the Network Operations table of contents proposal."
+description: "Add sequencer and mediator nodes, manage traffic, prune, and decommission synchronizer nodes."
 ---
 
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-0.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic1 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-1.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic2 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-2.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic3 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-3.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic4 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-4.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic5 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-5.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic6 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-6.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic7 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-7.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic8 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-8.mdx";
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/new_nodes.rst" hash="bd9cb2c5" */}
+
+## Add New Nodes
+
+### Add a new Sequencer to a distributed Synchronizer
+
+You can either initialize Sequencers as part of the regular distributed synchronizer bootstrapping process, or dynamically add a new Sequencer at a later point as described in this section.
+
+The reverse procedure is documented in the Sequencer decommissioning section.
+
+#### Database Sequencer
+
+The Database Sequencer is currently unsupported.
+
+#### BFT Sequencer
+
+1.  Assuming that at least one existing Sequencer is accessible, prepare a new Sequencer and make sure it's running.
+
+2.  Run the following `bootstrap` command using instance references of the new Sequencer, the existing Sequencer, and the owners of the current Synchronizer:
+
+    > ```scala
+    > bootstrap
+    >   .onboard_new_sequencer(
+    >     synchronizerId.logical,
+    >     newSequencerReference,
+    >     existingSequencerReference,
+    >     synchronizerOwners,
+    >     // Avoid issues if things are slow
+    >     customCommandTimeout = Some(config.NonNegativeDuration.tryFromDuration(2.minutes)),
+    >     isBftSequencer = true,
+    >   )
+    > ```
+
+3.  Set up new connections in either or both directions for all Sequencers using the following commands:
+
+    > ```scala
+    > newSequencerReference.bft.add_peer_endpoint(existingSequencerEndpoint)
+    > // existingSequencerReference.bft.add_peer_endpoint(newSequencerEndpoint) // Optional, one direction is enough
+    > ```
+    >
+    > For the newly-onboarded Sequencer, the endpoints can be configured as part of the initial network.
+
+4.  Wait for the new Sequencer to get initialized:
+
+    > ```scala
+    > newSequencerReference.health.wait_for_initialized()
+    > ```
+
+At this point, other nodes should be able to connect to the new Sequencer. To avoid problems, the best practice is to wait at least for the "maximum decision duration" (the sum of the `confirmationResponseTimeout` and `mediatorReactionTimeout` dynamic synchronizer parameters with a default of 30 seconds each) before connecting nodes to a newly-onboarded Sequencer.
+
+If you encounter issues, refer to the troubleshooting guide.
+
+<div className="todo">
+
+{/* Link the reference documentation. \<[https://github.com/DACH-NY/canton/issues/25963](https://github.com/DACH-NY/canton/issues/25963)\> */}
+
+</div>
+
+For details on the necessary admin commands, check the reference documentation.
+
+#### Use separate consoles
+
+Similarly to initializing a distributed synchronizer with separate consoles, dynamically onboarding new Sequencers can be achieved in separate consoles as follows:
+
+```scala
+// Third sequencer's console:
+// * write file with identity topology transactions
+{
+  sequencer3.topology.transactions.export_identity_transactionsV2(identityFile)
+}
+
+// Fist and second sequencers' (i.e., owners) console:
+// * load third sequencer's identity transactions
+// * add the third sequencer to the sequencer synchronizer state
+// * write the topology snapshot, sequencer snapshot and static synchronizer parameters to files
+{
+  // Store the third sequencer's identity topology transactions on the synchronizer
+  sequencer1.topology.transactions
+    .import_topology_snapshot_fromV2(identityFile, store = synchronizerId)
+  sequencer2.topology.transactions
+    .import_topology_snapshot_fromV2(identityFile, store = synchronizerId)
+
+  // wait for the identity transactions to become effective
+  sequencer1.topology.synchronisation.await_idle()
+  sequencer2.topology.synchronisation.await_idle()
+
+  // find the current sequencer synchronizer state
+  val sequencerSynchronizerState =
+    sequencer1.topology.sequencers
+      .list(store = synchronizerId)
+      .headOption
+      .getOrElse(sys.error("Did not find sequencer synchronizer state on the synchronizer"))
+
+  // add the third sequencer to the synchronizer state
+  val threshold = sequencerSynchronizerState.item.threshold
+  val activeSequencers = sequencerSynchronizerState.item.active :+ sequencer3.id
+  val newSerial = Some(sequencerSynchronizerState.context.serial.increment)
+  sequencer1.topology.sequencers.propose(
+    synchronizerId,
+    threshold,
+    activeSequencers,
+    serial = newSerial,
+  )
+  sequencer2.topology.sequencers.propose(
+    synchronizerId,
+    threshold,
+    activeSequencers,
+    serial = newSerial,
+  )
+  // wait for the topology change to be observed by the sequencer
+  utils.retry_until_true(consoleEnvironment.commandTimeouts.bounded) {
+    sequencer1.topology.sequencers
+      .list(sequencer1.synchronizer_id)
+      .headOption
+      .map(_.item.allSequencers.forgetNE)
+      .getOrElse(Seq.empty)
+      .contains(sequencer3.id)
+  }
+
+  // fetch the onboarding state and write it to a file
+  val onboardingState = sequencer1.setup.onboarding_state_for_sequencerV2(sequencer3.id)
+  utils.write_to_file(onboardingState, onboardingStateFile)
+}
+
+// Third sequencer's console:
+// * read the onboarding state from file
+// * initialize the third sequencer with the onboarding state
+{
+  val onboardingState = utils.read_byte_string_from_file(onboardingStateFile)
+  sequencer3.setup.assign_from_onboarding_stateV2(onboardingState)
+
+  sequencer3.health.initialized()
+}
+```
+
+### Add a new Mediator to a distributed Synchronizer
+
+You can either initialize Mediators as part of the regular distributed synchronizer bootstrapping process, or dynamically add a new Mediator at a later point as described in this section.
+
+1.  Prepare a new Mediator node and make sure it's running.
+
+2.  Save the new Mediator's identity and load it to relevant Sequencers:
+
+    > ```scala
+    > val mediator2Identity = mediator2.topology.transactions.identity_transactions()
+    > sequencer1.topology.transactions.load(
+    >   mediator2Identity,
+    >   store = TopologyStoreId.Synchronizer(synchronizer1Id),
+    >   ForceFlag.AlienMember,
+    > )
+    > ```
+
+3.  Propose a new Mediator state with active Mediators including the newly-onboarding Mediator:
+
+    > ```scala
+    > sequencer1.topology.mediators.propose(
+    >   synchronizer1Id.logical,
+    >   threshold = PositiveInt.one,
+    >   active = Seq(mediator1.id, mediator2.id),
+    >   group = NonNegativeInt.zero,
+    > )
+    > ```
+
+4.  Initialize the new Mediator:
+
+    > ```scala
+    > mediator2.setup.assign(
+    >   synchronizer1Id,
+    >   SequencerConnections.single(sequencer1.sequencerConnection),
+    > )
+    > mediator2.health.wait_for_initialized()
+    > ```
+
+The reverse procedure is documented in the Mediator decommissioning section.
+
+<div className="todo">
+
+{/* Link the reference documentation. \<[https://github.com/DACH-NY/canton/issues/25832](https://github.com/DACH-NY/canton/issues/25832)\> */}
+
+</div>
+
+For details on the necessary admin commands, check the reference documentation.
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/traffic.rst" hash="b10a3160" */}
+
+## Sequencer Traffic Management
+
 <Note>
-Placeholder for the proposed table of contents. It is made from Synchronizer Operations (extension-synchronizers/synchronizer-operations.mdx, lines 693–879, 1014–1153, 1182–1215, 1272–1389).
+Currently traffic management is supported only on Byzantine Fault Tolerant (BFT) Synchronizers.
 </Note>
+
+This page describes how to enable and configure traffic management on a Synchronizer, and how to inspect and manage the traffic balances of its members.
+
+Inspecting how much traffic a Synchronizer member has from the member's perspective (for Participant Nodes and Mediator Nodes) is discussed in Manage Node traffic.
+
+### Enable traffic management on a Synchronizer
+
+Traffic management can be enabled or disabled on an existing Synchronizer via adjusting its dynamic synchronizer parameters. Please refer to the Change dynamic synchronizer parameters for more details.
+
+First let's check the current traffic management status of a Synchronizer:
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic0 />
+
+If the field `trafficControl` of type `TrafficControlParameters` is not set (absent in the output above) or has `enforceRateLimiting` set to `false` then the traffic management is inactive.
+
+To enable traffic management, you update the dynamic synchronizer parameters, setting the `TrafficControlParameters` with the
+`enforceRateLimiting = true` and specifying desired values for the other parameters documented in `configuration class Scaladoc
+reference`.
+
+<Note>
+If you are using a Synchronizer with multiple owners, you need to ensure that the command to enable traffic management is submitted by at least the configured threshold of owners.
+</Note>
+
+Assuming `sequencer1` being the only synchronizer owner, run the following command to enable traffic management:
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic1 />
+
+Let's confirm that the traffic management is now enabled by checking the synchronizer parameters again:
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic2 />
+
+Note the `traffic control` in the output above.
+
+### Check the latest traffic balances of Synchronizer members
+
+One can interactively inspect and modify the traffic balances of Synchronizer members using the Canton console commands under `sequencer.traffic_control`.
+
+To inspect the traffic balances of all members of a Synchronizer, you can use the following command:
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic3 />
+
+If you only want to check the traffic balance of a specific member, you can use:
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic4 />
+
+### Top up the traffic balance for a Synchronizer member
+
+<Note>
+Traffic balance entitlements of members are decided by an external workflow and communicated via submitting the same traffic balance via one or multiple Sequencers.
+</Note>
+
+<Note>
+Top ups must be submitted by a quorum of Sequencers to become effective. This is configured by the `threshold` parameter of the `SequencerSynchronizerState` topology mapping.
+</Note>
+
+<div className="todo">
+
+{/* \<[https://github.com/DACH-NY/canton/issues/25832](https://github.com/DACH-NY/canton/issues/25832)\> \#. Link to the reference documentation of the `SequencerSynchronizerState` topology mapping above. */}
+
+</div>
+
+Let's add some traffic for a member, for example, `participant1`. First we need to know the current `serial` (a per-member monotonically increasing `PositiveInt`), which corresponds to the last traffic balance top up for that member.
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic5 />
+
+Now we can submit a command to increase the traffic balance for `participant1` by `newBalance`:
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic6 />
+
+Now the traffic balance for `participant1` has been updated. You can verify this by checking the traffic state again:
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic7 />
+
+Now let's run `ping` between participants and observe the traffic consumption:
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic8 />
+
+Observe the traffic balances for the Participants and the Mediator decrease.
+
+For more information on traffic control and its configuration parameters, read the traffic control overview.
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/pruning.rst" hash="f4d69914" */}
+
+## Synchronizer Pruning
+
+### Prune the Mediator state
+
+You can set up scheduled automatic pruning for each of your Mediators as explained in the [automatic pruning reference](/global-synchronizer/production-operations/pruning#automatic-pruning-reference).
+
+You can also directly prune the Mediator without using a schedule by calling the following command:
+
+``` none
+mediator1.pruning.prune()
+```
+
+This operation prunes processed sequenced events and finalized confirmation response aggregations based on the configured default retention period.
+
+This value is seven days by default; you can configure it as follows:
+
+``` none
+parameters {
+  retention-period-defaults {
+    mediator = "7 days"
+  }
+}
+```
+
+The Mediator retention period applies only to the Mediator's own stored data; it does not affect how long Sequencer clients can be offline.
+
+To choose another value, you can either change the config above or directly specify a retention period with the command `mediator.pruning.prune_with_retention_period` or even the exact timestamp to prune at, using `mediator.pruning.prune_at`.
+
+### Prune the Sequencer state
+
+You can prune the Sequencer by calling the following command:
+
+``` none
+val result = sequencer1.pruning.prune()
+```
+
+This command uses the configured Sequencer default retention period to compute the timestamp from which to prune sequenced events and returns a description of what was pruned.
+
+This value is seven days by default; you can configure it as follows:
+
+``` none
+parameters {
+  retention-period-defaults {
+    sequencer = "7 days"
+  }
+}
+```
+
+Note that when you disable a client on a Sequencer, this is a local operation; the client is still active on other Sequencers that have not performed the same operation.
+
+#### BFT Orderer Pruning
+
+The BFT Orderer layer of the Sequencer is where distributed consensus on the order of transactions is reached across all Sequencer nodes. It has its own separate set of database tables and different considerations regarding pruning.
+
+The BFT Orderer serves ordered events up to the Sequencer layer, which stores them and subsequently serves them to Sequencer clients. The BFT Orderer also needs to retain this data after it is served to the Sequencer layer, because it may need to assist other BFT Orderer nodes that are behind in catching up.
+
+You must pick a pruning retention period long enough for BFT Orderer nodes to be able to catch up after crashing and coming back. This retention period does not affect participants or mediators, which catch up from the Sequencer layer.
+
+See below how to manually prune using an admin command and also check the status.
+
+``` none
+sequencer1.bft.pruning.prune(retention = 30.days, minBlocksToKeep = 100)
+val status = sequencer1.bft.pruning.status()
+```
+
+You can also set up scheduled automatic pruning for the BFT Orderer using the commands shown below as well as the ones explained in the [automatic pruning reference](/global-synchronizer/production-operations/pruning#automatic-pruning-reference).
+
+``` none
+sequencer1.bft.pruning.set_bft_schedule(
+  cron = "0 0 8 ? * SAT",
+  maxDuration = 8.hours,
+  retention = 90.days,
+  minBlocksToKeep = 50,
+)
+sequencer1.bft.pruning.set_min_blocks_to_keep(100)
+val schedule = sequencer1.bft.pruning.get_bft_schedule()
+```
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/decommission/index.rst" hash="064f999f" */}
+
+## Decommissioning Canton nodes and Synchronizer entities
+
+This section covers decommissioning **sequencer** and **mediator** nodes. For decommissioning a **participant** node, see [Decommission Canton Nodes](/global-synchronizer/production-operations/decommission-nodes).
+
+This guide assumes general familiarity with Canton, in particular Canton identity management concepts and operations from the Canton console.
+
+Note that, while onboarding new nodes is always possible, **a decommissioned node or entity is effectively disposed of and cannot rejoin a synchronizer**. **Decommissioning is thus an irreversible operation**.
+
+In addition, **decommissioning procedures are currently experimental**; regardless, **backing up nodes to be decommissioned before decommissioning them is strongly recommended**.
+
+### Decommissioning a Sequencer
+
+Sequencers are part of a synchronizer’s messaging infrastructure and do not store application contracts, so they are disposable as long as precautions are taken to avoid disrupting the synchronization services. This means, concretely, ensuring that:
+
+1.  No active participant nor active mediator is connected to the sequencer to be decommissioned.
+2.  All active participants and mediators are connected to an active sequencer.
+
+After that, the sequencer can be decommissioned by removing it from the synchronizer’s topology and finally disposed of.
+
+#### Disconnecting all nodes from the sequencer to be decommissioned
+
+- Change the sequencer connection on the mediators connected to the sequencer to be decommissioned to use another active sequencer, as per [mediator connectivity](/global-synchronizer/reference/canton-console-commands#sequencer_connection.set):
+
+```scala
+mediator1.sequencer_connection.set(SequencerConnections.single(sequencer1.sequencerConnection))
+```
+
+- Reconnect participants to the synchronizer, as described in [Synchronizer connectivity](/global-synchronizer/reference/canton-console-commands#synchronizer-connectivity), using a sequencer connection to another active sequencer:
+
+```scala
+participant2.synchronizers.disconnect(daName)
+participant2.synchronizers.modify(
+  daName,
+  _.copy(sequencerConnections = SequencerConnections.single(sequencer1.sequencerConnection)),
+)
+participant2.synchronizers.reconnect(daName)
+```
+
+#### Decommissioning the sequencer
+
+A quorum of synchronizer owners proposes the sequencer out of the synchronizer topology. The remaining active sequencers must still meet the threshold of the sequencer synchronizer state; otherwise, lower the threshold in the same proposal.
+
+```scala
+// find the current sequencer synchronizer state
+val sequencerSynchronizerState =
+  sequencer1.topology.sequencers
+    .list(store = synchronizerId)
+    .headOption
+    .getOrElse(sys.error("Did not find sequencer synchronizer state on the synchronizer"))
+
+// remove the decommissioned sequencer from the synchronizer state
+val threshold = sequencerSynchronizerState.item.threshold
+val activeSequencers = sequencerSynchronizerState.item.active.filterNot(_ == sequencer3.id)
+val newSerial = Some(sequencerSynchronizerState.context.serial.increment)
+sequencer1.topology.sequencers.propose(
+  synchronizerId,
+  threshold,
+  activeSequencers,
+  serial = newSerial,
+)
+sequencer2.topology.sequencers.propose(
+  synchronizerId,
+  threshold,
+  activeSequencers,
+  serial = newSerial,
+)
+```
+
+If the synchronizer runs on BFT sequencers, wait until the ordering topology of the remaining sequencers no longer lists the decommissioned sequencer before stopping it; you can check that with the `bft.get_ordering_topology` command. Stopping it earlier can leave a BFT ordering network of three or fewer sequencers without a quorum.
+
+The cryptographic material of a decommissioned sequencer must also be disposed of:
+
+- If it was stored only on the decommissioned sequencer, it must be disposed of together with the decommissioned sequencer node.
+- However, if a decommissioned sequencer’s cryptographic material is managed via a KMS system, it must be disposed of through the KMS; refer to your KMS’ documentation and internal procedures to handle this.
+
+### Decommissioning a Mediator
+
+Mediators are also part of a synchronizer’s messaging infrastructure and do not store application contracts, so they are disposable as long as precautions are taken to avoid disrupting the synchronization services. This means ensuring that at least one mediator remains in its mediator group and that the remaining active mediators still meet the group’s threshold; otherwise, lower the threshold in the same proposal.
+
+A quorum of synchronizer owners proposes the mediator out of the synchronizer topology:
+
+```scala
+// find the mediator synchronizer state of the group containing the decommissioned mediator
+val mediatorSynchronizerState =
+  sequencer1.topology.mediators
+    .list(synchronizerId)
+    .find(_.item.active.contains(mediator2.id))
+    .getOrElse(sys.error("Did not find the mediator in a mediator synchronizer state on the synchronizer"))
+
+// remove the decommissioned mediator from the synchronizer state
+val threshold = mediatorSynchronizerState.item.threshold
+val activeMediators = mediatorSynchronizerState.item.active.filterNot(_ == mediator2.id)
+val newSerial = Some(mediatorSynchronizerState.context.serial.increment)
+sequencer1.topology.mediators.propose(
+  synchronizerId,
+  threshold,
+  activeMediators,
+  group = mediatorSynchronizerState.item.group,
+  serial = newSerial,
+)
+sequencer2.topology.mediators.propose(
+  synchronizerId,
+  threshold,
+  activeMediators,
+  group = mediatorSynchronizerState.item.group,
+  serial = newSerial,
+)
+```
+
+{/* COPIED_END */}
+
+{/* Intentionally not copying synchronizer/howtos/recover/index.rst — that content
+    duplicated production-operations/node-backup-restore.mdx (cf-docs#826). */}
+
+## Backup and Restore
+
+Backup, restore, and database-replication guidance for participant and synchronizer nodes is documented in [Canton Node Backup and Restore](/global-synchronizer/production-operations/node-backup-restore).

@@ -5,9 +5,9 @@ description: "Configure logging, tracing, metrics, and health monitoring on Cant
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/observe/monitoring.rst" hash="68d54436" */}
 
-# Monitoring Best Practices
+## Monitoring Best Practices
 
-## Introduction
+### Introduction
 
 Observability (also known as “monitoring”) lets you determine if Canton is healthy or not. If the state is not healthy, observability helps diagnose the root cause. There are three parts to observability: metrics, logs, and traces. These are described in this section.
 
@@ -15,7 +15,7 @@ To avoid becoming overwhelmed by the number of metrics and log messages, read th
 
 The remaining sections provide references to more detailed information.
 
-## Golden Signals and Key Metrics Quick Start
+### Golden Signals and Key Metrics Quick Start
 
 The best practice for monitoring a microservices [application](https://sre.google/sre-book/monitoring-distributed-systems) is an approach known as the Golden [Signals](https://www.blameless.com/blog/4-sre-golden-signals-what-they-are-and-why-they-matter), or the RED [method](https://www.waferwire.com/blog/red-metrics-use-microservices-monitoring). In this approach, metric monitoring determines whether the application is healthy and, if not healthy, which service is the root cause of the issue. The Golden Signals for HTTP and gRPC endpoints are supported for all endpoints. Key metrics specific to Canton are also available. These are described below.
 
@@ -50,9 +50,9 @@ The following other key metrics are monitored:
 
 This list is not exhaustive. It highlights the most important metrics.
 
-## Set Up Metrics Scraping
+### Set Up Metrics Scraping
 
-### Enable the Prometheus Reporter
+#### Enable the Prometheus Reporter
 
 [Prometheus](https://prometheus.io) is recommended for metrics reporting.
 Two other reporter types, `csv` (writes metrics to CSV files) and `logging`
@@ -80,17 +80,17 @@ canton.monitoring.metrics.reporters = [{
   port = 9464 // default
 }]
 ```
-### Prometheus-Only Metrics
+#### Prometheus-Only Metrics
 
 Some metrics are available only when using the Prometheus reporter. These metrics include common gRPC and HTTP metrics (which help you to measure the four golden [signals](https://sre.google/sre-book/monitoring-distributed-systems/#xref_monitoring_golden-signals)), and JVM GC and memory usage metrics (if enabled). The metrics are documented in detail below.
 
 Any metric marked with `*` is available only when using the Prometheus reporter.
 
-## Metrics
+### Metrics
 
 The full Canton metrics inventory — including Participant Metrics, Sequencer Metrics, Mediator Metrics, and Splice service metrics — lives in [Canton Metrics](/global-synchronizer/reference/canton-metrics).
 
-## Logging
+### Logging
 
 Canton uses [Logback](https://logback.qos.ch) as the logging library. All Canton logs derive from the logger `com.digitalasset.canton`. By default, Canton will write a log to the file `log/canton.log` using the `INFO` log-level and will also log `WARN` and `ERROR` to stdout.
 
@@ -121,7 +121,7 @@ JAVA_OPTS="-Dlogback.configurationFile=./path-to-file.xml" ./bin/canton --config
 
 If you use a custom log-file, the command line arguments for logging will not have any effect, except that `--log-level-canton` and `--log-level-root` can still be used to adjust the log level of the root loggers.
 
-### Viewing Logs
+#### Viewing Logs
 
 A log file viewer such as [lnav](/global-synchronizer/troubleshooting-guide/troubleshooting-methodology#where-to-find-logs) is recommended to view Canton logs and resolve issues. Among other features, lnav has automatic syntax highlighting, convenient filtering for specific log messages, and the ability to view log files of different Canton components in a single view. This makes viewing logs and resolving issues more efficient than using standard UNIX tools such as less or grep.
 
@@ -138,7 +138,7 @@ The following features are especially useful when using `lnav`:
 
 The custom lnav log format [file](https://docs.lnav.org/en/latest/formats.html) for Canton logs `canton.lnav.json` is bundled in any Canton release. You can install it with `lnav -i canton.lnav.json`. JSON-based log files (which need to use the file suffix `.clog`) can be viewed using the `canton-json.lnav.json` format file.
 
-### Detailed Logging
+#### Detailed Logging
 
 By default, logging omits details to avoid writing sensitive data into log files. For debugging or educational purposes, you can turn on additional logging using the following configuration switches:
 
@@ -161,7 +161,7 @@ This turns on payload logging in the `ApiRequestLogger`, which records every GRP
 Note that the detailed event logging will happen within an gRPC API Interceptor. This creates a sequential bottleneck as every message that is sent or received gets translated into a pretty-printed string. You will not be able to achieve the same performance if this setting is turned on.
 </Note>
 
-## Tracing
+### Tracing
 
 For further debugging, Canton provides a trace-id which allows you to trace the processing of requests through the system. The trace-id is exposed to logback through the *mapping diagnostic context* and can be included in the logback output pattern using `%mdc{trace-id}`.
 
@@ -197,7 +197,7 @@ Jaeger exposes port `16686` (for its UI, which can be viewed in a browser window
 
 Verify that all Canton nodes in the network report to the same tracing backend for an accurate view of the full traces and ensure that the backend is reachable by all Canton nodes.
 
-### Sampling
+#### Sampling
 
 You can change how often spans are sampled and reported to the configured exporter. By default, it will always report (`monitoring.tracing.tracer.sampler.type = always-on`).
 You can configure it to never report (`monitoring.tracing.tracer.sampler.type = always-off`), although this is less useful.
@@ -216,7 +216,7 @@ When turned on, a span is sampled if its parent is sampled (the root span will f
 There will never be incomplete traces; either the full trace is sampled or it is not.
 If you change this property, all spans will follow the configured sampling strategy and ignore whether the parent is sampled.
 
-### Known Limitations
+#### Known Limitations
 
 Not every trace created which can be observed in logs is reported to the configured trace collector service. Traces originated at console commands or that are part of the transaction protocol are largely reported, while other types of traces are added to the set of reported traces as the need arises.
 
@@ -224,7 +224,7 @@ Also, the transaction protocol trace has a known limitation: once a command is s
 
 This differs from a situation where a single Daml transaction results in multiple actions at the same time, such as archiving and creating multiple contracts. In that case, a single trace encompasses the entire process, since it occurs as part of a single transaction rather than the result of an external process reacting to Daml events.
 
-### Traces
+#### Traces
 
 Traces contain operations that are each represented by a span. A trace is a directed acyclic graph (DAG) of spans, where the edges between spans are defined as parent/child relationships (the definitions come from the Opentelemetry glossary).
 
@@ -271,7 +271,7 @@ To end this round of the transaction protocol, `participant1` and `participant2`
 
 As mentioned, there are two other transaction submissions that are unlinked from this ping trace but are part of the operation. The second one starts at a span titled `admin-ping.processTransaction`, which is created by `participant2`. The third one has the same name but is initiated by `participant1`.
 
-## Node Health Status
+### Node Health Status
 
 Each Canton node exposes rich health status information. Running:
 
@@ -321,9 +321,9 @@ A mediator node responds with a message containing:
 
 Additionally, all nodes also return a `components` field detailing the health state of each of its internal runtime dependencies. The actual components differ per node and can give further insights into the node's current status. Example components include storage access, synchronizer connectivity, and sequencer backend connectivity.
 
-## Health Checks
+### Health Checks
 
-### gRPC Health Check Service
+#### gRPC Health Check Service
 
 Each Canton node can optionally be configured to start a gRPC server exposing the gRPC Health [Service](https://github.com/grpc/grpc/blob/master/doc/health-checking.md#service-definition). Passive nodes (see High Availability for more information on active/passive states) return `NOT_SERVING`. Consider this when configuring liveness and readiness probes in a Kubernetes [environment](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes).
 
@@ -346,7 +346,7 @@ The gRPC health server is configured per Canton node, so the configuration must 
 To support usage as a Kubernetes liveness probe, the health server exposes a service named `liveness` that should be targeted when configuring a gRPC [probe](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-a-grpc-liveness-probe). The latter service always returns `SERVING`.
 </Note>
 
-### HTTP Health Check
+#### HTTP Health Check
 
 Optionally, each Canton node can expose an HTTP endpoint indicating whether the node believes it is healthy.
 This may be used as an uptime check or as a Kubernetes liveness [probe](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes).
@@ -364,7 +364,7 @@ monitoring.http-health-server {
 
 Health information is then available at `http://<host>:<port>/health`.
 
-## Health Dumps
+### Health Dumps
 
 You should provide as much information as possible to receive efficient support. For this purpose, Canton implements an information-gathering facility that gathers key essential system information for support staff. If you encounter an error where you need assistance, please ensure the following:
 
@@ -381,7 +381,7 @@ This creates a dump file (`.zip`) that stores the following information:
 
 Provide the gathered information to your support contact together with the exact list of steps that led to the issue. Providing complete information is very important to help troubleshoot issues.
 
-### Remote Health Dumps
+#### Remote Health Dumps
 
 When running a console configured to access remote nodes, the `health.dump()` command gathers health data from the remote nodes and packages them into resulting zip files. There is no special action required. You can obtain the health data of a specific node by targeting it when running the command. For example:
 
@@ -397,13 +397,13 @@ When packaging large amounts of data, increase the default timeout of the dump c
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/observe/metrics.rst" hash="bc10ae2b" */}
 
-# Configure Metrics
+## Configure Metrics
 
 Metrics provide quantitative information about the internal state of a running system, which is key for [monitoring](https://sre.google/sre-book/monitoring-distributed-systems) of its health and performance and [observability](https://medium.com/honeycombio/observability-101-terminology-and-concepts-honeycomb-821f17fde452) of its operating behavior.
 
 Participant Nodes can report these metrics on an HTTP endpoint. This should then be periodically scraped by a separate monitoring system such as [Prometheus](https://prometheus.io), which can store it as time-series data for querying, alerting, dashboards, etc.
 
-## Export Metrics for Scraping
+### Export Metrics for Scraping
 
 Export application metrics by enabling the Prometheus reporter with the configuration `canton.monitoring.metrics.reporters = [{ type = prometheus }]`
 

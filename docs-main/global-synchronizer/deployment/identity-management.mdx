@@ -17,11 +17,8 @@ import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateId
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement5 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-5.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement13 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-13.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement15 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-15.mdx";
-import ExternalCantonMainCommunityAppSrcTestResourcesRandomNodeIdentifier from "/snippets/external/canton/main/community/app/src/test/resources/random-node-identifier.mdx";
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/identity_management.rst" hash="b6135af4" */}
-
-# Identity Management
 
 On-ledger identity management focuses on the distributed aspect of identities across Canton system entities, while user identity management focuses on individual participants managing access of their users to their ledger APIs.
 
@@ -124,58 +121,6 @@ We note that from a user perspective, all that needs to happen by default is to 
 9.  The participant sets up the `ParticipantTopologyDispatcher`, which is the process that tries to push all topology transactions created at the participant node's topology manager to the synchronizer topology manager. If the participant is using its topology manager to manage its identity on its own, these transactions contain all the information about the registered parties or supported packages.
 10. As mentioned above, the first set of messages received by the participant through the sequencer contains the synchronizer topology state, which includes the signing keys of the synchronizer entities. If the participants know the synchronizer id, they can verify that they are talking to the expected synchronizer and that the keys of the synchronizer entities have been authorized by the owner of the key governing the synchronizer id.
 11. Once the initial topology transactions have been read, the participant is ready to process transactions and send commands.
-
-### Default Initialization
-
-The default initialization behavior of participant nodes and synchronizers is to run their own topology manager. This provides a convenient, automatic way to configure the nodes and make them usable without manual intervention, but it can be turned off by setting `init.generate-topology-transactions-and-keys = false` and `init.identity.type = manual` **before** the first startup.
-
-During the auto initialization, the following steps occur:
-
-1.  On a sequencer or mediator node, we generate three signing keys: a namespace key, a sequencer authentication key and a protocol signing key. On the participant, we generate four keys: a namespace key, a sequencer authentication key, a protocol signing key and an encryption key.
-2.  Using the fingerprint of the namespace, we generate the participant identity. For understandability, we use the node name used in the configuration file. This will change into a random identifier for privacy reasons. Once we've generated it, the node stores it as its unique identifier.
-3.  We create a root certificate as `NamespaceDelegation` using the namespace key, signing with the namespace key.
-4.  Then, we create an `OwnerToKeyMapping` for the participant or synchronizer entities.
-
-The `init.identity` object can be set to control the behavior of the auto initialization. For instance, it is possible to control the identifier name that will be given to the node during the initialization. There are 3 possible configurations:
-
-1.  Use the node name as the node identifier
-
-``` none
-canton.participants.participant1.init.identity = {
-  type = auto
-  identifier.type = config
-}
-```
-
-2.  Explicitly set a name
-
-<ExternalCantonMainCommunityAppSrcTestResourcesRandomNodeIdentifier />
-
-3.  Generate a random name
-
-``` none
-canton.participants.participant1.init.identity {
-    type = auto
-    identifier.type = random
-}
-```
-
-### Identity Setup Guide
-
-As explained, Canton nodes auto-initialize by default, running their own topology managers. This is convenient for development and prototyping. Actual deployments require more care and therefore, this section should serve as a brief guideline.
-
-Canton topology managers have one crucial task they must not fail at: do not lose access to or control of the root of trust (namespace keys). Any other key problem can somehow be recovered by revoking an old key and issuing a new owner to key association. Therefore, it is advisable that participants and parties are associated with a namespace managed by a topology manager that has sufficient operational setups to guarantee the security and integrity of the namespace.
-
-Therefore, a participant or synchronizer can
-
-1.  Run their own topology manager with their identity namespace key as part of the participant node.
-2.  Run their own topology manager on a detached computer in a self-built setup that exports topology transactions and transports them to the respective node (i.e. via burned CD roms).
-3.  Ask a trusted topology manager to issue a set of identifiers within the trusted topology manager's namespace as delegations and import the delegations to the local participant topology manager.
-4.  Let a trusted topology manager manage all the topology state on-behalf.
-
-Obviously, there are more combinations and options possible, but these options here describe some common options with different security and recoverability options.
-
-To reduce the risk of losing namespace keys, additional keys can be created and allowed to operate on a certain namespace. In fact, we recommend doing this and avoiding storing the root key on a live node.
 
 ## User Identity Management
 
@@ -562,147 +507,5 @@ Finally, the hosting node needs to issue the corresponding topology transaction 
 ### Party on Multiple Nodes
 
 Hosting a party across multiple participants increases its liveness and fault tolerance, as any hosting participant can act on the party's behalf based on their permissions. While all hosting participants share the same view of the party's contracts, they are also all included in its transactions. This creates overhead, limiting the feature's scalability. For sharing data with many participants, explicit disclosure is a more suitable approach.
-
-### Manually Initializing a Node
-
-There are situations where a node should not be automatically initialized, but where you should control each step of the initialization. For example, this might be the case when a node in the setup does not control its own identity, when you do not want to store the identity key on the node for security reasons, or when you want to set our own keys (e.g. when keys are externally stored in a Key Management Service - KMS).
-
-The following demonstrates the basic steps on how to initialize a node:
-
-#### Keys Initialization
-
-The following steps describe how to manually generate the necessary Canton keys (e.g. for a participant):
-
-```scala
-// Create a signing key used to define the node identity.
-val namespaceKey =
-  node.keys.secret
-    .generate_signing_key(
-      name = node.name + s"-${SigningKeyUsage.Namespace.identifier}",
-      SigningKeyUsage.NamespaceOnly,
-    )
-
-// Create a signing key used to authenticate the node toward the Sequencer.
-val sequencerAuthKey =
-  node.keys.secret.generate_signing_key(
-    name = node.name + s"-${SigningKeyUsage.SequencerAuthentication.identifier}",
-    SigningKeyUsage.SequencerAuthenticationOnly,
-  )
-
-// Create a signing key used to sign protocol messages.
-val signingKey =
-  node.keys.secret
-    .generate_signing_key(
-      name = node.name + s"-${SigningKeyUsage.Protocol.identifier}",
-      SigningKeyUsage.ProtocolOnly,
-    )
-
-// Create the encryption key.
-val encryptionKey =
-  node.keys.secret.generate_encryption_key(name = node.name + "-encryption")
-```
-
-<Note>
-Be aware that in some particular use cases, you might want to register keys rather than generate new ones (for instance when you have pre-generated KMS keys that you want to use). Please refer to External Key Storage with a Key Management Service (KMS) for more details.
-</Note>
-
-See [Initializing node identity manually](#initializing-node-identity-manually) below for the full manual initialization procedure.
-
-{/* COPIED_END */}
-
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/identity/manual_identity_init.rst" hash="5389d9f1" */}
-
-# Initializing node identity manually
-
-## Manual vs automatic identity initialization
-
-A Participant Node is initialized automatically by default, though it can also be initialized manually. Manual initialization is useful in the following circumstances:
-
-1.  When a Participant Node does not control its own identity.
-2.  To avoid storing the identity key on the Participant Node for security reasons.
-3.  To explicitly set the Participant Node keys rather than relying on keys auto-generated by the Participant Node.
-
-To disable the automatic initialization of a Participant Node, add the following to the configuration:
-
-``` none
-canton.participants.participant1.init = {
-    generate-topology-transactions-and-keys = false
-    identity.type = manual
-}
-```
-
-Start the Participant Node with the above configuration settings.
-
-## Key initialization
-
-Besides a namespace key and signing keys, a Participant Node also has an asymmetric encryption key used to encrypt and decrypt transactions. By default, Participant Nodes create keys automatically, but if you choose to manually set up a Participant Node, use the following commands to generate the namespace, signing, and encryption keys:
-
-```scala
-// Create a signing key used to define the node identity.
-val namespaceKey =
-  node.keys.secret
-    .generate_signing_key(
-      name = node.name + s"-${SigningKeyUsage.Namespace.identifier}",
-      SigningKeyUsage.NamespaceOnly,
-    )
-
-// Create a signing key used to authenticate the node toward the Sequencer.
-val sequencerAuthKey =
-  node.keys.secret.generate_signing_key(
-    name = node.name + s"-${SigningKeyUsage.SequencerAuthentication.identifier}",
-    SigningKeyUsage.SequencerAuthenticationOnly,
-  )
-
-// Create a signing key used to sign protocol messages.
-val signingKey =
-  node.keys.secret
-    .generate_signing_key(
-      name = node.name + s"-${SigningKeyUsage.Protocol.identifier}",
-      SigningKeyUsage.ProtocolOnly,
-    )
-
-// Create the encryption key.
-val encryptionKey =
-  node.keys.secret.generate_encryption_key(name = node.name + "-encryption")
-```
-
-If you use a Key Management Service (KMS) to manage Canton's keys, and you want to use a set of pre-generated keys, use the commands `register_kms_signing_key()` and `register_kms_encryption_key()` instead. Please refer to External Key Storage with a Key Management Service (KMS) for more details.
-
-## Participant Node manual initialization
-
-After the keys have been generated, or in the case of KMS, the KMS-generated keys have been registered, manually initialize a Participant Node as follows:
-
-```scala
-// Use the fingerprint of this key for the node identity.
-val namespace = Namespace(namespaceKey.id)
-node.topology.init_id_from_uid(
-  UniqueIdentifier.tryCreate("manual-" + node.name, namespace)
-)
-
-// Wait until the node is ready to receive the node identity.
-node.health.wait_for_ready_for_node_topology()
-
-// Create the self-signed root certificate.
-node.topology.namespace_delegations.propose_delegation(
-  namespace,
-  namespaceKey,
-  CanSignAllMappings,
-)
-
-// Assign the new keys to this node.
-node.topology.owner_to_key_mappings.propose(
-  member = node.id.member,
-  keys = NonEmpty(Seq, sequencerAuthKey, signingKey, encryptionKey),
-  signedBy = Seq(namespaceKey.fingerprint, sequencerAuthKey.fingerprint, signingKey.fingerprint),
-)
-```
-
-Wait for the Participant Node to initialize:
-
-```scala
-node.health.wait_for_initialized()
-```
-
-Finally, you can begin using the new Participant Node.
 
 {/* COPIED_END */}

@@ -1,8 +1,187 @@
 ---
 title: "Synchronizer parameters, HA and limits"
-description: "Placeholder page for the Network Operations table of contents proposal."
+description: "Tune the BFT orderer, change dynamic synchronizer parameters, configure mediator high availability, and set sequencer resource limits."
 ---
 
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/optimize/orderer.rst" hash="fabed5c0" */}
+
+## Optimize the BFT orderer
+
+### System resources
+
+Available system resources can affect the performance of the BFT orderer in multiple ways:
+
+- Node resources:
+  - CPU: affects general processing and particularly cryptographic operations.
+  - Memory: affects general processing and particularly the ability of a node to cope with bigger networks
+  - Disk I/O: affects the performance of an orderer's database operations.
+  - Network adapter performance: affects general network throughput and latency.
+- Network resources:
+  - Network bandwidth: affects message dissemination times and can directly affect ordering latency.
+  - Network latency: affects message propagation times and can directly affect ordering latency.
+
+### Dimensions
+
+The size of the network and the characteristics of the ordering requests can also affect performance and resource usage:
+
+- Number of Sequencer Nodes: the ISS protocol scales in the number of nodes up to node saturation.
+- Request Size: larger requests can lead to increased processing times, however the dissemination sub-protocol, when running on a high-bandwidth network, reduces the overall effect of request size up to node saturation.
+
+### Synchronizer parameters
+
+Some general Synchronizer parameters can also affect the performance of the BFT orderer:
+
+- Topology change delay: as for the Sequencer in general, bigger values reduces the chance of waiting for the topology processor to complete computing the requested topology snapshot.
+
+Refer to [Manage dynamic Synchronizer parameters](#manage-dynamic-synchronizer-parameters) for more information on Synchronizer parameters.
+
+### Configuration
+
+Some configuration parameters can affect performance and resource usage of the BFT orderer and are discussed below.
+
+Refer to [Configure Sequencer Backend](/global-synchronizer/extension-synchronizers/configure-synchronizer-nodes#configure-sequencer-backend) for general information on how to configure the orderer.
+
+- Epoch length: epoch transitions' overhead may be significant, because all nodes need to wait for the whole epoch's blocks to be complete to detect potential topology changes. Increasing the epoch length reduces the frequency of these transitions, at the cost of slower reaction to topology changes.
+- Minimum and maximum requests in batches, maximum batch creation interval: larger and less frequent batches increase throughput, at the cost of increased latency.
+- Maximum batches in blocks: larger block sizes increase throughput, at the cost of increased latency.
+- Leader selection policy: by default, failing leaders are blacklisted for a certain period. Disabling blacklisting may improve performance in stable networks, at the cost of reduced performance and resilience during node and network instability.
+- Consensus empty block creation timeout: the orderer creates empty blocks after a certain timeout in the absence of ordering traffic so that sequencing time does not lag too much behind median wall clock time. Reducing this timeout may make sequencing timestamps closer to wall clock time, at the cost of increased resource usage.
+- Maximum mempool queue size: larger values reduce backpressure on clients submitting requests, at the cost of increased memory usage, load, and ordering latency.
+- Maximum number of unordered batches per node: larger values allow peers to disseminate more data before it must be ordered, at the cost of additional storage and memory usage.
+- Storage: using fast, dedicated storage for the orderers' databases improves overall performance.
+- Batch aggregator: by default batch aggregation is enabled with a default configuration for all database insert operations. Tuning the batch aggregator's parameters may improve performance depending on the workload.
+- Dedicated execution context divisor: if set, a dedicated execution context is created for the orderer node, with a thread pool size equal to the number of available processors divided by the divisor. Setting this parameter may improve performance under high load, at the cost of increased resource usage.
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/dynamic_params.rst" hash="e1dfd800" */}
+
+## Manage dynamic Synchronizer parameters
+
+<div id="dynamic_synchronizer_parameters">
+
+In addition to the static Synchronizer parameters that you specify during Synchronizer bootstrap, you can change some parameters at runtime ( while the Synchronizer is running); these are referred to as `dynamic synchronizer parameters`. When the Synchronizer is bootstrapped, the default values are used for the dynamic Synchronizer parameters.
+
+</div>
+
+### Get dynamic Synchronizer parameters
+
+You can get the current parameters on a Synchronizer you are connected to using the following command:
+
+```scala
+myParticipant.topology.synchronizer_parameters.get_dynamic_synchronizer_parameters(
+  synchronizerId
+)
+```
+
+### Change dynamic Synchronizer parameters
+
+<div id="change_dynamic_synchronizer_parameters">
+
+You can set several dynamic parameters at the same time:
+
+</div>
+
+<div className="todo">
+
+{/* Link to reference with all dynamic synchronizer parameters */}
+
+</div>
+
+<div className="todo">
+
+{/* \<[https://github.com/DACH-NY/canton/issues/25684](https://github.com/DACH-NY/canton/issues/25684)\> \#. Explain the concept of synchronizer owner and that for changes to become affective one needs a threshold of them to submit the same proposal */}
+
+</div>
+
+```scala
+mySequencer.topology.synchronizer_parameters
+  .propose_update(
+    synchronizerId,
+    _.update(
+      confirmationResponseTimeout = 40.seconds,
+      mediatorDeduplicationTimeout = 2.minutes,
+      preparationTimeRecordTimeTolerance = 1.minute,
+      mediatorReactionTimeout = 20.seconds,
+      assignmentExclusivityTimeout = 1.second,
+      reconciliationInterval = 5.seconds,
+      confirmationRequestsMaxRate = 100,
+      maxRequestSize = 100000,
+      sequencerAggregateSubmissionTimeout = 5.minutes,
+      trafficControl = Some(
+        TrafficControlParameters(
+          maxBaseTrafficAmount = NonNegativeLong.tryCreate(204800),
+          readVsWriteScalingFactor = 200,
+          maxBaseTrafficAccumulationDuration = 12.minutes,
+          setBalanceRequestSubmissionWindowSize = 10.minutes,
+          enforceRateLimiting = false,
+          baseEventCost = NonNegativeLong.zero,
+          freeConfirmationResponses = true,
+        )
+      ),
+    ),
+  )
+
+// For ledger time record time tolerance, use the dedicated set method
+mySequencer.topology.synchronizer_parameters
+  .set_ledger_time_record_time_tolerance(synchronizerId, 60.seconds)
+```
+
 <Note>
-Placeholder for the proposed table of contents. It is made from Synchronizer Operations (extension-synchronizers/synchronizer-operations.mdx, lines 246–297, 880–954, 1216–1271).
+When increasing `max request size`, the sequencer nodes need to be restarted for the new value to be taken into account.
 </Note>
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/ha.rst" hash="f0d76dfc" */}
+
+## High Availability in Synchronizer
+
+### Mediator
+
+The mediator service uses a hot standby mechanism with an arbitrary number of replicas. During a mediator fail-over, all in-flight requests get purged. As a result, these requests will timeout at the participants. The applications need to retry the underlying commands.
+
+#### HA Configuration
+
+Only PostgreSQL-based storage is supported for mediator HA.
+
+Mediator node replicas are configured in the Canton configuration file as individual stand-alone mediator nodes with two required changes for each mediator node replica:
+
+- Using the same storage configuration to ensure access to the shared database.
+- Set `replication.enabled = true` for each mediator node replica.
+
+<Note>
+Mediator replication is enabled by default when using supported storage.
+</Note>
+
+Only the active mediator node replica has to be initialized through the synchronizer bootstrap commands. The passive replicas observe the initialization via the shared database.
+
+Further replicas can be started at runtime without any additional setup. They remain passive until the current active mediator node replica fails.
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/secure/limits.rst" hash="6ff391dd" */}
+
+## Set sequencer resource limits
+
+### Protect against large requests
+
+Max request size is a dynamic Synchronizer parameter. You update the `maxRequestSize` field when you change the dynamic Synchronizer parameters.
+
+### Protect the Sequencer via rate limiting
+
+Confirmation request max rate is a dynamic Synchronizer parameter. You update the `confirmationRequestsMaxRate` field when you change the dynamic Synchronizer parameters.
+
+### Protect the Sequencer from too many acknowledgements
+
+To limit the amount of acknowledgements on the network, the Sequencer can conflate acknowledgements that come from the same member and are too close in time to each other. You can configure the window by setting the following value in the config.
+
+``` none
+sequencers.sequencer1.acknowledgements-conflate-window = "1 minute"
+```
+
+### Limit Sequencer submissions via traffic management
+
+You can protect a Synchronizer from excessive traffic from its members by enabling traffic management.
+
+{/* COPIED_END */}

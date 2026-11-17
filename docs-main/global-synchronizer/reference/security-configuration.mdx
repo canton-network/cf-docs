@@ -9,13 +9,13 @@ import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLedger
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/secure/apis/tls.rst" hash="13141191" */}
 
-# TLS API Configuration
+## TLS API Configuration
 
 Both the gRPC Ledger API and the Admin API support the same TLS capabilities and can be configured using identical directives. TLS provides end-to-end channel encryption between the server and the client, and—depending on the configuration—can enforce either server-only or mutual authentication.
 
 The example configurations presented in this section are for the Ledger API, but they are the same for the Admin API. All private keys mentioned in these how-tos must be in the PKCS#8 PEM format.
 
-## Enable TLS for server side authentication
+### Enable TLS for server side authentication
 
 The following settings allow a connecting client to verify that it is communicating with the intended server.
 
@@ -87,7 +87,7 @@ canton.participants.participant4 {
 
 The `trust-collection-file` allows you to provide a file-based trust store. If omitted, the system will default to the built-in `JVM` trust store. The format is a collection of PEM certificates (in the right order or hierarchy), not a Java-based trust store.
 
-## Enable TLS for client side authentication
+### Enable TLS for client side authentication
 
 Client-side authentication is disabled by default. To enable it, you must configure the `client-auth.type` to `require`.
 
@@ -111,7 +111,7 @@ This new `client-auth` setting enables client authentication, which means that t
 
 The `trust-collection-file` must contain all client certificates (or parent certificates that were used to sign the client certificate) that are trusted to use the API. A certificate is valid if it has been signed by a key in the trust store.
 
-## Restrict TLS ciphers and protocols
+### Restrict TLS ciphers and protocols
 
 Assuming the server-side configuration has been completed as described in the howto above, the following settings can be used to restrict the allowed TLS ciphers and protocol versions. By default, Canton uses the JVM default values, but you can override them using the variables `ciphers` and `minimum-server-protocol-version`.
 
@@ -130,9 +130,9 @@ canton.participants.participant4.ledger-api.tls.ciphers =
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/secure/apis/jwt.rst" hash="4de8fc92" */}
 
-# Configure API Authentication and Authorization with JWT
+## Configure API Authentication and Authorization with JWT
 
-## Configure authorization service
+### Configure authorization service
 
 The Ledger API supports [JWT](https://jwt.io/) based authorization checks as described in the Authorization documentation.
 
@@ -194,7 +194,7 @@ Note that you can define multiple authorization plugins. If more than one is def
 
 If no authorization plugins are defined, the system uses a default (wildcard) authorization method.
 
-## Configure leeway parameters for JWT authorization
+### Configure leeway parameters for JWT authorization
 
 You can define leeway parameters for authorization using JWT tokens. An authorization that fails due to clock skew between the signing and the verification of the tokens can be eased by specifying a leeway window in which the token should still be considered valid. Leeway can be defined either specifically for the **Expiration Time ("exp")**, **Not Before ("nbf")** and **Issued At ("iat")** claims of the token or by a default value for all three. The values defining the leeway for each of the three specific fields override the default value if present. The leeway parameters should be given in seconds and can be defined as in the example configuration below:
 
@@ -207,13 +207,13 @@ canton.participants.participant.ledger-api.jwt-timestamp-leeway {
 }
 ```
 
-## Configure the target audience for JWT authorization
+### Configure the target audience for JWT authorization
 
 The default audience (`aud` field in the audience-based token) for authenticating on the Ledger API using JWT is `https://daml.com/participant/jwt/aud/participant/${participantId}`. Other audiences can be configured explicitly using the custom target audience configuration option:
 
 <ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLedgerApiTargetScope />
 
-## Configure the target scope for JWT authorization
+### Configure the target scope for JWT authorization
 
 The default scope (`scope` field in the scope-based access token) for authenticating on the Ledger API using JWT is `daml_ledger_api`.
 
@@ -223,7 +223,7 @@ Other scopes can be configured explicitly using the custom target scope configur
 
 Target scope can be any case-sensitive string containing alphanumeric characters, hyphens, slashes, colons and underscores. Either the `target-scope` or the `target-audience` parameter can be configured individually, but not both at the same time.
 
-## Configure authorization service with user list
+### Configure authorization service with user list
 
 Authorization service with user list is a form of JWT Authorization that can be configured on the Admin API exposed by the Participant, the Sequencer, and the Mediator Nodes as well as being available on the Ledger API of the Participant Node.
 
@@ -237,7 +237,7 @@ The configuration can contain a definition of either the target audience or the 
 
 Independent of the specific service that the operator wants to expose, it is a good practice to also give access rights to the `ServerReflection` service. Some tools such as `grpcurl` or `postman` need to hit that service to construct their requests.
 
-## Configure privileged tokens
+### Configure privileged tokens
 
 Privileged tokens are another form of JWT Authorization that can be configured on the Admin API exposed by the Participant, Sequencer, and Mediator Nodes, as well as being available on the Ledger API of the Participant Node. The configuration follows the same pattern as normal user tokens, but it contains an additional key called `privileged` set to true.
 
@@ -270,7 +270,7 @@ canton {
 
 You can determine if the use of privileged tokens should result in granting of the `participant_admin` or the `wildcard` access levels by adding a definition of the `access-level` key and setting it to `Admin` or `Wildcard` respectively. The `Admin` is the default.
 
-## Configure JWKS cache expiration
+### Configure JWKS cache expiration
 
 The JWKS cache stores recently obtained public keys, which reduces the need for expensive, repeated calls to the JWKS HTTP endpoint. Keys are kept in the cache for a default period of 5 minutes. After this time, a key is evicted, and the participant must contact the JWKS address again to retrieve the latest keys. You can modify this behavior by setting:
 
@@ -287,7 +287,7 @@ You can also enable background refresh of cached keys by setting ``auto-refresh-
 on first access after this duration has elapsed, so that clients never experience latency from a cache miss. If a background refresh fails,
 the previously cached verifier continues to be served until hard eviction at ``cache-expiration``.
 
-## Configure maximum time-to-live of JWT tokens
+### Configure maximum time-to-live of JWT tokens
 
 To improve security against JWT token theft or loss, it is recommended to use tokens with a very short expiration time, ideally between 5 and 15 minutes. Further details on this topic are available in the documentation on the importance of short-lived tokens.
 
@@ -305,7 +305,7 @@ Similar parameter can also be set on the `admin-api`.
 The rejection is based only on the remaining time-to-live of the token. Consequently, a token originally valid for 24 hours could still be used successfully if presented within the last 5 minutes of its lifetime, assuming a `max-token-lifetime` setting of 5 minutes.
 </Note>
 
-## Configure remote console for JWT authorization
+### Configure remote console for JWT authorization
 
 When the authorization is configured, the remote console will only work against a participant when a JWT token is made available to the console in the config:
 
@@ -333,9 +333,9 @@ canton {
 
 Cover gRPC max message size for both Admin API and Ledger API. Cover rate limiting on the Ledger API. Discuss load balancer in front of APIs as best practice for additional protection. Discuss the possible performance impact if rate limits are too strict. Link to howto for resource limits on the participant. Link to "build" site for daml related size limits.
 
-# Configure API Limits
+## Configure API Limits
 
-## Max Inbound Message Size
+### Max Inbound Message Size
 
 The APIs exposed by both the participant (gRPC Ledger API and Admin API) as well as by the synchronizer (Public API and Admin API) have an upper limit on incoming message size. To increase this limit to accommodate larger payloads, the flag `max-inbound-message-size` has to be set for the respective API to the maximum message size in **bytes**.
 

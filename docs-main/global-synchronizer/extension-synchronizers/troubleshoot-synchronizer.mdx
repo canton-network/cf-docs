@@ -1,8 +1,91 @@
 ---
 title: "Troubleshoot a synchronizer"
-description: "Placeholder page for the Network Operations table of contents proposal."
+description: "Recover from a too-small maximum request size and unblock sequencer pruning held back by inactive members."
 ---
 
-<Note>
-Placeholder for the proposed table of contents. It is made from Synchronizer Operations (extension-synchronizers/synchronizer-operations.mdx, lines 955–1013, 1154–1181).
-</Note>
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/dynamic_params.rst" hash="e1dfd800" */}
+## Recover from too-small *max request size*
+
+`MaxRequestSize` is a dynamic parameter. This parameter configures both the gRPC channel size on the Sequencer node and the maximum size that a Sequencer client is allowed to transfer.
+
+If the parameter is set to a very small value (roughly under `30kb`), Canton can crash because all messages are rejected by the sequencer client or by the sequencer node. This cannot be corrected by setting a higher value within the console, because this change request needs to be sent via the sequencer and will also be rejected.
+
+To recover from this crash, you need to configure `override-max-request-size` on both the Sequencer node and all Sequencer clients.
+
+This means you need to modify both the Synchronizer and the Participant Node configuration as follows:
+
+``` none
+mediators {
+  mediator1 {
+    sequencer-client.override-max-request-size = 30000
+  }
+}
+participants {
+  participant1 {
+    sequencer-client.override-max-request-size = 30000
+  }
+  participant2 {
+    sequencer-client.override-max-request-size = 30000
+  }
+}
+mediators {
+  mediator1 {
+    sequencer-client.override-max-request-size = 30000
+  }
+}
+sequencers {
+  sequencer1 {
+    # overrides the maxRequestSize in bytes on the sequencer node
+    public-api.override-max-request-size = 30000
+  }
+}
+```
+
+After the configuration is modified, disconnect all the Participant Nodes from the Synchronizer and then restart all nodes.
+
+```scala
+participants.all.synchronizers.disconnect(daName)
+nodes.local.stop()
+```
+
+Then perform the restart:
+
+```scala
+nodes.local.start()
+participants.all.synchronizers.reconnect_all()
+```
+
+Once Canton has recovered, use the admin command to set the `maxRequestSize` value, then delete the added configuration in the previous step, and finally perform the restart again.
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/pruning.rst" hash="f4d69914" */}
+Alternatively, you can directly specify a retention period with the command `sequencer.pruning.prune_with_retention_period` or even the exact timestamp to prune at, using `sequencer.pruning.prune_at`.
+
+## Unblock pruning due to inactive sequencer members
+
+All Sequencer clients, such as Participants or Mediators, periodically acknowledge the timestamp of the latest event they have received from the Sequencer. These acknowledgements, which all Sequencers can see, allow the Sequencers to compute the highest timestamp that all clients have achieved. This timestamp serves as a safe pruning point.
+
+You can check the Sequencer pruning status as follows:
+
+``` none
+val status = sequencer1.pruning.status()
+```
+
+The status contains the latest acknowledgement timestamp for all active clients, and you can check the computed safe pruning point by calling `status.safePruningTimestamp`. The Sequencer can only perform pruning earlier than that point. Otherwise, one or more clients would be unable to continue operation.
+
+If a Sequencer client goes inactive for some time, then all Sequencers are blocked from pruning past this client's latest acknowledged timestamp. To unblock a Sequencer from pruning at more recent timestamps, either the client must come back and acknowledge newer events or you must disable that client on the Sequencer.
+
+The Sequencer has force-prune commands. The difference between these and the regular prune commands is that the force-prune commands disable members that are preventing pruning from happening at the given timestamp. A disabled member can no longer connect to that Sequencer, so the retention period used for force-pruning limits how long a participant or mediator can be offline. Any pruning, forced or not, also limits how old a backup a participant or mediator can be restored from. Once the Sequencer has pruned the events the restored node missed, the node can't catch up. Pick a retention period at least as long as the longest outage or the oldest backup you need clients to recover from. On the Global Synchronizer, this limit is 30 days; see [Restoring a validator from backups](/global-synchronizer/production-operations/validator-disaster-recovery#restoring-a-validator-from-backups).
+
+You can force prune at a given timestamp as follows:
+
+``` none
+val result = sequencer1.pruning.force_prune_at(earliestAck, dryRun = false)
+```
+
+Setting `dryRun` to `true` produces a list of the clients that would be disabled, if any, as part of the operation, without actually performing the pruning. To perform the pruning operation, run it with `dryRun` set to `false`.
+
+If you've identified a problematic client you don't need to serve, you can directly disable it by calling the repair command `repair.disable_member(client)`.
+
+{/* COPIED_END */}

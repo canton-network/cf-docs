@@ -5,7 +5,6 @@ description: "Operational runbooks for common validator incidents with step-by-s
 
 import CANTON_DOCS_CN_GS_TROUBLESHOOTING_GUIDE_RUNBOOKS_0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/docs-cn/global-synchronizer-troubleshooting-guide-runbooks-0.mdx";
 
-
 Runbooks provide a structured response to known incident types. Each runbook follows the same phases: detect, assess, act, verify, and document.
 
 ## Incident Response Template
@@ -63,7 +62,6 @@ The endpoint should return HTTP 200.
 **Assessment:**
 
 <CANTON_DOCS_CN_GS_TROUBLESHOOTING_GUIDE_RUNBOOKS_0 />
-
 
 If `availableTraffic` is 0 or traffic limits are exhausted, purchase traffic or enable auto-top-up before transactions can proceed normally.
 
@@ -169,38 +167,3 @@ kubectl logs -n validator deployment/validator-app --tail=200
 **Verification:** Health endpoint returns 200 and the validator is processing transactions.
 
 ---
-
-## Runbook: CometBFT Consensus Stall
-
-**Detection:** This applies to Super Validator (SV) operators running CometBFT nodes. Block height stops advancing, or the CometBFT status endpoint shows no new blocks.
-
-**Assessment:**
-
-```bash
-# Check CometBFT status
-curl -s http://localhost:26657/status | jq '.result.sync_info'
-```
-
-If `latest_block_height` has not changed in several minutes and `catching_up` is `false`, consensus has stalled.
-
-**Action:**
-
-1. Check the number of connected peers:
-   ```bash
-   curl -s http://localhost:26657/net_info | jq '.result.n_peers'
-   ```
-   If peers have dropped below the threshold for consensus (2/3 of validators), blocks cannot be produced.
-
-2. Check for validator signing issues:
-   ```bash
-   curl -s http://localhost:26657/dump_consensus_state | jq '.result.round_state.votes'
-   ```
-
-3. If your own CometBFT node is the one not signing, restart it:
-   ```bash
-   kubectl rollout restart deployment/cometbft -n validator
-   ```
-
-4. If the stall is network-wide (multiple SV nodes are not signing), coordinate with other SV operators through the `#validator-operations` Slack channel.
-
-**Verification:** Block height is advancing and the interval between blocks has returned to normal (typically a few seconds).
