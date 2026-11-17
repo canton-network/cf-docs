@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import os
 import re
@@ -35,19 +34,16 @@ NETWORKS = {
     "mainnet": {
         "display_name": "MainNet",
         "info_url": "https://docs.global.canton.network.sync.global/info",
-        "index_url": "https://docs.global.canton.network.sync.global/index.html",
         "endpoint": "scan.sv-1.global.canton.network.sync.global",
     },
     "testnet": {
         "display_name": "TestNet",
         "info_url": "https://docs.test.global.canton.network.sync.global/info",
-        "index_url": "https://docs.test.global.canton.network.sync.global/index.html",
         "endpoint": "scan.sv-1.test.global.canton.network.sync.global",
     },
     "devnet": {
         "display_name": "DevNet",
         "info_url": "https://docs.dev.global.canton.network.sync.global/info",
-        "index_url": "https://docs.dev.global.canton.network.sync.global/index.html",
         "endpoint": "scan.sv-1.dev.global.canton.network.sync.global",
     },
 }
@@ -171,11 +167,6 @@ def fetch_manifest_json(url: str, timeout: float) -> dict:
     request = Request(url, headers=headers)
     with urlopen(request, timeout=timeout) as response:
         return json.load(response)
-
-
-def fetch_text(url: str, timeout: float) -> str:
-    with request_url(url, timeout) as response:
-        return response.read().decode("utf-8", "replace")
 
 
 def fetch_npm_latest(package_name: str, timeout: float) -> str:
@@ -441,37 +432,8 @@ def collect_pqs_versions(
     return pqs_versions
 
 
-def clean_html_text(value: str) -> str:
-    value = re.sub(r"<.*?>", "", value)
-    return " ".join(html.unescape(value).split())
-
-
-def parse_table_pairs(page_html: str) -> dict[str, str]:
-    pairs: dict[str, str] = {}
-    for row in re.findall(r'<tr class="row-(?:odd|even)">(.*?)</tr>', page_html, re.S):
-        columns = re.findall(r"<td><p>(.*?)</p></td>", row, re.S)
-        if len(columns) < 2:
-            continue
-        key = clean_html_text(columns[0])
-        value = clean_html_text(columns[1])
-        if key:
-            pairs[key] = value
-    return pairs
-
-
-def require_value(pairs: dict[str, str], label: str, url: str) -> str:
-    try:
-        return pairs[label]
-    except KeyError as exc:
-        raise RuntimeError(f"Could not find table row {label!r} in {url}") from exc
-
-
-def choose_observed_release(
-    info_payload: dict,
-    info_url: str,
-    *,
-    index_version: str | None = None,
-) -> str:
+def choose_observed_release(info_payload: dict, info_url: str) -> str:
+    """Return the network Splice version from a public /info payload."""
     sv = info_payload.get("sv", {})
     synchronizers = info_payload.get("synchronizer", {})
     synchronizer_label = "active"
@@ -487,15 +449,10 @@ def choose_observed_release(
     if not sv_version or not sync_version:
         raise RuntimeError(f"Missing release version in {info_url}")
     if sv_version != sync_version:
-        observed_version = resolve_mismatched_info_version(
-            sv_version=str(sv_version),
-            sync_version=str(sync_version),
-            synchronizer_label=synchronizer_label,
-            info_url=info_url,
-            index_version=index_version,
+        raise RuntimeError(
+            f"Version mismatch in {info_url}: "
+            f"sv.version={sv_version} synchronizer.{synchronizer_label}.version={sync_version}"
         )
-    else:
-        observed_version = str(sv_version)
     if sv_migration_id is None:
         raise RuntimeError(f"Missing sv.migration_id in {info_url}")
     if sync_migration_id is None and synchronizer_label == "active":
@@ -506,41 +463,7 @@ def choose_observed_release(
             f"sv.migration_id={sv_migration_id} "
             f"synchronizer.{synchronizer_label}.migration_id={sync_migration_id}"
         )
-    return observed_version
-
-
-def resolve_mismatched_info_version(
-    *,
-    sv_version: str,
-    sync_version: str,
-    synchronizer_label: str,
-    info_url: str,
-    index_version: str | None,
-) -> str:
-    """Pick an /info version during upgrade windows using the docs index as authority."""
-    mismatch = (
-        f"Version mismatch in {info_url}: "
-        f"sv.version={sv_version} synchronizer.{synchronizer_label}.version={sync_version}"
-    )
-    if index_version is None:
-        raise RuntimeError(mismatch)
-    if sv_version == index_version:
-        print(
-            f"WARNING: {mismatch}; using sv.version={sv_version} because it matches "
-            f"docs index version {index_version}",
-            file=sys.stderr,
-        )
-        return sv_version
-    if sync_version == index_version:
-        print(
-            f"WARNING: {mismatch}; using synchronizer.{synchronizer_label}.version="
-            f"{sync_version} because it matches docs index version {index_version}",
-            file=sys.stderr,
-        )
-        return sync_version
-    raise RuntimeError(
-        f"{mismatch}; neither matches docs index version {index_version}"
-    )
+    return str(sv_version)
 
 
 def read_existing_config(path: Path) -> dict:
@@ -595,26 +518,8 @@ def update_substitutions(existing: dict, release_version: str) -> dict:
 
 def collect_network_snapshot(network_key: str, timeout: float) -> dict:
     urls = NETWORKS[network_key]
-    index_pairs = parse_table_pairs(fetch_text(urls["index_url"], timeout))
-    docker_image_tag = require_value(index_pairs, "Docker Image Tag:", urls["index_url"])
-    helm_chart_version = require_value(index_pairs, "Helm Chart Version:", urls["index_url"])
-    if docker_image_tag != helm_chart_version:
-        raise RuntimeError(
-            f"{network_key}: index page mismatch docker_image_tag={docker_image_tag} "
-            f"helm_chart_version={helm_chart_version}"
-        )
-
     info_payload = fetch_json(urls["info_url"], timeout)
-    observed_release = choose_observed_release(
-        info_payload,
-        urls["info_url"],
-        index_version=docker_image_tag,
-    )
-    if docker_image_tag != observed_release:
-        raise RuntimeError(
-            f"{network_key}: /info version {observed_release} does not match "
-            f"docs index version {docker_image_tag}"
-        )
+    observed_release = choose_observed_release(info_payload, urls["info_url"])
     canton_version, canton_release_line_branch, canton_sources_url = (
         fetch_canton_version_from_splice_release_line(observed_release, timeout)
     )
@@ -627,12 +532,7 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
         "cantonReleaseLineBranch": canton_release_line_branch,
         "sources": {
             "infoUrl": urls["info_url"],
-            "indexUrl": urls["index_url"],
             "cantonSourcesUrl": canton_sources_url,
-        },
-        "checks": {
-            "dockerImageTag": docker_image_tag,
-            "helmChartVersion": helm_chart_version,
         },
     }
 
@@ -666,7 +566,6 @@ def network_snapshot_from_existing(existing_config: dict, network_key: str) -> d
     )
     sources = {
         "infoUrl": existing_sources.get("infoUrl", urls["info_url"]),
-        "indexUrl": existing_sources.get("indexUrl", urls["index_url"]),
         "cantonSourcesUrl": existing_sources.get("cantonSourcesUrl", ""),
         "preservedFromPrevious": True,
     }
@@ -677,10 +576,6 @@ def network_snapshot_from_existing(existing_config: dict, network_key: str) -> d
         "cantonVersion": canton_version,
         "cantonReleaseLineBranch": canton_release_line_branch,
         "sources": sources,
-        "checks": {
-            "dockerImageTag": splice_version,
-            "helmChartVersion": splice_version,
-        },
         "preservedFromPrevious": True,
     }
 
@@ -837,8 +732,8 @@ def build_source_contract(snapshot: dict) -> dict:
             "Network /info endpoint: MainNet "
             "https://docs.global.canton.network.sync.global/info, TestNet "
             "https://docs.test.global.canton.network.sync.global/info, DevNet "
-            "https://docs.dev.global.canton.network.sync.global/info. Cross-check against "
-            "the same network's /index.html Docker image tag and Helm chart version."
+            "https://docs.dev.global.canton.network.sync.global/info. Use sv.version when "
+            "it matches synchronizer.active.version or synchronizer.current.version."
         ),
         "canton": (
             "Use the observed Splice version from the network /info endpoint, derive the "
