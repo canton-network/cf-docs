@@ -55,7 +55,7 @@ The new node has a different Ledger API update lineage, most importantly with ch
 
 #### New participant ID
 
-The new node gets a new participant ID. Party IDs do not change. Traffic that was bought for the old participant ID stays with that ID, so the new participant needs its own traffic.
+The new node gets a new participant ID. Party IDs do not change. Traffic that was bought for the old participant ID stays with that ID, so the new participant needs its own traffic. Until it has traffic, it only has the base rate, and every message it sends to the synchronizer is throttled. Plan how to get traffic for the new participant ID before you start step 8.
 
 #### Contracts archived after the LSU without your node
 
@@ -203,6 +203,8 @@ You can save this data to later restore the state after successfully recovering 
 
 #### Step 8. Deploy a new validator using "recovery from an identities backup"
 
+First stop the old participant. It must stay stopped for the rest of the procedure and afterwards, since the new participant uses the same namespace key. Don't delete it or its database until the checks of step 13 pass, in case you need to export from it again.
+
 Follow the [Recovery from an identities backup: Re-onboard a validator and recover balances of all users it hosts](/global-synchronizer/production-operations/validator-disaster-recovery#recovery-from-an-identities-backup-re-onboard-a-validator-and-recover-balances-of-all-users-it-hosts) procedure to migrate to a new validator node on the LSU successor synchronizer.
 
 <Warning>
@@ -321,4 +323,4 @@ Generally, observe the [troubleshooting guide](/global-synchronizer/production-o
 
 #### Step 17. Import Ledger API users
 
-Finally, set up Ledger API IDP and user management, using the Ledger API `UserManagementService` and `IdentityProviderConfigService`. You can use the data extracted in step 7.
+Finally, set up Ledger API IDP and user management, using the Ledger API `UserManagementService` and `IdentityProviderConfigService`. You can use the data extracted in step 7. The validator app grants its own ledger user the rights on the hosted parties when it starts in step 14, so you only need to recreate the users of your own applications.
