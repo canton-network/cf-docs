@@ -201,6 +201,175 @@ curl http://localhost:3975/v2/parties -H "Authorization: Bearer $TOKEN"
 
 With OAuth2 turned on, the App Provider and App User participants validate tokens issued by the bundled Keycloak instead, and the shared secret doesn't work on them. See [Keycloak in the QuickStart](/appdev/quickstart/keycloak).
 
+## Test Token Standard flows
+
+LocalNet doesn't run registries for third-party tokens, such as the Digital Asset Registry. To test Token Standard workflows locally, use Canton Coin (Amulet) as the token. It implements both [CIP-0056](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md) (Token Standard V1) and [CIP-0112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md) (V2), and LocalNet runs its registry and the Canton Coin faucet. Because every token goes through the same Token Standard interfaces, testing your workflows against Canton Coin in CI catches most integration problems before you test against a real registry. Test against other issuers' registries on DevNet or TestNet, through the test support those issuers provide.
+
+The script below uses the [Wallet SDK](/sdks-tools/sdks/wallet-sdk/overview) to run a two-step transfer on the App User validator. It creates two external parties, funds Alice from the faucet, lists her holdings, sends 100 CC to Bob and has Bob accept the pending transfer.
+
+Before you run it, make sure that:
+
+- LocalNet is running with the default ports. The SDK reaches the validator API on port 2000 and Scan on `scan.localhost:4000`, both through the `nginx` container.
+- Node.js is installed.
+
+Install the SDK and `tsx` in an empty directory:
+
+```bash
+npm init -y
+npm install @canton-network/wallet-sdk tsx
+```
+
+Save the script as `token-flows.mts`. The `.mts` extension makes Node treat it as an ES module, which the top-level `await` calls need.
+
+```typescript
+import {
+    SDK,
+    localNetStaticConfig,
+    type TokenProviderConfig,
+} from '@canton-network/wallet-sdk'
+
+// LocalNet accepts self-signed tokens for the default ledger API user
+const auth: TokenProviderConfig = {
+    method: 'self_signed',
+    issuer: 'unsafe-auth',
+    credentials: {
+        clientId: 'ledger-api-user',
+        clientSecret: 'unsafe',
+        audience: 'https://canton.network.global',
+        scope: '',
+    },
+}
+
+// On LocalNet, Canton Coin's registry is served through the validator's Scan Proxy
+const registryUrl = localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+
+const sdk = await SDK.create({
+    auth,
+    ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    // Pick the Global Synchronizer by its alias
+    synchronizerId: (synchronizers) =>
+        synchronizers.find((s) => s.synchronizerAlias === 'global')!
+            .synchronizerId,
+    token: { registries: [registryUrl], auth },
+    amulet: {
+        scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
+        registryUrl,
+        auth,
+    },
+})
+
+// 1. Create two external parties
+const aliceKeys = sdk.keys.generate()
+const alice = await sdk.party.external
+    .create(aliceKeys.publicKey, { partyHint: 'alice' })
+    .sign(aliceKeys.privateKey)
+    .execute()
+
+const bobKeys = sdk.keys.generate()
+const bob = await sdk.party.external
+    .create(bobKeys.publicKey, { partyHint: 'bob' })
+    .sign(bobKeys.privateKey)
+    .execute()
+
+// 2. Fund Alice from the Canton Coin faucet (LocalNet and DevNet only)
+const [tapCommand, tapDisclosedContracts] = await sdk.amulet.tap(
+    alice.partyId,
+    '2000'
+)
+await sdk.ledger
+    .prepare({
+        partyId: alice.partyId,
+        commands: tapCommand,
+        disclosedContracts: tapDisclosedContracts,
+    })
+    .sign(aliceKeys.privateKey)
+    .execute({ partyId: alice.partyId })
+
+// 3. List Alice's holdings
+const aliceHoldings = await sdk.token.utxos.list({ partyId: alice.partyId })
+console.log(
+    'Alice holdings:',
+    aliceHoldings.map((h) => h.interfaceViewValue.amount)
+)
+
+// 4. Alice sends 100 CC to Bob. Bob has no transfer preapproval,
+//    so this creates a pending transfer instruction.
+const [transferCommand, transferDisclosedContracts] =
+    await sdk.token.transfer.create({
+        sender: alice.partyId,
+        recipient: bob.partyId,
+        amount: '100',
+        instrumentId: 'Amulet',
+        registryUrl,
+    })
+await sdk.ledger
+    .prepare({
+        partyId: alice.partyId,
+        commands: transferCommand,
+        disclosedContracts: transferDisclosedContracts,
+    })
+    .sign(aliceKeys.privateKey)
+    .execute({ partyId: alice.partyId })
+
+// 5. Bob accepts the pending transfer
+const pending = await sdk.token.transfer.pending(bob.partyId)
+console.log('Bob pending transfers:', pending.length)
+
+const [acceptCommand, acceptDisclosedContracts] =
+    await sdk.token.transfer.accept({
+        transferInstructionCid: pending[0].contractId,
+        registryUrl,
+    })
+await sdk.ledger
+    .prepare({
+        partyId: bob.partyId,
+        commands: acceptCommand,
+        disclosedContracts: acceptDisclosedContracts,
+    })
+    .sign(bobKeys.privateKey)
+    .execute({ partyId: bob.partyId })
+
+// 6. Check both balances
+for (const [name, party] of [
+    ['Alice', alice.partyId],
+    ['Bob', bob.partyId],
+] as const) {
+    const holdings = await sdk.token.utxos.list({ partyId: party })
+    console.log(
+        `${name} holdings:`,
+        holdings.map((h) => h.interfaceViewValue.amount)
+    )
+}
+process.exit(0)
+```
+
+Run it:
+
+```bash
+npx tsx token-flows.mts
+```
+
+Besides the SDK's own log lines, the script prints the balances before and after the transfer:
+
+```text
+Alice holdings: [ '2000.0000000000' ]
+Bob pending transfers: 1
+Alice holdings: [ '1900.0000000000' ]
+Bob holdings: [ '100.0000000000' ]
+```
+
+This was tested with Wallet SDK 1.7.0 on LocalNet with Splice 0.9.4. External parties sign each transaction with their own key, so the faucet tap, the transfer and the acceptance each go through `prepare`, `sign` and `execute`.
+
+To test other transfer paths, see [Transfer types](/sdks-tools/sdks/wallet-sdk/guides/transfer-types). It covers one-step transfers to a receiver with a transfer preapproval, and rejecting or withdrawing a pending transfer.
+
+Allocations for delivery-versus-payment settle through an app that requests the allocations and then executes the trade, so testing them needs such an app. The `splice` container ships test trading apps for this in `/app/splice-node/dars`. Copy one out with `docker cp`, for example:
+
+```bash
+docker cp splice:/app/splice-node/dars/splice-token-test-trading-app-1.0.2.dar .
+```
+
+For complete allocation flows that use these apps with the Wallet SDK, see the example scripts [04-token-standard-allocation.ts](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/docs/wallet-integration-guide/examples/scripts/04-token-standard-allocation.ts) (V1) and [19-token-standard-allocation-v2.ts](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/docs/wallet-integration-guide/examples/scripts/19-token-standard-allocation-v2.ts) (V2) in the Wallet SDK repository.
+
 ## Configuration Options
 
 ### Deployment Profiles
