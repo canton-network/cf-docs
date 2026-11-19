@@ -161,11 +161,11 @@ The timeout error includes a `context` field listing `unresponsiveParties`. If t
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/troubleshoot/commitments.rst" hash="f64b1ce5" */}
 
-# Troubleshoot ACS Commitments
+## Troubleshoot ACS Commitments
 
 A participant node generates commitments to the active contract set (ACS) at regular intervals and exchanges them with its counter-participants. These commitments are used to establish non-repudiation on the common ACS state between participants, which is necessary for pruning the participant state. More information on commitments is available in the Pruning overview section.
 
-## Error codes
+### Error codes
 
 A participant node logs warning messages when it detects a fork with the ACS of a counter-participant, when commitment computation is slow, or when received commitments show evidence of tampering. The following error codes are relevant for troubleshooting commitments, which are described in detail in the Error codes reference section:
 
@@ -175,7 +175,7 @@ A participant node logs warning messages when it detects a fork with the ACS of 
 - `ACS_COMMITMENT_DEGRADATION`: This warning indicates that the participant node is behind some of its counter-participants in commitment computation, perhaps due to heavy load, and enters catch-up mode. Counter-participants might blacklist this participant, because it prevents them from pruning.
 - `ACS_COMMITMENT_DEGRADATION_WITH_INEFFECTIVE_CONFIG`: This error code indicates that there is a degradation in commitment computation and the catch-up mode started, however the catch-up mode configuration is invalid and will not improve performance.
 
-## Inspection Tools
+### Inspection Tools
 
 > [!NOTE]
 > These inspection tools work for synchronizers using protocol version 35 or lower with the old ACS commitment processor.
@@ -187,7 +187,7 @@ Inspection tools enable the operator to understand to what extent its participan
 - The operator suspects that agreement is slower than it could or should be, e.g., because commitment monitoring alerts the operator of slowdowns when sending or receiving commitments. Inspection tools enable the operator to investigate the reason for the alert: Which counter-participants are behind, how far they are behind, or whether the participant itself is behind.
 - There is a fork between the participant's ACS state and the state of one or more counter-participants. The participant node operator wants to understand the context of the fork, e.g., was the fork transient or not, does the fork span several counter-participants or just one, etc.
 
-### Troubleshoot Slow Commitments
+#### Troubleshoot Slow Commitments
 
 {/* DIVERGENCE: removed three editorial notes ("Refine when addressing #27011", plus a mid-paragraph note about generating example output from integration tests) that leaked into the rendered page as user-facing prose. Upstream docs-website source (docs/replicated/canton/3.5/participant/howtos/troubleshoot/commitments.rst, hash f64b1ce5) still has them inline. Related to github.com/DACH-NY/canton/issues/27011. */}
 
@@ -256,7 +256,7 @@ Map(synchronizer1::1220087eeae4... ->
 )
 ```
 
-## Handle slow counter-participant
+### Handle slow counter-participant
 
 If a participant operator observes that a counter-participant is slow in sending commitments, then the operator can opt not to wait for commitments from specific counter participants across multiple synchronizers. The configuration place takes effect immediately. Pruning the participant can continue even if the participant misses commitments from these counter-participants, or if the commitments it receives do not match. Although the participant does not expect commitments from these counter-participants, it still computes and sends commitments to them, and it does process potential received commitments, e.g., logs mismatch warnings.
 
@@ -298,7 +298,7 @@ Vector()
 A participant added to the no-wait will not affect the *Default* or *Distinguished* counter-participant latency monitoring.
 </Note>
 
-## Handle slow commitment computation
+### Handle slow commitment computation
 
 Catch-up mode is a behavior that automatically trigger when a participants detects itself being falling behind. The synchronizer operator can configure catch-up mode on a per-synchronizer basis.
 
@@ -308,7 +308,7 @@ An alternative configuration in the synchronizer is `reconciliationInterval` (de
 
 To configure the parameters above, please refer to the synchronizer management section on Manage dynamic synchronizer parameters.
 
-### Troubleshoot Forks (Commitment Mismatches)
+#### Troubleshoot Forks (Commitment Mismatches)
 
 When the operator observes an `ACS_COMMITMENT_MISMATCH` in the logs, it indicates that the participant's ACS state diverged from the counter-participant's state. In other words, the two participants do not agree on the shared contracts. In the example below, `participant1` received a commitment from `participant2` for the period `1970-01-01T00:01:35Z to 1970-01-01T00:01:40Z` on `synchronizer1`, but the received commitment does not match the local commitment for that period.
 

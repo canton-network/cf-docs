@@ -5,7 +5,7 @@ description: "Manual how to avoid and recover from database corruptions in Canto
 
 Canton relies on PostgreSQL for its storage needs. A key capability of Canton is privacy through data segregation, which results in the fact that ultimately, data must be stored reliably and cannot just be recovered trivially from other actors on the network.
 
-# Use a Professional Cloud Operator
+## Use a Professional Cloud Operator
 
 While there are [procedures](/global-synchronizer/production-operations/validator-disaster-recovery) to recover a node's data from the network, they are rather complex, time-consuming, and only allow you to recover the current state, not history. The simpler approach is therefore to avoid performing these procedures by not corrupting your data.
 
@@ -13,7 +13,7 @@ Operating a database is not trivial, especially when handling faults and operati
 
 If you choose to run your own database yourself, you need to ensure that your data is correct and that your recovery procedures are in place. The present guide summarizes a few recipes in this regard. Note that some recipes require expert knowledge and are listed here solely to guide experts through the recovery process. Manipulating databases without great care may result in data corruption and loss.
 
-# Preventing Data Corruption
+## Preventing Data Corruption
 
 The following action items may help you to prevent data corruption.
 
@@ -34,7 +34,7 @@ If you are using Docker Compose, be very careful when manipulating `compose.yaml
 
 - **Use Co-Validation:** Parties on Canton can be hosted on multiple nodes with configurable confirmation thresholds. This allows you to distribute your party to e.g. three nodes with a confirmation threshold of 2, providing you a significantly higher level of security and availability. 
 
-# Be Prepared to Deal with Database Corruption
+## Be Prepared to Deal with Database Corruption
 
 - **Prune Your System:** Recovering a database of a few GBs is faster and simpler than recovering a 1TB database. Therefore, ensure that [pruning of your node](/appdev/faq#how-do-i-enable-pruning-on-my-validator)  is enabled and keep your active contract set small (e.g., UTXO management).
 Monitor the metric `daml.pruning.max-event-age` ([see reference](/global-synchronizer/reference/canton-metrics#daml-pruning-max-event-age)) to verify that your system is getting pruned. You will also save on storage costs.
@@ -47,7 +47,7 @@ Monitor the metric `daml.pruning.max-event-age` ([see reference](/global-synchro
 
 - **Enable Metadata Storage in PQS:** If you enable the “--pipeline-filter-metadata=*” flag in PQS, PQS will store the contract in its original form, which can be re-imported into Canton.
 
-# Detecting Data Corruption
+## Detecting Data Corruption
 
 - **Check your Database Regularly:** Run `pg_amcheck -v -d postgres --install-missing --parent-check --heapallindexed` regularly against your database during quiet times. If it reports corruption, act immediately. If you run the command in a container, run it in the background and pipe the output into a file. The command may take a long time, and your active terminal connection might be interrupted, causing you to lose all progress.
 
@@ -60,7 +60,7 @@ Monitor the metric `daml.pruning.max-event-age` ([see reference](/global-synchro
 - **Check with Disabled Indexes:** If indexes are corrupted, you can also try to run the same query with and without using indexes: 
   `SET enable_indexscan = off; SET enable_bitmapscan = off; SET enable_indexonlyscan = off` will force sequential scans. After you tested, revert the settings back to on.
 
-# Repairing Data Corruption
+## Repairing Data Corruption
 
 There are several ways to recover from disasters. Please review the documentation for [validators](/global-synchronizer/production-operations/validator-disaster-recovery) as well as [super-validators](/global-synchronizer/production-operations/disaster-recovery).
 

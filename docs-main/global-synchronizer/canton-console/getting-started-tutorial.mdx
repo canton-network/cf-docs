@@ -57,8 +57,6 @@ import ExternalCantonMainCommunitySrcExampleSimpleTopology from "/snippets/exter
 change the section where we provision smart contract code: - create a new empty project - use the "Understanding IOUs" section to explain the structure of a daml contract (see [Java language bindings](/sdks-tools/language-bindings/java)) - transact on the IOU contract using curl and JSON Ledger API, not via console commands
 </div>
 
-# Getting Started
-
 Interested in Canton? This is the right place to start! You don't need any prerequisite knowledge, and you will learn:
 
 - how to install Canton and get it up and running in a simple test configuration
@@ -532,7 +530,7 @@ Note how we again use `retry_until_true` to add a manual synchronization point, 
 
 Tutorial to download, install, run canton with a simple configuration. Link to other howtos for follow-up topics.
 
-# Install Canton
+## Install Canton
 
 This guide will guide you through the process of setting up your Canton nodes to build a distributed Daml ledger. You will learn the following:
 
@@ -544,7 +542,7 @@ A single Canton process can run multiple nodes, which is very useful for testing
 
 This guide uses the reference configurations you can find in the release bundle under `config` and explains how to leverage these examples for your purposes. Therefore, any file named in this guide refers to subdirectories of the reference configuration example.
 
-## Hardware Resources
+### Hardware Resources
 
 Adequate hardware resources need to be available for each Canton node in a test, staging, or production environment. It is recommended to begin with a potentially over-provisioned system. Once a long running, performance benchmark has proven that the application's NFRs can be met (e.g., application request latency, PQS query response time, etc.) then decreasing the available resources can be tried, with a follow up rerun of the benchmark to confirm the NFRs can still be met. Alternatively, if the NFRs are not met then the available resources should be increased.
 
@@ -555,13 +553,13 @@ As a starting point, the minimum recommended resources are:
 
 Also, you may want to add `-XX:+UseG1GC` to force the JVM to to use the `G1` garbage collector. Experience has shown that the JVM may use a different garbage collector in a low resource situation which can result in long latencies.
 
-## Downloading Canton
+### Downloading Canton
 
 Canton is open source, licensed under Apache 2.0, and available from [GitHub](https://github.com/digital-asset/daml/releases). No license or entitlement is required.
 
 You can also use the Canton Docker image described in [Installation](#installation).
 
-## Your Topology
+### Your Topology
 
 The first question we need to address is what the topology is that you are going after. The Canton topology is made up of parties, participants and synchronizers, as depicted in the following figure.
 
@@ -577,7 +575,7 @@ The following instructions assume that you are running all commands in the root 
 cd ./canton-<type>-X.Y.Z
 ```
 
-## The Config Directory Contents
+### The Config Directory Contents
 
 <Warning>
 This section applies to 2.8.1 and later releases.
@@ -613,7 +611,7 @@ In addition, you'll find the following files and directories:
 - `tls`: contains TLS configuration files for the various APIs and a script to generate test certificates.
 - `utils`: contains utility scripts, mainly to set up the database.
 
-## Selecting your Storage Layer
+### Selecting your Storage Layer
 
 In order to run any kind of node, you need to decide how and if you want to persist the data. You can choose not to persist data and instead use in-memory stores that are deleted on node restart, or you can persist data using the `Postgres` database.
 
@@ -640,7 +638,7 @@ Please also consult the more detailed section on storage configurations.
 
 Canton will manage the database schema for you. You don't need to create any tables or indexes.
 
-### Persistence using Postgres
+#### Persistence using Postgres
 
 While in-memory is great for testing and demos, for any production use, you'll need to use a database as a persistence layer. Canton supports [Postgres](https://www.postgresql.org/) as a persistence layer.
 
@@ -648,7 +646,7 @@ Make sure you have a running Postgres server. Create one database per node.
 
 Canton is tested on a selection of the [currently supported Postgres versions](https://www.postgresql.org/support/versioning/). See the [Canton release notes](https://github.com/digital-asset/canton/releases) for the specific Postgres version used to test a particular Canton release.
 
-#### Creating the Database and the User
+##### Creating the Database and the User
 
 In `util/postgres` you can find a script `db.sh` which helps configure the database, and optionally start a Docker-based Postgres instance. Assuming you have [Docker](https://www.docker.com/) installed, you can run:
 
@@ -666,11 +664,11 @@ Other useful commands are:
 - `resume`: To resume a previously stopped Docker-based Postgres instance.
 - `drop`: Drop the created databases.
 
-#### Database character encoding
+##### Database character encoding
 
 For Canton applications to work correctly you must use UTF8 database server encoding in Postgres. This avoids any issues with character conversion, like not being able to store some UTF8 characters in the database. If the server character encoding is not set to UTF8, Canton reports an ERROR log message at startup. You can check Postgres database server encoding by connecting to the database via SQL console (for example psql) and issuing [SHOW SERVER_ENCODING;](https://www.postgresql.org/docs/current/sql-show.html) Server encoding is set during database initialization to defaults deduced from OS environment, but this can be [overridden](https://www.postgresql.org/docs/current/sql-createdatabase.html#CREATE-DATABASE-ENCODING). Please see [Postgres documentation on this subject](https://www.postgresql.org/docs/current/multibyte.html#MULTIBYTE) for further information.
 
-#### Configure the Connectivity
+##### Configure the Connectivity
 
 You can provide the connectivity settings either by editing the file `config/storage/postgres.conf` or by setting respective environment variables (see the file for which ones need to be set):
 
@@ -682,11 +680,11 @@ export POSTGRES_DB=postgres
 export POSTGRES_PORT=5432
 ```
 
-#### Tuning the Database
+##### Tuning the Database
 
 Please note that Canton requires a properly sized and correctly configured database. Please consult the Postgres performance guide for further information.
 
-## Generate the TLS Certificates
+### Generate the TLS Certificates
 
 The reference example configurations use TLS to secure the APIs. You can find the configuration files in `config/tls`. The configuration files are split by different APIs. The configuration files are:
 
@@ -700,7 +698,7 @@ If you want to start with a simple setup, you can use the provided script `confi
 
 Alternatively, you can also skip this step by commenting out the TLS includes in the respective configuration files.
 
-## Setting up a Participant
+### Setting up a Participant
 
 Start your participant by using the reference example `config/participant.conf`:
 
@@ -716,13 +714,13 @@ By default, the node will initialize itself automatically using the identity com
 
 This was everything necessary to start up your participant node. However, there are a few steps that you want to take care of in order to secure the participant and make it usable.
 
-### Secure the APIs
+#### Secure the APIs
 
 1.  By default, all APIs in Canton are only accessible from localhost. If you want to connect to your node from other machines, you need to bind to `0.0.0.0` instead of localhost. You can do this by setting `address = 0.0.0.0` or to the desired network name within the respective API configuration sections.
 2.  All nodes are managed through the administration API. Whenever you use the console, almost all requests will go through the administration API. It is recommended that you set up mutual TLS authentication as described in the TLS documentation section.
 3.  Applications and users interact with the Participant Node using the gRPC Ledger API. We recommend that you secure your API by using TLS. You should also authorize your clients using JWT tokens. The reference configuration contains a set of configuration files in `config/jwt`, which you can use as a starting point.
 
-### Configure Applications, Users and Connection
+#### Configure Applications, Users and Connection
 
 Canton distinguishes static from dynamic configuration.
 
@@ -731,7 +729,7 @@ Canton distinguishes static from dynamic configuration.
 
 If you don't know how to connect to synchronizers, onboard parties, or provision Daml code, please read the getting started guide.
 
-## Setting up a Synchronizer
+### Setting up a Synchronizer
 
 Your participant node is now ready to connect to other participants to form a distributed ledger. The connection is facilitated by a synchronizer, which is formed by three separate processes:
 
@@ -748,7 +746,7 @@ To set up a synchronizer, you need to decide what kind of driver you want to use
 
 This section explains how to set up a Postgres-based synchronization synchronizer.
 
-### Using Microservices
+#### Using Microservices
 
 You can start the synchronizer processes as separate microservices:
 
@@ -777,7 +775,7 @@ bootstrap.synchronizer(
 )
 ```
 
-#### Connect the Participant
+##### Connect the Participant
 
 The final step is to connect the participant to the synchronizer. Refer to the connectivity guide for detailed instructions. In the simplest case, you just need to run the following command in the participant's console:
 
@@ -787,13 +785,13 @@ participant.synchronizers.connect("da", "https://localhost:10018", certificatesP
 
 The certificate is explicitly provided, as the self-signed test certificates are not trusted by default.
 
-### Secure the APIs
+#### Secure the APIs
 
 1.  As with the participant node, all APIs bind by default to localhost. If you want to connect to your node from other machines, you need to bind to the right interface or to `0.0.0.0`.
 2.  The administration API should be secured using client certificates as described in TLS documentation section.
 3.  The Public API needs to be properly secured using TLS. Please follow the corresponding instructions.
 
-## Multi-node setup
+### Multi-node setup
 
 If desired, you can run many nodes in the same process. This is convenient for testing and demonstration purposes. You can either do this by listing several node configurations in the same configuration file or by invoking the Canton process with several separate configuration files (which get merged together).
 
