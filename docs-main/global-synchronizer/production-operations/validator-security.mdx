@@ -44,3 +44,70 @@ Also recall that you need to deploy a **fresh** participant in order for KMS to 
 
 
 {/* COPIED_END */}
+{/* NOT FROM SOURCE: the section below is maintained in cf-docs only. It extends the GCP and AWS examples above to driver-based KMS on Splice deployments. Verified against Splice 0.10.0 (Canton 3.7.1): participant image `canton-participant:0.10.0` and the `splice-participant` 0.10.0 Helm chart (extraVolumes renders only secret/persistentVolumeClaim). Installed through the 0.9.4 charts on DevNet validators with Scaleway Key Manager and OpenBao Transit drivers, 2026-11-03. */}
+
+#### Self-hosted and other KMS providers (driver-based KMS)
+
+Canton also supports a [driver-based KMS](/global-synchronizer/production-operations/kms-operations#configure-a-driver-based-kms). A KMS driver is a JAR that implements the [Canton KMS Driver API](/global-synchronizer/reference/kms-driver-guide) and connects the participant to a key manager other than GCP or AWS KMS, such as a self-hosted key manager or an HSM, or another cloud provider's KMS. The Splice participant needs no custom image to use one: the participant image's launcher (`bin/canton`) adds the contents of the `EXTRA_CLASSPATH` environment variable to Canton's class path. Mount the driver JAR into the pod and point `EXTRA_CLASSPATH` at it.
+
+Before you deploy a driver:
+
+- Check that the driver supports the Canton version bundled with your Splice release (see the [Splice release notes](/global-synchronizer/release-notes/splice)).
+- Run the driver against your KMS with the `kms-driver-testing` suite and a local participant ping, as described in [Develop and Test a KMS Driver](/global-synchronizer/reference/kms-driver-guide#develop-and-test-a-kms-driver).
+
+Ship the driver JAR as a Kubernetes secret, not a ConfigMap. The `splice-participant` chart's `extraVolumes` supports only `secret` and `persistentVolumeClaim` volumes. Any other volume type, including `configMap`, is dropped silently: Kubernetes then mounts an empty directory, and the participant fails at startup with `Driver '<driver-name>' ... not found. Found drivers: )`. `helm template` does not show the problem, because the volume name is still rendered. A secret holds up to 1 MiB; a larger JAR needs a `persistentVolumeClaim` volume.
+
+```bash
+kubectl -n <namespace> create secret generic canton-kms-driver-jar \
+  --from-file=driver.jar=<driver>.jar
+kubectl -n <namespace> create secret generic kms-driver-credentials \
+  --from-file=token=<credentials-file>
+```
+
+Then configure the `splice-participant` Helm chart. The `config` block is passed to the driver unchanged, so its keys depend on the driver. The example below uses placeholders:
+
+```yaml
+kms:
+  type: driver
+  # The name the driver registers with Canton
+  name: <driver-name>
+  # Driver-specific configuration; see the driver's documentation.
+  # String values must carry their own double quotes (see the note below).
+  config:
+    address: '"https://kms.example.internal:8200"'
+    tokenFile: '"/var/run/secrets/kms-driver/token"'
+additionalEnvVars:
+  - name: EXTRA_CLASSPATH
+    value: /opt/canton-kms/driver.jar
+  # Session signing keys are only supported for KMS-enabled participants
+  # and avoid a KMS round trip for most signatures.
+  - name: ADDITIONAL_CONFIG_SESSION_SIGNING_KEYS
+    value: canton.participants.participant.crypto.session-signing-keys.enabled = true
+extraVolumes:
+  - name: kms-driver
+    secret:
+      secretName: canton-kms-driver-jar
+  - name: kms-driver-credentials
+    secret:
+      secretName: kms-driver-credentials
+extraVolumeMounts:
+  - name: kms-driver
+    mountPath: /opt/canton-kms
+  - name: kms-driver-credentials
+    mountPath: /var/run/secrets/kms-driver
+    readOnly: true
+```
+
+<Warning>
+The chart writes each value of the `kms` section into the participant's HOCON configuration exactly as given, without adding quotes. An unquoted URL such as `https://kms.example.internal:8200` is read by HOCON as `https:` followed by a `//` comment. Wrap string values in double quotes inside the YAML string, as in the example above. Values that should be read from environment variables can instead be written as HOCON substitutions, such as `secretKey: ${KMS_SECRET_KEY}`, with the variable set from a Kubernetes secret through `additionalEnvVars` and `secretKeyRef`.
+</Warning>
+
+Security considerations for a driver-based KMS:
+
+- **The driver is trusted code.** The driver JAR runs inside the participant's JVM, sees the participant's KMS credentials, and performs every signing and decryption operation on the participant's KMS-held keys. Review the driver before you use it, take it from a source you trust, and verify the JAR against a published checksum before you mount it.
+- **Use least-privilege credentials.** In External Key Storage mode the participant creates its own keys in the KMS, then signs, decrypts and reads public keys with them. Give the credentials only the operations the driver's documentation lists for that, scoped to the participant's keys. Do not grant key export or deletion.
+- **Keep the keys non-exportable.** Key protection comes from the KMS refusing to release private key material. Configure the KMS or HSM so that the participant's keys cannot be exported or backed up in plaintext.
+- **Do not rotate or delete the keys in the KMS.** The participant's root namespace key cannot be rotated (see [above](#migrating-an-existing-validator-to-use-an-external-kms)). Deleting a key, or rotating it to a new version that the driver then uses, can make the participant unable to sign. Check how your driver treats key versions before you enable automatic rotation in the KMS.
+- **Protect the connection to the KMS.** Use TLS between the participant and the KMS, with a CA certificate you mount into the pod if the KMS uses a private CA. Restrict network access to the KMS endpoint to the participant.
+- **Treat the KMS as a hard dependency.** A participant whose KMS is unreachable cannot sign or decrypt and stops processing transactions. Size the KMS for availability accordingly, and monitor it alongside the validator. Do not rely on the pod's readiness for this: a participant that cannot authenticate to its KMS at startup stops before it initializes, but its pod can still report ready. Alert on the participant's `driver-kms` and `crypto` health states, which the participant logs whenever they change (for example `'crypto' is now in state Failed(...)`). The same applies when the KMS becomes unavailable while the participant runs: transactions fail and the pod stays ready. The participant recovers without a restart once the KMS is reachable again.
+- **Pass credentials as files or secrets.** Mount credentials from Kubernetes secrets or reference them through environment variables. Do not write them inline in the Helm values. Check that the driver masks confidential settings when the participant logs its configuration (see [Driver Configuration Reading & Parsing](/global-synchronizer/reference/kms-driver-guide#driver-configuration-reading--parsing)).
