@@ -55,7 +55,7 @@ The new node has a different Ledger API update lineage, most importantly with ch
 
 #### New participant ID
 
-The new node gets a new participant ID. Party IDs do not change. Traffic that was bought for the old participant ID stays with that ID, so the new participant needs its own traffic. Until it has traffic, it only has the base rate, and every message it sends to the synchronizer is throttled. Plan how to get traffic for the new participant ID before you start step 8.
+The new node gets a new participant ID. Party IDs do not change. Traffic that was bought for the old participant ID stays with that ID, so the new participant needs its own traffic. Until it has traffic, it only has the base rate, and every message it sends to the synchronizer is throttled. Step 8 explains how to buy it once your CC is on the new node.
 
 #### Contracts archived after the LSU without your node
 
@@ -64,6 +64,10 @@ The exports of steps 4 and 5 contain the contracts as the stuck node saw them at
 ### Steps
 
 #### Pre-requirements
+
+The console snippets assume your participant is named `participant`. If yours has a different name (e.g. `participant2`), run `val participant = participant2` at the start of each console session so the snippets work unchanged.
+
+Run each snippet as a whole, since later lines use values defined earlier (e.g. `offset` in step 4).
 
 Turn on debug logging in the [Canton console](/global-synchronizer/canton-console/essential-commands) for all participant sessions:
 
@@ -208,7 +212,7 @@ First stop the old participant. It must stay stopped for the rest of the procedu
 Follow the [Recovery from an identities backup: Re-onboard a validator and recover balances of all users it hosts](/global-synchronizer/production-operations/validator-disaster-recovery#recovery-from-an-identities-backup-re-onboard-a-validator-and-recover-balances-of-all-users-it-hosts) procedure to migrate to a new validator node on the LSU successor synchronizer.
 
 <Warning>
-This procedure connects the new validator to the synchronizer: that is how the parties are migrated and their CC contracts imported. Once the validator app is up and its log shows `ACS import complete`, stop the validator app and keep it stopped until step 14 is done. Then prevent the new participant from reconnecting on restarts, as in step 3 (the configuration override and/or):
+This procedure connects the new validator to the synchronizer to migrate the parties and import their CC. Once the validator app log shows `ACS import complete`, buy traffic for the new participant with your validator party's CC (the party has no CC on the new node before this point), and wait for the purchase to go through. Do this even if automatic top-ups already bought some: step 8 can use most of it, and steps 9 to 12 are slow on the base rate. Then stop the validator app until step 14 is done, and prevent the new participant from reconnecting on restarts as in step 3 (the configuration override and/or):
 
 ```
 participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = true))
@@ -250,8 +254,28 @@ require(exportedInternalNotYetHosted.isEmpty, s"Internal party migration failed.
 
 participant.synchronizers.disconnect_all()
 participant.repair.import_acs(syncId, "acs-internal.gz", workflowIdPrefix = "recovery-internal", excludedStakeholders = Set(dso))
+
+// Remove the old participant's traffic top-up record that the import brought back
+import com.digitalasset.canton.config.RequireTypes.PositiveInt
+import com.digitalasset.canton.protocol.LfContractId
+// Replace the placeholder with your validator party ID
+val validatorParty = PartyId.tryFromProtoPrimitive("<validator party ID>")
+val oldTopUpStates = participant.ledger_api.state.acs.of_party(validatorParty, limit = PositiveInt.tryCreate(100000)).filter(c => c.templateId.entityName == "ValidatorTopUpState" && c.arguments.get("memberId").exists(_ != participant.id.toProtoPrimitive))
+oldTopUpStates.foreach(c => println(s"${c.contractId} ${c.arguments("memberId")}"))
+if (oldTopUpStates.nonEmpty) participant.repair.purge(SynchronizerAlias.tryCreate("global"), oldTopUpStates.map(c => LfContractId.assertFromString(c.contractId)))
+
 participant.synchronizers.reconnect_all()
 ```
+
+If your old validator app bought traffic automatically, the step 4 export includes a top-up record for the old participant ID. Without the purge, the validator app might keep buying traffic for that ID when it starts in step 14.
+
+Only your validator party is a stakeholder of this record, so purging it doesn't affect anyone else. The println shows what's removed: one line with the old participant ID, or nothing.
+
+To check that the purge worked, run the val oldTopUpStates = ... line again. It should return List().
+
+The participant log shows a summary of the import: `Contract import pipeline ... finished. Persisted: <N> new active contracts written. Skipped: ... Dropped: <M> foreign payloads ignored (synchronizer mismatch)`.
+
+Here, "synchronizer mismatch" just means contracts in the export that belong to another synchronizer. It doesn't mean an ACS commitment mismatch.
 
 If the check reports a party that you allocated on the stuck node after the LSU announcement, that party is not known to the synchronizer and was not migrated. Contact DA support in that case.
 
@@ -261,11 +285,19 @@ After this step, you have recovered the remaining assets (non-CC holdings) of yo
 
 An external party can only be hosted on the new node with a party-to-participant mapping signed with the party's own key. Hence, its ACS can only be imported once the owner provided its onboarding signature.
 
+Like step 10, this step requires the validator app to be stopped. Once an external party is hosted on the new node, a running validator app might renew its transfer preapproval. The import would then fail because the step 5 export still contains the old one.
+
 For onboarding the external party to the new validator node, follow the steps in [Recover the Coin balance of an external party](/global-synchronizer/production-operations/validator-disaster-recovery#recover-the-coin-balance-of-an-external-party), but stop before importing the ACS from the Scan API as its contents are already included in the export generated in step 5.
 
 <Warning>
-Onboarding of external parties must happen in a timely manner to avoid crashing the node later due to ACS mismatches. To avoid such risky situations, consider onboarding the late external party on a separate node.
+Onboarding of external parties must happen in a timely manner, ideally right after step 10. Until then, don't use contracts shared between your internal and external parties.
+
+The step 5 export contains these contracts as they were at the LSU upgrade time. If any are archived or changed after step 10, the import might fail or bring back the old version, causing ACS commitment mismatches in step 13.
+
+To avoid such risky situations, consider onboarding a late external party on a separate new node.
 </Warning>
+
+**NOTE:** Skipping the Scan import is safe because nothing the external party signs can change while the stuck node is its only host. The exception is a featured app provider (check with `<scan-url>/api/scan/v0/featured-apps/by-provider/<party ID>`): the DSO expires its app reward coupons without the party's node, so the export brings them back. For such a party, add `excludedStakeholders = Set(dso)` (from step 10) to its `import_acs` call and do the Scan import from the linked docs.
 
 ```
 val external = Files.readString(Paths.get("external-parties.txt")).linesIterator.map(PartyId.tryFromProtoPrimitive).toSeq
@@ -295,7 +327,15 @@ However, since a multi-hosted party may have already been migrated to the LSU su
 
 After ACS imports are done, to validate the contracts migration was successful, check the ACS commitments status on your new participant, by inspecting the logs for `ACS_COMMITMENT_MISMATCH` or `ACS_MISMATCH_NO_SHARED_CONTRACTS` errors once a few reconciliation intervals have passed (i.e. on MainNet the reconciliation interval is 30 minutes).
 
-If there are any, check the [troubleshooting guide](/global-synchronizer/production-operations/validator-disaster-recovery#limitations-and-troubleshooting) or contact DA support.
+No errors doesn't mean commitments were exchanged. Also check for these INFO lines: `Commitment correct for sender <participant> and period <period>` (expect these from super validators) and `All commitments up to <timestamp> have been sent successfully`.
+
+Don't use `commitments.lookup_received_acs_commitments`: from protocol version 36, it reads the old processor's state, which is off by default, and fails with `No computations done`.
+
+Commitment matches are logged within half an hour after each period ends (3 to 25 minutes on TestNet in November 2026). Wait for matches from at least two periods ending after the last reconnect in step 10, roughly 1.5 hours with 30-minute periods.
+
+For any mismatches, note the sending participant and period, and contact DA support.
+
+These warnings and errors are expected and don't block this step: `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` and `Requeuing and backing off` from step 9 (if the participant had no traffic), and sequencer connection restarts after `RST_STREAM closed stream` (other connections remain usable). Contact DA support for anything else.
 
 <Warning>
 DO NOT submit commands before ensuring there are no warnings or errors in the participant's logs.
