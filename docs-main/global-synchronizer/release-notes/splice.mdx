@@ -2,6 +2,68 @@
 title: "Splice"
 description: "Release notes and version history for Global Synchronizer software"
 ---
+## 0.10.3
+
+    - Canton: Upgrade Canton to [3.7.4](/global-synchronizer/release-notes/canton-releases/3-7-4).
+
+    - Scan App
+
+      - New ACS snapshot pruning, off by default. With `canton.scan-apps.scan-app.pruning.snapshots.enabled = true` (Helm
+        value `pruning.snapshots.enabled`) and a finite analyzable time window, Scan deletes the ACS snapshots stored in
+        per-snapshot tables that are older than the window, except the daily snapshot that bulk storage exports. Later
+        releases will extend this setting to the daily snapshots once they are in bulk storage.
+        ACS snapshot queries with `record_time_match=exact` for a time whose snapshot was pruned then return `not found`.
+      - Added an optional `daml_value_encoding` field to the requests of `/v2/state/acs` and `/v2/holdings/state`.
+        It defaults to `compact_json`, which is what these endpoints returned so far.
+      - Added the `ledger_api_json` option to the `DamlValueEncoding` enum, used by the `daml_value_encoding`
+        parameter of the update history and event history endpoints.
+        It encodes Daml values like the JSON Ledger API (v2) does. The encoding is identical to the existing
+        `compact_json`, with two differences: numeric values are encoded differently ("0E-10" vs "0.0000000000"),
+        and it omits trailing `null` fields of Daml records. The latter is important: with `compact_json`,
+        a Daml upgrade that adds new optional fields to templates caused old values to be returned with those
+        fields included in the JSON object (as `null`), so the returned JSON depends on the Scan version.
+        The new `ledger_api_json` encoding returns the same JSON regardless of the Scan version.
+        `compact_json` remains the default for now. All users are advised to switch to the new encoding:
+
+        - The `ledger_api_json` encoding will become the new default in a future release, replacing `compact_json`.
+        - In the coming months, Scan will start serving updates in bulk, and historical data more than a few weeks old
+          will be available only in bulk. The bulk data will not support the `compact_json` encoding.
+
+    - SV App
+
+      - Joining SVs now download the DSO party ACS and sequencer onboarding state from their sponsor as files
+        instead of keeping the responses in the SV app's memory, reducing SV app memory usage for large
+        snapshots. SVs that restrict SV app ingress must allow other SVs to reach the new
+        `/v0/onboard/sv/party-migration/prepare`, `/v0/onboard/sv/sequencer/prepare` and
+        `/v0/onboard/sv/download/{id}` endpoints, which are tagged `x-external-audience: svs`.
+        Interrupted downloads resume where they stopped. Proxies between SVs must pass through the
+        `Repr-Digest` response header, which the joining SV uses to verify the snapshot. They should also
+        pass through the `Range` and `Content-Range` headers; otherwise, interrupted downloads start again
+        from the beginning.
+
+    - Deployment
+
+      - SV onboarding snapshots are kept in `canton.sv-apps.sv.onboarding-snapshots.directory`, a new required setting
+        that must point to persistent storage. The SV Helm chart now always creates a dedicated 35 GiB
+        `onboardingSnapshotsPvc` for it, mounted at `/onboarding-snapshots`.
+      - The Postgres images used by the Docker Compose deployments and by the Helm `pg-init` init containers are bumped
+        to `postgres:18.7-trixie`, and the `splice-postgres` chart to `postgres:14.25-trixie`. If you run the Compose
+        Postgres or the `splice-postgres` chart, recreate the Postgres container to pick up the new version.
+      - App Helm charts and the validator compose now support participant Admin API authentication. Until 0.11.0, it is opt-in
+        and requires additional setup in the auth provider. From 0.11.0 it will be enabled by default and require an explicit
+        opt-out configuration to keep running without it. It is strongly encouraged to configure it as soon as possible.
+        Please see the [k8s deployment](/global-synchronizer/deployment/validator-kubernetes#configuring-authentication)
+        and [compose deployment](/global-synchronizer/deployment/validator-docker-compose#configuring-authentication)
+        docs for more information on how to set it up.
+        For SV deployment look [here](/global-synchronizer/deployment/kubernetes-deployment#configuring-authentication).
+      - As a mitigation for CVE-2026-114938, the Helm charts and Docker Compose setups now pass
+        `-XX:-UseBASE64Intrinsics` to the JVM by default, disabling the JVM's Base64 intrinsics.
+        If you override `defaultJvmOptions` in Helm, or set `PARTICIPANT_JVM_OPTS` / `VALIDATOR_JVM_OPTS`
+        in Docker Compose, add `-XX:-UseBASE64Intrinsics` to your JVM options yourself.
+      - Docker Compose: Bump nginx to 1.31.9, which includes the fixes for CVE-2026-123633 and CVE-2026-123007.
+        This matters only for validator and LocalNet Compose deployments whose nginx is reachable from outside the host (e.g., validators started with `-E`),
+        which our docs explicitly recommend against. If you pin `NGINX_VERSION` yourself, update it to 1.31.9 or later.
+
 ## 0.10.2
 
   - Canton: Upgrade Canton to [3.7.3](/global-synchronizer/release-notes/canton-releases/3-7-3).
