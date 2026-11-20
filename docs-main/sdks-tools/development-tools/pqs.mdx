@@ -4,14 +4,6 @@ description: "Query ledger data with SQL using PQS, a PostgreSQL-based projectio
 boost: 3
 ---
 
-import DamlDocsSdksToolsDevelopmentToolsPqsL62 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L62.mdx";
-import DamlDocsSdksToolsDevelopmentToolsPqsL73 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L73.mdx";
-import DamlDocsSdksToolsDevelopmentToolsPqsL85 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L85.mdx";
-import DamlDocsSdksToolsDevelopmentToolsPqsL331 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L331.mdx";
-import DamlDocsSdksToolsDevelopmentToolsPqsL339 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L339.mdx";
-import DamlDocsSdksToolsDevelopmentToolsPqsL343 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L343.mdx";
-import DamlDocsSdksToolsDevelopmentToolsPqsL96 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L96.mdx";
-
 
 PQS (Participant Query Store) subscribes to a validator's transaction stream and projects contract data into a PostgreSQL database. Your backend queries this database with standard SQL, enabling: filtered queries, aggregations, joins, and full-text search that would be impractical through the Ledger API alone.
 
@@ -307,41 +299,70 @@ These examples use the PQS SQL API — a set of provisioned functions that are t
 
 Query all active contracts for a specific template:
 
-<DamlDocsSdksToolsDevelopmentToolsPqsL62 />
+```sql
+SELECT contract_id, payload
+FROM active('Licensing:License')
+WHERE payload->>'owner' = 'Alice::1234...';
+```
 
 ### Recent Create Events
 
 View recent create events for a party:
 
-<DamlDocsSdksToolsDevelopmentToolsPqsL73 />
+```sql
+SELECT contract_id, template_fqn, created_effective_at
+FROM creates()
+WHERE witnesses @> ARRAY['Alice::1234...']
+ORDER BY created_effective_at DESC
+LIMIT 50;
+```
 
 ### Aggregations
 
 Count active contracts by template:
 
-<DamlDocsSdksToolsDevelopmentToolsPqsL85 />
+```sql
+SELECT template_fqn, count
+FROM summary_active()
+ORDER BY count DESC;
+```
 
 ### Party Filtering
 
 Find active contracts where a specific party is a signatory:
 
-<DamlDocsSdksToolsDevelopmentToolsPqsL96 />
+```sql
+SELECT contract_id, template_fqn, payload
+FROM active()
+WHERE signatories @> ARRAY['Alice::1234...'];
+```
 
 ### Contract Lookup by ID
 
 Find contract by ID:
 
-<DamlDocsSdksToolsDevelopmentToolsPqsL331 />
+```sql
+SELECT contract_id, template_fqn, payload
+FROM lookup_contract('00123...');
+```
 
 ### Key Filtering
 
 Find active contracts by key:
 
-<DamlDocsSdksToolsDevelopmentToolsPqsL339 />
+```sql
+SELECT contract_id, template_fqn, payload
+FROM active()
+WHERE contract_key = jsonb_build_object('_1', 'Alice::1234...', '_2', 'some_value')
+```
 
 Find active contracts by key hash:
 
-<DamlDocsSdksToolsDevelopmentToolsPqsL343 />
+```sql
+SELECT contract_id, template_fqn, payload
+FROM active()
+WHERE contract_key_hash = '\xc9be4984...'::bytea
+```
 
 ## Performance Optimization
 
