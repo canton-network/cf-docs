@@ -32,7 +32,7 @@ If your validator only holds Canton Coin and CNS entries (no other Daml applicat
 
 ### What the Procedure Does
 
-This procedure helps you create a new validator node that migrates the namespace keys and parties of the broken node onto a new validator connected to the successor LSU synchronizer. CC contracts are imported using the Scan API, whereas the external parties and non-CC contracts are restored from exports taken from the stuck node.
+This procedure helps you create a new validator node that migrates the namespace keys and parties of the broken node onto a new validator connected to the successor LSU synchronizer. CC contracts are imported using the Scan API, whereas the other contracts are restored from exports taken from the stuck node.
 
 **NOTE:** The stuck node can be decommissioned afterwards.
 
@@ -59,7 +59,9 @@ The new node gets a new participant ID. Party IDs do not change. Traffic that wa
 
 #### Contracts archived after the LSU without your node
 
-The exports of steps 4 and 5 contain the contracts as the stuck node saw them at the LSU upgrade time. A contract that was archived on the synchronizer since then without a confirmation from your node (possible where your parties are only observers) is imported as active again. Such contracts show up as ACS commitment mismatches in step 13.
+The exports from steps 4 and 5 contain contracts as of the LSU upgrade time. Contracts your parties only observe may have been archived since then without your node, and importing them brings them back as active, causing ACS commitment mismatches in step 13.
+
+Steps 8, 10 and 11 avoid this for contracts shared with the DSO by importing them from Scan. The same issue can happen between your own parties if an internal party changes a contract shared with an external party between steps 10 and 11.
 
 ### Steps
 
@@ -285,19 +287,17 @@ After this step, you have recovered the remaining assets (non-CC holdings) of yo
 
 An external party can only be hosted on the new node with a party-to-participant mapping signed with the party's own key. Hence, its ACS can only be imported once the owner provided its onboarding signature.
 
-Like step 10, this step requires the validator app to be stopped. Once an external party is hosted on the new node, a running validator app might renew its transfer preapproval. The import would then fail because the step 5 export still contains the old one.
+To onboard the external party to the new validator node, follow Recover the Coin balance of an external party through the ACS import from Scan. Then import the party's remaining contracts from the step 5 export, as shown below.
 
-For onboarding the external party to the new validator node, follow the steps in [Recover the Coin balance of an external party](/global-synchronizer/production-operations/validator-disaster-recovery#recover-the-coin-balance-of-an-external-party), but stop before importing the ACS from the Scan API as its contents are already included in the export generated in step 5.
+Skip the setup-proposal flow at the end of the linked procedure, since the imports already restore the party's transfer preapproval and validator right.
 
 <Warning>
-Onboarding of external parties must happen in a timely manner, ideally right after step 10. Until then, don't use contracts shared between your internal and external parties.
+Onboard external parties right after step 10. Until then, don't use contracts shared between your internal and external parties (see Contracts archived after the LSU without your node).
 
-The step 5 export contains these contracts as they were at the LSU upgrade time. If any are archived or changed after step 10, the import might fail or bring back the old version, causing ACS commitment mismatches in step 13.
-
-To avoid such risky situations, consider onboarding a late external party on a separate new node.
+If an external party can't be onboarded soon, consider onboarding it on a separate new node.
 </Warning>
 
-**NOTE:** Skipping the Scan import is safe because nothing the external party signs can change while the stuck node is its only host. The exception is a featured app provider (check with `<scan-url>/api/scan/v0/featured-apps/by-provider/<party ID>`): the DSO expires its app reward coupons without the party's node, so the export brings them back. For such a party, add `excludedStakeholders = Set(dso)` (from step 10) to its `import_acs` call and do the Scan import from the linked docs.
+**NOTE:** Like step 10, the import below excludes contracts shared with the DSO, since Scan already imported their current state. This also covers contracts the party only observes, such as app reward coupons, which the DSO can archive without the party's node.
 
 ```
 val external = Files.readString(Paths.get("external-parties.txt")).linesIterator.map(PartyId.tryFromProtoPrimitive).toSeq
@@ -308,7 +308,7 @@ val hostedHere = (participant.topology.party_to_participant_mappings
 
 participant.synchronizers.disconnect_all()
 external.zipWithIndex.filter { case (party, _) => hostedHere(party) }.foreach { case (_, i) =>
-  participant.repair.import_acs(syncId, s"acs-external-$i.gz", workflowIdPrefix = s"recovery-external-$i")
+  participant.repair.import_acs(syncId, s"acs-external-$i.gz", workflowIdPrefix = s"recovery-external-$i", excludedStakeholders = Set(dso))
 }
 participant.synchronizers.reconnect_all()
 ```
