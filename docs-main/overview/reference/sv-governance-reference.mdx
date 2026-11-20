@@ -101,6 +101,21 @@ The [Canton Foundation (CF)](https://sync.global) is an independent, non-profit 
 
 The CF does not have unilateral control over the network. Its SV node carries the same voting weight as any other SV, and all governance actions still require the standard BFT vote threshold to pass. The current list of Super Validators is maintained by the CF.
 
+## SV Nodes and SV Reward Beneficiaries
+
+Lists of "Super Validators" from different sources often disagree in size, because some count the SV nodes that vote and others count every organization that holds SV reward weight. These are two different things:
+
+- **SV nodes** are the members of the DSO, recorded in the `svs` map of the `DsoRules` contract. Each SV node operator casts one vote per node on governance actions, and `numSVs` in the vote threshold above counts these nodes. An organization that operates two SV nodes has two votes.
+- **SV reward weight** determines each SV node's share of SV rewards. An SV node can pass all or part of its weight to other parties through its `extraBeneficiaries` configuration (see [SV operations](/global-synchronizer/deployment/sv-operations)). A beneficiary receives SV rewards but does not operate a node and does not vote, so reward weight never adds votes.
+
+Many organizations that hold SV weight under a CIP are beneficiaries of an existing SV node rather than node operators. A single organization can also appear more than once in reward data, for example when its weight is split between separate parties, or when part of its weight is held by an escrow party until milestones in its CIP are met.
+
+The authoritative sources are:
+
+- **Who votes:** the `svs` in the current `DsoRules` contract, which you can read from Scan with [`GET /v0/dso`](/reference/splice-scan-api/get-v0dso).
+- **Who earns SV rewards:** the approved SV identities file for each network in the [CF configs repository](https://github.com/canton-foundation/configs), for example [`configs/MainNet/approved-sv-id-values.yaml`](https://github.com/canton-foundation/configs/blob/main/configs/MainNet/approved-sv-id-values.yaml). It lists every SV node with its reward weight and extra beneficiaries, with comments naming the CIP behind each allocation. The file changes with each SV weight CIP, so cite a specific commit when you need a stable reference.
+- **Why an allocation exists:** the [CIPs](https://github.com/canton-foundation/cips), where each SV onboarding or weight change is proposed and approved.
+
 ## On-Chain Governance Architecture
 
 All governance state lives on-chain as Daml contracts. The `DsoRules` contract holds the authoritative record of DSO membership (`svs` map), and the current configuration. The `AmuletRules` contract holds the Canton Coin configuration schedule. Vote requests, confirmations, and SV state contracts are all ledger-visible, making governance auditable by any party with access to the Scan app.
