@@ -165,7 +165,7 @@ The [JSON Ledger API](/sdks-tools/api-reference/json-api) is exposed under `json
 
 The [gRPC Ledger API](/sdks-tools/api-reference/ledger-api) is exposed under `grpc-ledger-api.localhost:80`. Note that for some clients you may explicitly need to set the `:authority: json-ledger-api.localhost` pseudo-header for this to get resolved correctly.
 
-The Canton Admin API is not exposed by default as it does not yet support auth. There is a commented out section in `nginx.conf` that you can enable to expose it if you ensure that it is not exposed publicly, e.g., through network restrictions.
+The Canton Admin API is not exposed by default. There is a commented out section in `nginx.conf` that you can enable to expose it. Before it is exposed ensure that it is not public, e.g., through network restrictions and/or enable auth on that API.
 
 ## Wallet Gateway and Splice Portfolio
 
@@ -232,6 +232,7 @@ Once you have set up your OAuth provider, you need to configure it by setting th
 | ANS_UI_CLIENT_ID | The client id of the OAuth app for the CNS UI. |
 | WALLET_GATEWAY_UI_CLIENT_ID | The client id of the OAuth app for the Wallet Gateway UI. Only needed if you deploy the Wallet Gateway with `-g`. |
 | CONTACT_POINT | The contact point for your validator node that can be used by other node operators to reach out to you if needed (slack username or an email address). Optional |
+| PARTICIPANT_ADMIN_API_AUTH_AUDIENCE | The audience for the participant Admin API, e.g. `https://participant_admin_api.example.com`. This sets the `admin-api.auth-services.target-audience` configuration for the participant. Optional if --enable-participant-admin-api-auth is not passed to the `start.sh` script. |
 
 In order to enable auth in the deployment, add the `-a` flag to the `start.sh` command, as follows:
 
@@ -245,6 +246,8 @@ ADDITIONAL_CONFIG_HTTP_BASIC_AUTH=canton.validator-apps.validator_backend.partic
 ```
 
 If you have already deployed a non-authenticated validator on your machine, you can migrate it to an authenticated one by stopping the validator with `./stop.sh` and restarting it with the `-a` flag as above. The validator operator user will be automatically migrated, and the user indicated by the `WALLET_ADMIN_USER` variable will be associated with the validator operator party. If you have also onboarded other users onto your validator, those will not be automatically migrated, and you need to manually associate the OAuth users with their corresponding parties. In order to do that, first take note of the party IDs of all relevant users (do this before stopping the unauthenticated validator), e.g. by copying them from the top-right corner of their wallet UIs. Now for every user that you wish to migrate, follow the instructions for associating a user with a party in the [Users, Parties and Wallets in the Splice Wallet section](/global-synchronizer/deployment/validator-users), but replace the admin party ID with the party ID which you wish to associate with each user.
+
+To enable participant Admin API auth, additionally add the `--enable-participant-admin-api-auth` flag to the `start.sh` command. If you have already deployed  a validator without participant Admin API auth first stop it with `stop.sh` and restart with the `--enable-participant-admin-api-auth` flag.
 
 ## Configuring Automatic Traffic Purchases
 
