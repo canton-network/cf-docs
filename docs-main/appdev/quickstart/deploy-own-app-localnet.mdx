@@ -152,7 +152,7 @@ export LOCALNET_DIR=$PWD/splice-node/docker-compose/localnet
 export IMAGE_TAG=0.9.4
 ```
 
-2. Start the three validators (Docker pulls images from `ghcr.io/digital-asset/decentralized-canton-sync/docker/`). If `docker compose` fails with `denied` on GHCR, authenticate first: `docker login ghcr.io` with a GitHub account that can read those packages.
+2. Start the three validators. Docker pulls release images from the public registry `ghcr.io/digital-asset/decentralized-canton-sync/docker/` — no login is required. If a pull fails with `denied`, run `docker logout ghcr.io` and retry; a leftover GHCR login can block anonymous pulls.
 
 ```bash
 docker compose --env-file $LOCALNET_DIR/compose.env \
@@ -401,7 +401,7 @@ With `includeInterfaceView: true`, each matching `createdEvent` includes `interf
 | HTTP **400** `Missing required field at 'commands.commands'` on `submit-and-wait-for-transaction` | Flat commands body (as used by `submit-and-wait`) | Nest commands under `"commands": { "commands": [...], "commandId", "actAs", ... }` and set `transactionFormat` beside it |
 | Compile error recommending separate packages for interfaces | Interface and template in the same package | Split into interface + implementation packages with `multi-package.yaml` (see [m3 interfaces](/appdev/modules/m3-interfaces#define-interfaces-in-their-own-package)) |
 | Version / image mismatch, unexpected API behaviour | LocalNet from an old cn-quickstart `.env` while docs assume dashboard versions | Use the Splice release bundle and `IMAGE_TAG` from the [Version Dashboard](/shared/version-compatibility-dashboard) |
-| `denied` pulling `ghcr.io/digital-asset/decentralized-canton-sync/...` | Not logged in to GHCR, or token lacks package read access | `docker login ghcr.io` with an account that can pull the release images |
+| `denied` pulling `ghcr.io/digital-asset/decentralized-canton-sync/...` | Stale GHCR credentials overriding public anonymous pulls | `docker logout ghcr.io` and retry (release images need no login) |
 | `address already in use` on `docker compose up` | Host port taken (often PostgreSQL 5432) | `export DB_PORT=5440` (or another free port) and retry |
 | Empty ACS query result | Wrong `activeAtOffset`, or party / filter mismatch | Use `GET /v2/state/ledger-end` for the offset; confirm `actAs` party and interface ID |
 
