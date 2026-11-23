@@ -245,23 +245,23 @@ For security, the various components that comprise your Validator node need to b
 1.  Set up an OIDC provider in such a way that both backends and web UI users are able to obtain JWTs in a supported form.
 2.  Configure your backends to use that OIDC provider.
 
-The validator supports non-authenticated deployments as well, but this is strongly discouraged for production deployments. If you wish to run without authentication, please refer to the notes in `helm-validator-no-auth`.
+The validator supports non-authenticated deployments as well, but this is strongly discouraged for production deployments. If you wish to run without authentication, please refer to the notes in [Running without Authentication](#running-without-authentication).
 
 ### OIDC Provider Requirements
 
-This section provides pointers for setting up an OIDC provider for use with your Validator node. Feel free to skip directly to `helm-validator-auth0` if you plan to use [Auth0](https://auth0.com) for your Validator node's authentication needs.
+This section provides pointers for setting up an OIDC provider for use with your Validator node. Feel free to skip directly to [Configuring an Auth0 Tenant](#configuring-an-auth0-tenant) if you plan to use [Auth0](https://auth0.com) for your Validator node's authentication needs.
 
 These docs focus on Auth0, and are being continuously tested and maintained. Other OIDC providers can be used, and are in active use by various community members, who have contributed some notes and examples in Okta and Keycloak community authored examples.
 
 Your OIDC provider must be reachable[^1] at a well known (HTTPS) URL. In the following, we will refer to this URL as `OIDC_AUTHORITY_URL`. Both your Validator node and any users that wish to authenticate to a web UI connected to your Validator node must be able to reach the `OIDC_AUTHORITY_URL`. We require your OIDC provider to provide a [discovery document](https://openid.net/specs/openid-connect-discovery-1_0.html) at `OIDC_AUTHORITY_URL/.well-known/openid-configuration`. We furthermore require that your OIDC provider exposes a [JWK Set](https://datatracker.ietf.org/doc/html/rfc7517) document. In this documentation, we assume that this document is available at `OIDC_AUTHORITY_URL/.well-known/jwks.json`.
 
-For machine-to-machine (Validator node component to Validator node component) authentication, your OIDC provider must support the [OAuth 2.0 Client Credentials Grant](https://tools.ietf.org/html/rfc6749#section-4.4) flow. This means that you must be able to configure (`CLIENT_ID`, `CLIENT_SECRET`) pairs for all Validator node components that need to authenticate themselves to other components. Currently, this is the validator app backend - which needs to authenticate to the Validator node's Canton participant. The `sub` field of JWTs issued through this flow must match the user ID configured as `ledger-api-user` in `helm-validator-auth-secrets-config`. In this documentation, we assume that the `sub` field of these JWTs is formed as `CLIENT_ID@clients`. If this is not true for your OIDC provider, pay extra attention when configuring `ledger-api-user` values below.
+For machine-to-machine (Validator node component to Validator node component) authentication, your OIDC provider must support the [OAuth 2.0 Client Credentials Grant](https://tools.ietf.org/html/rfc6749#section-4.4) flow. This means that you must be able to configure (`CLIENT_ID`, `CLIENT_SECRET`) pairs for all Validator node components that need to authenticate themselves to other components. Currently, this is the validator app backend - which needs to authenticate to the Validator node's Canton participant. The `sub` field of JWTs issued through this flow must match the user ID configured as `ledger-api-user` in [Configuring Authentication on your Validator](#configuring-authentication-on-your-validator). In this documentation, we assume that the `sub` field of these JWTs is formed as `CLIENT_ID@clients`. If this is not true for your OIDC provider, pay extra attention when configuring `ledger-api-user` values below.
 
 For user-facing authentication - allowing users to access the various web UIs hosted on your Validator node, your OIDC provider must support the [OAuth 2.0 Authorization Code Grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1) flow and allow you to obtain client identifiers for the web UIs your Validator node will be hosting. Currently, these are the Wallet web UI and the CNS web UI. You might be required to whitelist a range of URLs on your OIDC provider, such as "Allowed Callback URLs", "Allowed Logout URLs", "Allowed Web Origins", and "Allowed Origins (CORS)". If you are using the ingress configuration of this runbook, the correct URLs to configure here are `https://wallet.validator.YOUR_HOSTNAME` (for the Wallet web UI) and `https://cns.validator.YOUR_HOSTNAME` (for the CNS web UI).
 
 `YOUR_HOSTNAME` is a placeholder that you need to replace with the actual domain name or IP address of the server hosting your services.
 
-An identifier that is unique to the user must be set via the `sub` field of the issued JWT. On some occasions, this identifier will be used as a user name for that user on your Validator node's Canton participant. In `helm-validator-install`, you will be required to configure a user identifier as the `validatorWalletUser` -make sure that whatever you configure there matches the contents of the `sub` field of JWTs issued for that user.
+An identifier that is unique to the user must be set via the `sub` field of the issued JWT. On some occasions, this identifier will be used as a user name for that user on your Validator node's Canton participant. In [Installing the Software](#installing-the-software), you will be required to configure a user identifier as the `validatorWalletUser` -make sure that whatever you configure there matches the contents of the `sub` field of JWTs issued for that user.
 
 *All* JWTs issued for use with your Validator node:
 
@@ -279,7 +279,7 @@ Summing up, your OIDC provider setup must provide you with the following configu
 | WALLET_UI_CLIENT_ID     | The client id of your OIDC provider for the wallet UI.                                  |
 | CNS_UI_CLIENT_ID        | The client id of your OIDC provider for the CNS UI.                                     |
 
-We are going to use these values, exported to environment variables named as per the `Name` column, in `helm-validator-auth-secrets-config` and `helm-validator-install`.
+We are going to use these values, exported to environment variables named as per the `Name` column, in [Configuring Authentication on your Validator](#configuring-authentication-on-your-validator) and [Installing the Software](#installing-the-software).
 
 When first starting out, it is suggested to configure both JWT token audiences below to the same value: `https://canton.network.global`.
 
@@ -296,7 +296,7 @@ Your IAM may also require a scope to be specified when the validator backend req
 |---------------------------------|----------------------------------------------------|
 | OIDC_AUTHORITY_LEDGER_API_SCOPE | The scope for the participant ledger API. Optional |
 
-In case you are facing trouble with setting up your (non-Auth0) OIDC provider, it can be beneficial to skim the instructions in `helm-validator-auth0` as well, to check for functionality or configuration details that your OIDC provider setup might be missing.
+In case you are facing trouble with setting up your (non-Auth0) OIDC provider, it can be beneficial to skim the instructions in [Configuring an Auth0 Tenant](#configuring-an-auth0-tenant) as well, to check for functionality or configuration details that your OIDC provider setup might be missing.
 
 ### Configuring an Auth0 Tenant
 
@@ -337,7 +337,7 @@ To configure [Auth0](https://auth0.com) as your validator's OIDC provider, perfo
     - In step b, use `CNS web UI` as the name of your application.
     - In steps c and d, use the URL for your validator's *CNS* UI. If you're using the ingress configuration of this runbook, that would be `https://cns.validator.YOUR_HOSTNAME`.
 
-Please refer to Auth0's [own documentation on user management](https://auth0.com/docs/manage-users) for pointers on how to set up end-user accounts for the two web UI applications you created. Note that you will need to create at least one such user account for completing the steps in `helm-validator-install` - for being able to log in as your Validator node's administrator. You will be asked to obtain the user identifier for this user account. It can be found in the Auth0 interface under User Management -\> Users -\> your user's name -\> user_id (a field right under the user's name at the top).
+Please refer to Auth0's [own documentation on user management](https://auth0.com/docs/manage-users) for pointers on how to set up end-user accounts for the two web UI applications you created. Note that you will need to create at least one such user account for completing the steps in [Installing the Software](#installing-the-software) - for being able to log in as your Validator node's administrator. You will be asked to obtain the user identifier for this user account. It can be found in the Auth0 interface under User Management -\> Users -\> your user's name -\> user_id (a field right under the user's name at the top).
 
 We will use the environment variables listed in the table below to refer to aspects of your Auth0 configuration:
 
@@ -354,7 +354,7 @@ The `AUTH0_TENANT_NAME` is the name of your Auth0 tenant as shown at the top lef
 
 ### Configuring Authentication on your Validator
 
-We are now going to configure your Validator node software based on the OIDC provider configuration values you exported to environment variables at the end of either `helm-validator-auth-requirements` or `helm-validator-auth0`. (Note that some authentication-related configuration steps are also included in `helm-validator-install`)
+We are now going to configure your Validator node software based on the OIDC provider configuration values you exported to environment variables at the end of either [OIDC Provider Requirements](#oidc-provider-requirements) or [Configuring an Auth0 Tenant](#configuring-an-auth0-tenant). (Note that some authentication-related configuration steps are also included in [Installing the Software](#installing-the-software))
 
 The validator app backend requires the following secret (omit the scope if it is not needed in your setup)
 
