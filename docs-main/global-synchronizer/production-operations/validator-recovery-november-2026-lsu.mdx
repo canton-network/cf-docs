@@ -41,7 +41,7 @@ From step 8 on, the stuck node stays stopped. You only start it again, still dis
 
 ### What applies to you
 
-Some instructions depend on your setup and are shown in tabs: **Docker Compose** or **Helm**, and **Local keys** or **KMS** (participant keys in an AWS or GCP KMS configured in Canton). Choose your setup in one of these tabs, and the other tabs on this page switch to it too. If your participant uses a KMS driver, contact DA support before you start.
+Some instructions depend on your setup and are shown in tabs: **Docker Compose** or **Helm**, and **Local keys** or **KMS** (participant keys in an AWS or GCP KMS configured in Canton). Choose your setup in one of these tabs, and the other tabs on this page switch to it too.
 
 ## Limitations
 
@@ -76,7 +76,7 @@ Steps 8, 10 and 11 avoid this for contracts shared with the DSO party by importi
 
 ### Multi-hosted parties
 
-A multi-hosted party is hosted on more than one participant. This page covers a multi-hosted party only if it has exactly two hosts and threshold 1, the owning node (below) hosts it with `Submission` permission, and **both** hosts are stuck nodes that you recover with this page. For any other multi-hosted party, contact DA support before you start.
+A multi-hosted party is hosted on more than one participant. This page covers a multi-hosted party only if it has exactly two hosts and threshold 1, the owning node (below) hosts it with `Submission` permission, and **both** hosts are stuck nodes that you recover with this page.
 
 The node whose namespace the party belongs to is the **owning node**. The pre-flight check shows which one it is. Recover the nodes in this order:
 
@@ -165,8 +165,8 @@ mappings.map(_.partyId).foreach { party =>
 
 Go ahead if all of these hold:
 
-* The only registered synchronizer is the old one (see the table at the top). If it shows another one, someone ran `perform_manual_lsu`, `repair.perform_late_lsu` or the SQL statements of an earlier recovery runbook on this node. Restore the database backup from before that, or contact DA support.
-* **Only with KMS:** every key has a name, only the namespace key's name contains `namespace`, and every key shows `kms=true`.
+* The only registered synchronizer is the old one (see the table at the top). If it shows another one, someone ran `perform_manual_lsu`, `repair.perform_late_lsu` or the SQL statements of an earlier recovery runbook on this node. Restore the database backup from before that.
+* **Only with KMS:** the KMS is configured in Canton, not through a KMS driver. Every key has a name, only the namespace key's name contains `namespace`, and every key shows `kms=true`.
 * Every party with `external=false` and a single host shows `own-namespace=true`.
 * Every party with `external=true` has a single host, and its owner can sign a new hosting for it soon after step 10. Until then the party has no working host and can't use its assets.
 * Every party with more than one host fits [Multi-hosted parties](#multi-hosted-parties). Compare the output of its two hosts: the party shows `own-namespace=true` on one of them. If it doesn't on either, its owner is outside these nodes.
@@ -366,7 +366,7 @@ println(s"External parties (steps 5 and 11): ${external.map(_.toProtoPrimitive).
 println(s"Multi-hosted parties of other namespaces (step 12): ${multiHosted.map(_.toProtoPrimitive).mkString(", ")}")
 
 // An empty party set would export the contracts of all hosted parties
-require(internal.nonEmpty, "No internal party found. Contact DA support")
+require(internal.nonEmpty, "No internal party found. Check the pre-flight output")
 participant.repair.export_acs(
   parties = internal.toSet,
   ledgerOffset = offset,
@@ -620,7 +620,7 @@ val internal = Files.readString(Paths.get("internal-parties.txt")).linesIterator
 val hostedHere = participant.topology.party_to_participant_mappings.list(syncId, filterParticipant = participant.id.filterString).map(_.item.partyId).toSet
 
 val exportedInternalNotYetHosted = internal -- hostedHere
-require(exportedInternalNotYetHosted.isEmpty, s"Internal party migration failed. Missing $exportedInternalNotYetHosted. Check for errors and contact DA support")
+require(exportedInternalNotYetHosted.isEmpty, s"Internal party migration failed. Missing $exportedInternalNotYetHosted. See the checks of step 8")
 
 participant.synchronizers.disconnect_all()
 participant.repair.import_acs(syncId, "acs-internal.gz", workflowIdPrefix = "recovery-internal", excludedStakeholders = Set(dso))
@@ -692,8 +692,8 @@ val partyId = PartyId.tryFromProtoPrimitive("<party ID>")
 val current = participant.topology.party_to_participant_mappings
   .list(syncId, filterParty = partyId.filterString)
   .find(_.item.partyId == partyId)
-  .getOrElse(sys.error(s"No hosting found for $partyId. Contact DA support"))
-require(current.item.partySigningKeys.exists(_.fingerprint == partyId.namespace.fingerprint), "The party's own key isn't among its signing keys. Contact DA support")
+  .getOrElse(sys.error(s"No hosting found for $partyId. Check the party ID"))
+require(current.item.partySigningKeys.exists(_.fingerprint == partyId.namespace.fingerprint), "The party's own key isn't among its signing keys, which step 11 doesn't cover")
 
 // Hosted on this node only, with the same signing keys, as the next change of the party's hosting
 val hosting = PartyToParticipant.tryCreate(
@@ -830,7 +830,7 @@ Step 13 can't detect every difference. If the only contracts your node shares wi
 
 Don't use `participant.commitments.lookup_received_acs_commitments`: from protocol version 36, it reads the old processor's state, which is off by default, and fails with `No computations done`.
 
-`SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` and `Requeuing and backing off` from step 9 (if the participant had no traffic), and sequencer connection restarts after `RST_STREAM closed stream` (other connections remain usable), are expected. Contact DA support about any other warning or error.
+`SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` and `Requeuing and backing off` from step 9 (if the participant had no traffic), and sequencer connection restarts after `RST_STREAM closed stream` (other connections remain usable), are expected. Look up any other warning or error in the [error reference](#error-reference). If it isn't there and names one of your parties or contracts, stop and contact DA support.
 
 With a multi-hosted party, the other host, if already recovered, logs mismatches with the owning node while the owning node is between its steps 8 and 10. They must stop once the owning node has passed its step 13.
 
@@ -841,7 +841,7 @@ If any other mismatch has a period that ends after the disconnect before the las
 * the output of the comparison in step 10
 
 <Warning>
-DO NOT submit commands before ensuring there are no warnings or errors in the participant's logs.
+DO NOT submit commands until step 13 has passed and you've checked every warning and error in the participant's logs as described above.
 </Warning>
 
 ## Phase F. Go live
@@ -883,7 +883,7 @@ If your application is built on top of [PQS](/sdks-tools/development-tools/pqs),
 
 ### Step 16. Checks and troubleshooting
 
-See the [error reference](#error-reference) below and the [troubleshooting guide](/global-synchronizer/production-operations/validator-disaster-recovery#limitations-and-troubleshooting) for recovering a node from its keys. If you run into difficulties, contact DA support.
+See the [error reference](#error-reference) below and the [troubleshooting guide](/global-synchronizer/production-operations/validator-disaster-recovery#limitations-and-troubleshooting) for recovering a node from its keys.
 
 ### Step 17. Import the Ledger API users and back up the new node
 
@@ -1030,12 +1030,12 @@ Then repeat both checks of step 13 on the target, and the mismatch search on the
 | `PACKAGE_SERVICE_CANNOT_AUTODETECT_SYNCHRONIZER` | step 8 | a service uploads DARs before the participant is connected | nothing, harmless |
 | `Ignoring parties that we will ...` | step 8, validator app log | the validator app doesn't move external or multi-hosted parties | nothing, unless it names a party from `internal-parties.txt` |
 | `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT`, `extraTrafficLimit = 0`, `Requeuing and backing off` | steps 8 and 9 | the new participant has no bought traffic yet | wait, or buy traffic as in step 8 |
-| `Internal party migration failed. Missing ...` | step 10 | step 8 didn't move all internal parties | check the step 8 logs, contact DA support |
-| `Cannot apply a repair command as the last event is a topology offset` | steps 10, 11, G6 | a check on Canton 3.7 | step 10: reconnect, wait a minute, disconnect, import again. Step 11: don't reconnect; run the failed import again with `forceRepairWhenTopologyTransactionAtLedgerEnd = true`. G6: stop and contact DA support |
+| `Internal party migration failed. Missing ...` | step 10 | step 8 didn't move all internal parties | see [Check the new node](#check-the-new-node) in step 8 |
+| `Cannot apply a repair command as the last event is a topology offset` | steps 10, 11, G6 | a check on Canton 3.7 | step 10: reconnect, wait a minute, disconnect, import again. Step 11: don't reconnect; run the failed import again with `forceRepairWhenTopologyTransactionAtLedgerEnd = true`. G6: don't reconnect, see G6 |
 | `TOPOLOGY_SERIAL_MISMATCH` | step 11 | the party's hosting changed after the owner signed | run the first snippet of step 11 again, and have the owner sign the new hash |
 | `Cannot add previously archived contract` | steps 10, 11, G6 | the export has a contract that the new node has already seen archived | stop and contact DA support |
 | `Insufficient funds to buy configured traffic amount` | whenever the validator app runs after step 8, validator app log | the validator party's CC doesn't cover one top-up | send CC to the validator party or lower the target throughput |
 | `No computations done` | `lookup_received_acs_commitments` | the command doesn't work on protocol version 36 and later | use the log checks of step 13 |
-| `ACS_COMMITMENT_MISMATCH` | step 13 | the new node and a counter-participant disagree on shared contracts | if its period ends before the disconnect that preceded your last import (see step 13), nothing. Otherwise stop and contact DA support with the data listed in step 13 |
+| `ACS_COMMITMENT_MISMATCH` | step 13 | the new node and a counter-participant disagree on shared contracts | if its period ends before the disconnect that preceded your last import (see step 13), nothing. Otherwise see step 13 |
 | `Failed to read config at startup` | validator app log, Docker Compose | the `ADDITIONAL_CONFIG_DO_NOT_START` entry of step 2 or step 8 stops the validator app, as intended | nothing. Step 14 removes the entry from the new node |
 | `RST_STREAM closed stream` | any step, INFO | a sequencer connection restarted | nothing, the participant uses its other connections |
