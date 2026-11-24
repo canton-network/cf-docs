@@ -579,10 +579,21 @@ If an import in this phase or in G6 fails, look up the error in the [error refer
 participant.synchronizers.reconnect_all()
 // Uploads every DAR downloaded in step 6. From step 14, the validator app vets the Splice versions that the network requires
 new java.io.File("dars").listFiles().filter(_.getName.endsWith(".dar")).foreach(f => participant.dars.upload(f.getPath, vetAllPackages = !f.getName.startsWith("splice-")))
-participant.synchronizers.disconnect_all()
 ```
 
 The upload vets every DAR except the Splice DARs (names starting with `splice-`), so the old Splice versions stay unvetted. If you haven't bought traffic, each DAR can take a minute or more (see `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` in the [error reference](#error-reference)). If the snippet fails or you interrupt it, run it again.
+
+Vetting the other DARs can also bring back versions that you unvetted on the old node, for example because they have bugs. Unvet again any DAR that you know should stay unvetted, by its main package ID (`participant.dars.list()` shows them):
+
+```scala
+participant.dars.vetting.disable("<main package ID>")
+```
+
+Then disconnect:
+
+```scala
+participant.synchronizers.disconnect_all()
+```
 
 ### Step 10. Import the ACS of the internal parties
 
