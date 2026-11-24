@@ -137,6 +137,56 @@ def test_versioned_source_config_changes_summarizes_canton_release_versions(tmp_
     ]
 
 
+def test_versioned_source_config_changes_summarizes_added_lines_and_publish_version(tmp_path: Path) -> None:
+    module = load_script_module()
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    write_json(
+        before,
+        {"publish_version": "3.5", "versions": [{"version": "3.5", "canton_version": "3.5.19"}]},
+    )
+    write_json(
+        after,
+        {
+            "publish_version": "3.7",
+            "versions": [
+                {"version": "3.5", "canton_version": "3.5.19"},
+                {"version": "3.7", "canton_version": "3.7.4"},
+            ],
+        },
+    )
+
+    assert module.versioned_source_config_changes(before, after, label="JSON Ledger API OpenAPI") == [
+        "- JSON Ledger API OpenAPI 3.7 added: 3.7.4",
+        "- JSON Ledger API OpenAPI publish_version: 3.5 -> 3.7",
+    ]
+
+
+def test_history_report_changes_reports_publish_version_and_added_versions(tmp_path: Path) -> None:
+    module = load_script_module()
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    write_json(
+        before,
+        {"title": "Java bindings", "publish_version": "3.5.17", "comparison_versions": ["3.5.16", "3.5.17"]},
+    )
+    write_json(
+        after,
+        {
+            "title": "Java bindings",
+            "publish_version": "3.7.4",
+            "comparison_versions": ["3.5.16", "3.5.17", "3.6.0", "3.7.4"],
+        },
+    )
+
+    assert module.history_report_changes(before, after) == [
+        "- Java bindings publish_version: 3.5.17 -> 3.7.4",
+        "- Java bindings added 2 version(s): 3.6.0, 3.7.4",
+    ]
+    assert module.history_report_changes(before, before) == []
+    assert module.history_report_changes(None, after)[0] == "- Java bindings publish_version: null -> 3.7.4"
+
+
 def test_artifact_source_config_changes_summarizes_added_versions(tmp_path: Path) -> None:
     module = load_script_module()
     before = tmp_path / "before.json"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import sys
 from pathlib import Path
@@ -180,33 +181,78 @@ def test_target_matrix_includes_daml_requirement() -> None:
     }
 
 
-def test_daml_script_target_wires_source_pin_and_generated_paths() -> None:
+UNPINNED_TARGET_KEYS = (
+    "wallet-gateway-openrpc",
+    "ledger-bindings",
+    "daml-standard-library",
+    "daml-script",
+    "typescript-bindings",
+)
+
+
+def test_unpinned_targets_always_generate_and_summarize_history_reports() -> None:
+    module = load_script_module()
+
+    for key in UNPINNED_TARGET_KEYS:
+        target = next(target for target in module.UPDATE_TARGETS if target.key == key)
+        # Their updaters are no-ops because generation resolves the latest releases itself, so
+        # gating generation on a pin change would freeze them at the last manual regeneration.
+        assert target.source_update_commands == ()
+        assert target.source_update_paths == ()
+        assert target.summary_kind == "history-report"
+        assert target.history_reports
+        assert all(report.endswith("history-report.json") for report in target.history_reports)
+        assert not any("update:generated-reference-sources" in command for command in target.validation)
+        assert not any(path.endswith("source-artifacts.json") for path in target.paths)
+
+
+def test_daml_script_target_wires_generated_paths() -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
 
     assert target.branch == "generated-references/daml-script/update"
-    assert target.source_update_commands == (
-        module.nix_develop_command("npm run update:generated-reference-sources -- --source daml-script"),
-    )
-    assert target.source_update_paths == ("config/x2mdx/daml-script/source-artifacts.json",)
     assert target.generate_commands == (
         module.nix_develop_command("npm run generate:daml-script-reference"),
     )
     assert target.paths == (
-        "config/x2mdx/daml-script/source-artifacts.json",
         "docs-main/docs.json",
         "docs-main/appdev/reference/daml-script",
     )
+    assert target.history_reports == ("docs-main/appdev/reference/daml-script/history-report.json",)
     assert target.validation == (
-        "npm run update:generated-reference-sources -- --source daml-script",
         "npm run generate:daml-script-reference",
         "git diff --check",
     )
 
 
-def test_daml_script_target_skips_generation_when_source_is_unchanged(monkeypatch) -> None:
+def test_unpinned_target_generates_even_when_no_source_file_changed(monkeypatch, tmp_path: Path) -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+    calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(module, "summarize_history_report_changes", lambda target, base_sha: ["- changed"])
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr", kwargs["target"].key)))
+    monkeypatch.setattr(module.pr_utils, "run", lambda command: calls.append(command))
+
+    module.process_target(
+        target=target,
+        base_sha="base-sha",
+        base_branch="main",
+        repository="canton-network/cf-docs",
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        module.nix_develop_command("npm run generate:daml-script-reference"),
+        ("pr", "daml-script"),
+    ]
+
+
+def test_pinned_target_skips_generation_when_source_is_unchanged(monkeypatch) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "json-api-reference")
     calls: list[tuple[str, ...]] = []
 
     monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
@@ -233,15 +279,15 @@ def test_daml_script_target_skips_generation_when_source_is_unchanged(monkeypatc
 
     assert calls == [
         ("reset", "base-sha"),
-        module.nix_develop_command("npm run update:generated-reference-sources -- --source daml-script"),
-        ("close", "generated-references/daml-script/update"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source ledger-api"),
+        ("close", "generated-references/json-api-reference/update"),
     ]
     assert not any("generate:daml-script-reference" in " ".join(call) for call in calls if isinstance(call, tuple))
 
 
 def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypatch) -> None:
     module = load_script_module()
-    target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-openrpc")
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "json-api-reference")
     calls: list[tuple[str, ...]] = []
 
     monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
@@ -268,8 +314,8 @@ def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypa
 
     assert calls == [
         ("reset", "base-sha"),
-        module.nix_develop_command("npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
-        ("close", "generated-references/wallet-gateway-openrpc/update"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source ledger-api"),
+        ("close", "generated-references/json-api-reference/update"),
     ]
 
 
@@ -307,7 +353,7 @@ def test_version_dashboard_skips_timestamp_only_source_changes(monkeypatch, tmp_
 
 def test_source_update_targets_generate_when_source_changed(monkeypatch, tmp_path: Path) -> None:
     module = load_script_module()
-    target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-openrpc")
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "json-api-reference")
     calls: list[tuple[str, ...]] = []
     body_paths: list[Path] = []
 
@@ -336,9 +382,9 @@ def test_source_update_targets_generate_when_source_changed(monkeypatch, tmp_pat
 
     assert calls == [
         ("reset", "base-sha"),
-        module.nix_develop_command("npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
-        module.nix_develop_command("npm run generate:wallet-gateway-openrpc-reference"),
-        ("pr", "wallet-gateway-openrpc"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source ledger-api"),
+        module.nix_develop_command("npm run generate:json-api-reference"),
+        ("pr", "json-api-reference"),
     ]
     assert body_paths
 
@@ -438,7 +484,7 @@ def test_body_markdown_includes_description_changes_and_validation() -> None:
         changes=["- Wallet Gateway OpenRPC publish_version: 0.25.0 -> 1.4.0"],
     )
 
-    assert body.startswith("Updates the Wallet Gateway OpenRPC source pin")
+    assert body.startswith("Regenerates the Wallet Gateway OpenRPC reference")
     assert "Version changes:\n- Wallet Gateway OpenRPC publish_version: 0.25.0 -> 1.4.0" in body
     assert "- `npm run generate:wallet-gateway-openrpc-reference`" in body
 
@@ -474,7 +520,11 @@ def test_summarize_target_changes_supports_versioned_source_configs(monkeypatch,
 
 def test_summarize_target_changes_supports_artifact_source_configs(monkeypatch, tmp_path: Path) -> None:
     module = load_script_module()
-    target = next(target for target in module.UPDATE_TARGETS if target.key == "ledger-bindings")
+    target = dataclasses.replace(
+        next(target for target in module.UPDATE_TARGETS if target.key == "ledger-bindings"),
+        summary_kind="artifact-source-config",
+        summary_path="config/x2mdx/ledger-bindings/source-artifacts.json",
+    )
     before = tmp_path / "before.json"
     before.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
