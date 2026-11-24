@@ -428,7 +428,7 @@ This step follows [Recovery from an identities backup](/global-synchronizer/prod
 * **Deployment files.** Start from the Docker Compose files or Helm charts of the Splice version that the network runs now, and carry your customizations over as for an upgrade (for example KMS settings, an external database, a proxy or extra services). Keep a copy of the old compose directory or Helm values, in case you need to start the old node again to export from it.
 * **Settings.** Compare the old and the new settings line by line (`.env` and `compose.yaml`, or the Helm values). Every setting that isn't a database name, an identity or an image version must be in the new files too (except `ADDITIONAL_CONFIG_DO_NOT_START` from step 2 and `ADDITIONAL_CONFIG_NO_RECONNECT` from step 3), for example traffic top-up, authentication, wallet sweep or auto-accept settings.
 * **New databases** for the participant and the validator app. Keep the old databases until step 13 passes (CC-only path: until the check of [Choose your path](#choose-your-path) passes).
-* **Memory.** The new participant needs the most memory when it first downloads the synchronizer's topology state.
+* **Memory.** The new participant needs the most memory when it first downloads the synchronizer's topology state. Give the new node at least the memory of the old one, and see the [hardware requirements](/global-synchronizer/deployment/prerequisites).
 
 <Tabs>
 <Tab title="Docker Compose">
@@ -443,13 +443,10 @@ This step follows [Recovery from an identities backup](/global-synchronizer/prod
       name: splice-validator_postgres-splice-new
   ```
 
-* **Memory:** with the default limits (`PARTICIPANT_MEMORY` 20G and `VALIDATOR_MEMORY` 8G in `compose.yaml`, which `.env` can override) the host needs about 32 GB; check with `free -g`. Add memory to the host rather than lowering the limits.
-
 </Tab>
 <Tab title="Helm">
 
 * **New databases:** set new names in `persistence.databaseName` of the participant values and of the validator values. The validator chart creates its database. Create the new participant database yourself on the Postgres server first (`CREATE DATABASE <name>;`): the participant chart refuses to create one while the old participant database exists. If you can't, set `persistence.enableParticipantDbConflictCheck: false` in the participant values instead.
-* **Memory:** don't lower the participant's memory limits below the chart defaults.
 
 </Tab>
 </Tabs>
@@ -573,30 +570,26 @@ After this step, you have recovered the CC holdings of your internal parties.
 
 ## Phase D. Restore the contracts
 
+If an import in this phase or in G6 fails, look up the error in the [error reference](#error-reference) before you run anything else. Don't reconnect unless it says so.
+
 ### Step 9. Upload the exported DARs
 
 ```scala
-// Reconnect to the synchronizer to vet the DARs
+// Vetting goes through the synchronizer
 participant.synchronizers.reconnect_all()
-// Uploads and vets every DAR downloaded in step 6
-new java.io.File("dars").listFiles().filter(_.getName.endsWith(".dar")).foreach(f => participant.dars.upload(f.getPath))
+// Uploads every DAR downloaded in step 6. From step 14, the validator app vets the Splice versions that the network requires
+new java.io.File("dars").listFiles().filter(_.getName.endsWith(".dar")).foreach(f => participant.dars.upload(f.getPath, vetAllPackages = !f.getName.startsWith("splice-")))
 ```
 
-Without bought traffic, each DAR can take a minute or more, and the participant log shows `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` and `Requeuing and backing off`. That's expected: the participant retries until the base rate allows the message. Let the upload finish.
+The upload vets every DAR except the Splice DARs (names starting with `splice-`), so the old Splice versions stay unvetted. If you haven't bought traffic, each DAR can take a minute or more (see `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` in the [error reference](#error-reference)). If the snippet fails or you interrupt it, run it again.
 
-The upload also vets the old Splice versions (DARs whose names start with `splice-`). That's harmless. From step 14, the validator app unvets the old versions that its release ships. Any others stay vetted, which doesn't change the version that transactions use.
-
-Then check that the other DARs are vetted, and vet those that aren't. The check skips the Splice DARs, since the validator app manages their vetting:
+Vetting the other DARs can also bring back versions that you unvetted on the old node, for example because they have bugs. Unvet again any DAR that you know should stay unvetted, by its main package ID (`participant.dars.list()` shows them):
 
 ```scala
-val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
-val vetted = participant.topology.vetted_packages.list(store = Some(syncId), filterParticipant = participant.id.filterString).flatMap(_.item.packages.map(_.packageId.toString)).toSet
-val notVetted = participant.dars.list().filterNot(d => vetted(d.mainPackageId) || d.name.startsWith("splice-"))
-notVetted.foreach(d => println(s"Not vetted: ${d.name} ${d.version}"))
-notVetted.foreach(d => participant.dars.vetting.enable(d.mainPackageId))
+participant.dars.vetting.disable("<main package ID>")
 ```
 
-It prints the DARs that it vets. If it prints any, run it again: it should then print nothing. Then disconnect:
+Then disconnect:
 
 ```scala
 participant.synchronizers.disconnect_all()
@@ -634,8 +627,6 @@ participant.synchronizers.reconnect_all()
 ```
 
 If the check reports a party that you allocated on the stuck node after the LSU announcement, that party is not known to the synchronizer and was not migrated. Contact DA support in that case.
-
-If `import_acs` fails with `Cannot apply a repair command as the last event is a topology offset`, reconnect, wait a minute, disconnect and run the import again.
 
 Only your validator party is a stakeholder of this record, so purging it doesn't affect anyone else. The `println` shows one line with the old participant ID if a top-up record was removed, or nothing. Running the `val oldTopUpStates = ...` line again should return `List()`.
 
@@ -677,7 +668,7 @@ An external party can only be hosted on the new node with a hosting signed by it
 Onboard external parties right after step 10. Until then, don't use contracts shared between your internal and external parties (see [Contracts that changed after the LSU without your node](#contracts-that-changed-after-the-lsu-without-your-node)). If an owner can't sign before you want to go live in step 14, contact DA support.
 </Warning>
 
-The snippets follow [Recover the Coin balance of an external party](/global-synchronizer/production-operations/validator-disaster-recovery#recover-the-coin-balance-of-an-external-party), with two differences. They keep the party's signing keys in its new hosting: without them, Canton rejects the hosting even with the owner's signature. And they disconnect the node before the party's contracts are imported (see below). Skip the setup-proposal flow at the end of that section, since the imports restore the party's transfer preapproval and validator right.
+The snippets follow [Recover the Coin balance of an external party](/global-synchronizer/production-operations/validator-disaster-recovery#recover-the-coin-balance-of-an-external-party), with two differences. They keep the party's signing keys in its new hosting: without them, Canton rejects the hosting even with the owner's signature. And they disconnect the node before the party's contracts are imported (see [Why does step 11 disconnect right after loading the hosting?](#why-does-step-11-disconnect-right-after-loading-the-hosting)). Skip the setup-proposal flow at the end of that section, since the imports restore the party's transfer preapproval and validator right.
 
 First, in the console of the new node, prepare the new hosting. Replace the placeholder with the party ID:
 
@@ -746,8 +737,6 @@ participant.topology.party_to_participant_mappings
 
 If it doesn't show this participant as the only host, stop and contact DA support.
 
-The node stays disconnected until the party's contracts are imported. If a contract of the party changes meanwhile, the node processes the change when it reconnects, after the import. If the node were still connected when such a change happens, the import would fail with `Cannot add previously archived contract`. That's why the snippet disconnects straight after `load`, which returns once the hosting has taken effect. A change in the few milliseconds between the two lines would have the same effect.
-
 On the machine where the console runs, download the party's contracts that are shared with the DSO party from Scan, as of the `validFrom` time that the snippet printed:
 
 ```bash
@@ -768,8 +757,6 @@ participant.repair.import_acs(syncId, s"acs-external-$i.gz", workflowIdPrefix = 
 participant.synchronizers.reconnect_all()
 ```
 
-If an import fails with `Cannot apply a repair command as the last event is a topology offset`, the new hosting is still the node's last event. This is rare. Don't reconnect: the node would then process the party's transactions before it has their contracts. Run the failed line again with `forceRepairWhenTopologyTransactionAtLedgerEnd = true` added, then the lines after it. The validator app sets the same flag for its import from Scan in step 8.
-
 After this step, you have recovered the assets of your external parties.
 
 ### Step 12. Multi-hosted parties of other namespaces
@@ -780,9 +767,9 @@ Skip this step if `multi-hosted-parties.txt` is empty. Otherwise finish steps 13
 
 ### Step 13. ACS checks
 
-After the imports, check the ACS commitments of the new participant in its log. The participant logs the matches for a 30-minute commitment period within about half an hour after the period ends (3 to 25 minutes on TestNet in November 2026). Wait until you see them for at least two periods that ended after the last reconnect in step 10 or 11. For example, if step 10 reconnected at 08:05 UTC, the two periods are 08:00 to 08:30 and 08:30 to 09:00 UTC, and you can check after about 09:25 UTC.
+After the imports, check the ACS commitments of the new participant in its log. Wait until it has logged the matches for at least two 30-minute commitment periods that ended after the last reconnect in step 10 or 11 (see [How long does step 13 take?](#how-long-does-step-13-take)).
 
-The participant logs to standard output only. First check that commitments are being exchanged:
+First check that commitments are being exchanged:
 
 <Tabs>
 <Tab title="Docker Compose">
@@ -801,9 +788,9 @@ kubectl logs <participant pod> -n <namespace> | grep -F -e 'Commitment correct f
 </Tab>
 </Tabs>
 
-You should see `Commitment correct for sender ...` lines from the super validators' participants, `All commitments up to ... have been sent successfully` lines, and no `ACS_COMMITMENT_MISMATCH` for a period that ends after the disconnect before the last import (see below).
+You should see `Commitment correct for sender ...` lines from the super validators' participants and `All commitments up to ... have been sent successfully` lines.
 
-Then search the whole log for mismatches, since the first check only shows the last 20 lines. Each mismatch spans several log lines, and `-A5` also shows the sending participant and its period:
+Then search the whole log for mismatches:
 
 <Tabs>
 <Tab title="Docker Compose">
@@ -822,15 +809,11 @@ kubectl logs <participant pod> -n <namespace> | grep -F -A5 'ACS_COMMITMENT_MISM
 </Tab>
 </Tabs>
 
-Judge each mismatch by the end of its period (`toInclusive = ...` in `period = CommitmentPeriod(...)`), not by the time of the log line. Compare it with the disconnect before the last import: the one at the end of step 9 if step 10 was your last import, or the one right after `load` in step 11. Mismatches for periods that end before that disconnect are expected, since the new node doesn't have the contracts that your parties share outside the DSO party until the import. Some of them are only logged after the reconnect, because the node receives the other participant's commitment for the last of these periods only then.
+Judge each mismatch by the end of its period (`toInclusive = ...` in `period = CommitmentPeriod(...)`), not by the time of the log line. Mismatches for periods that end before the disconnect before the last import are expected (see [Which ACS commitment mismatches are expected?](#which-acs-commitment-mismatches-are-expected)). That disconnect is the one at the end of step 9 if step 10 was your last import, or the one right after `load` in step 11.
 
 Step 13 has passed when the first check shows the expected lines and no mismatch has a period that ends after that disconnect.
 
-Step 13 can't detect every difference. If the only contracts your node shares with another participant differ (see [Contracts that changed after the LSU without your node](#contracts-that-changed-after-the-lsu-without-your-node)), neither participant logs a mismatch. Contracts shared with the DSO party aren't affected, since they come from Scan.
-
-Don't use `participant.commitments.lookup_received_acs_commitments`: from protocol version 36, it reads the old processor's state, which is off by default, and fails with `No computations done`.
-
-`SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` and `Requeuing and backing off` from step 9 (if the participant had no traffic), and sequencer connection restarts after `RST_STREAM closed stream` (other connections remain usable), are expected. Look up any other warning or error in the [error reference](#error-reference). If it isn't there and names one of your parties or contracts, stop and contact DA support.
+Look up the other warnings and errors of the participant log in the [error reference](#error-reference). If one isn't there and names one of your parties or contracts, stop and contact DA support.
 
 With a multi-hosted party, the other host, if already recovered, logs mismatches with the owning node while the owning node is between its steps 8 and 10. They must stop once the owning node has passed its step 13.
 
@@ -925,13 +908,11 @@ The placeholders below are:
 
 Stop the validator app and the other services you stopped in step 2, as in the warning box of step 8. G7 starts them again as in step 14. Keep them stopped until G7, since the validator app connects the participant to the synchronizer whenever it starts.
 
-Copy the `dars` directory that the owning node downloaded in its step 6 to this node, and upload the DARs. The participant is connected and must stay connected for G2, so run only the upload line of step 9:
+Copy the `dars` directory that the owning node downloaded in its step 6 to this node, and upload the DARs as in step 9. The participant is connected and must stay connected for G2, so run only the upload line:
 
 ```scala
-new java.io.File("dars").listFiles().filter(_.getName.endsWith(".dar")).foreach(f => participant.dars.upload(f.getPath))
+new java.io.File("dars").listFiles().filter(_.getName.endsWith(".dar")).foreach(f => participant.dars.upload(f.getPath, vetAllPackages = !f.getName.startsWith("splice-")))
 ```
-
-Then run the vetting check of step 9, but not its disconnect.
 
 ### G2. Target: propose to host the party, then disconnect
 
@@ -995,8 +976,6 @@ participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(m
 participant.synchronizers.reconnect_all()
 ```
 
-If `import_acs` fails with `Cannot apply a repair command as the last event is a topology offset`, stop and contact DA support. Unlike in step 10, don't reconnect to retry: the target would then process the new hosting before it has the contracts.
-
 ### G7. Check
 
 On either node, the mapping lists both new participants:
@@ -1031,7 +1010,7 @@ Then repeat both checks of step 13 on the target, and the mismatch search on the
 | `Ignoring parties that we will ...` | step 8, validator app log | the validator app doesn't move external or multi-hosted parties | nothing, unless it names a party from `internal-parties.txt` |
 | `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT`, `extraTrafficLimit = 0`, `Requeuing and backing off` | steps 8 and 9 | the new participant has no bought traffic yet | wait, or buy traffic as in step 8 |
 | `Internal party migration failed. Missing ...` | step 10 | step 8 didn't move all internal parties | see [Check the new node](#check-the-new-node) in step 8 |
-| `Cannot apply a repair command as the last event is a topology offset` | steps 10, 11, G6 | a check on Canton 3.7 | step 10: reconnect, wait a minute, disconnect, import again. Step 11: don't reconnect; run the failed import again with `forceRepairWhenTopologyTransactionAtLedgerEnd = true`. G6: don't reconnect, see G6 |
+| `Cannot apply a repair command as the last event is a topology offset` | steps 10, 11, G6 | a check on Canton 3.7 | step 10: reconnect, wait a minute, disconnect, import again. Step 11: don't reconnect; run the failed import again with `forceRepairWhenTopologyTransactionAtLedgerEnd = true`, then the lines after it. G6: don't reconnect; stop and contact DA support. See [Why do steps 10, 11 and G6 handle the topology offset error differently?](#why-do-steps-10-11-and-g6-handle-the-topology-offset-error-differently) |
 | `TOPOLOGY_SERIAL_MISMATCH` | step 11 | the party's hosting changed after the owner signed | run the first snippet of step 11 again, and have the owner sign the new hash |
 | `Cannot add previously archived contract` | steps 10, 11, G6 | the export has a contract that the new node has already seen archived | stop and contact DA support |
 | `Insufficient funds to buy configured traffic amount` | whenever the validator app runs after step 8, validator app log | the validator party's CC doesn't cover one top-up | send CC to the validator party or lower the target throughput |
@@ -1039,3 +1018,21 @@ Then repeat both checks of step 13 on the target, and the mismatch search on the
 | `ACS_COMMITMENT_MISMATCH` | step 13 | the new node and a counter-participant disagree on shared contracts | if its period ends before the disconnect that preceded your last import (see step 13), nothing. Otherwise see step 13 |
 | `Failed to read config at startup` | validator app log, Docker Compose | the `ADDITIONAL_CONFIG_DO_NOT_START` entry of step 2 or step 8 stops the validator app, as intended | nothing. Step 14 removes the entry from the new node |
 | `RST_STREAM closed stream` | any step, INFO | a sequencer connection restarted | nothing, the participant uses its other connections |
+
+## FAQ
+
+### Why does step 11 disconnect right after loading the hosting?
+
+The node stays disconnected until the party's contracts are imported. If a contract of the party changes meanwhile, the node processes the change when it reconnects, after the import. If the node were still connected when such a change happens, the import would fail with `Cannot add previously archived contract`. That's why the snippet disconnects straight after `load`, which returns once the hosting has taken effect. A change in the few milliseconds between the two lines would have the same effect.
+
+### Why do steps 10, 11 and G6 handle the topology offset error differently?
+
+Canton 3.7 refuses a repair import while the node's last event is a topology change, and fails with `Cannot apply a repair command as the last event is a topology offset`. In step 10, reconnecting for a minute lets the node process newer events. In step 11 and G6, the last event is the party's new hosting, which is rare. Reconnecting would make the node process the party's transactions before it has the party's contracts. So step 11 runs the import again with `forceRepairWhenTopologyTransactionAtLedgerEnd = true`, the same flag that the validator app sets for its import from Scan in step 8.
+
+### How long does step 13 take?
+
+The participant logs the matches for a 30-minute commitment period within about half an hour after the period ends (3 to 25 minutes on TestNet in November 2026). For example, if step 10 reconnected at 08:05 UTC, the two periods are 08:00 to 08:30 and 08:30 to 09:00 UTC, and you can check after about 09:25 UTC.
+
+### Which ACS commitment mismatches are expected?
+
+Until the import, the new node doesn't have the contracts that your parties share outside the DSO party, so its commitments for the periods before the import don't match. That's why only periods that end after the disconnect before the last import count. Some of these mismatches are only logged after the reconnect, because the node receives the other participant's commitment for the last of these periods only then.
