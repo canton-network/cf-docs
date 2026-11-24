@@ -137,6 +137,31 @@ def test_versioned_source_config_changes_summarizes_canton_release_versions(tmp_
     ]
 
 
+def test_versioned_source_config_changes_summarizes_added_lines_and_publish_version(tmp_path: Path) -> None:
+    module = load_script_module()
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    write_json(
+        before,
+        {"publish_version": "3.5", "versions": [{"version": "3.5", "canton_version": "3.5.19"}]},
+    )
+    write_json(
+        after,
+        {
+            "publish_version": "3.7",
+            "versions": [
+                {"version": "3.5", "canton_version": "3.5.19"},
+                {"version": "3.7", "canton_version": "3.7.4"},
+            ],
+        },
+    )
+
+    assert module.versioned_source_config_changes(before, after, label="JSON Ledger API OpenAPI") == [
+        "- JSON Ledger API OpenAPI 3.7 added: 3.7.4",
+        "- JSON Ledger API OpenAPI publish_version: 3.5 -> 3.7",
+    ]
+
+
 def test_artifact_source_config_changes_summarizes_added_versions(tmp_path: Path) -> None:
     module = load_script_module()
     before = tmp_path / "before.json"

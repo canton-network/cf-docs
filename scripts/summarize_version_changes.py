@@ -152,6 +152,7 @@ def versioned_source_config_changes(before_path: Path, after_path: Path, *, labe
             continue
         before_item = before_versions.get(version)
         if before_item is None:
+            changes.append(f"- {label} {version} added: {format_value(item.get('canton_version'))}")
             continue
         for field in ("canton_version",):
             if before_item.get(field) != item.get(field):
@@ -159,6 +160,11 @@ def versioned_source_config_changes(before_path: Path, after_path: Path, *, labe
                     f"- {label} {version} {field}: "
                     f"{format_value(before_item.get(field))} -> {format_value(item.get(field))}"
                 )
+    if before.get("publish_version") != after.get("publish_version"):
+        changes.append(
+            f"- {label} publish_version: "
+            f"{format_value(before.get('publish_version'))} -> {format_value(after.get('publish_version'))}"
+        )
     return changes
 
 
