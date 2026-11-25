@@ -4,7 +4,11 @@ description: "Returns a stream of the snapshot of the active contracts and incom
 Once the stream of GetActiveContractsResponses completes,
 the client SHOULD begin streaming updates from the update service,
 starting at the GetActiveContractsRequest.active_at_offset specified in this request.
-Clients SHOULD NOT assume that the set of active contracts they receive reflects the state at the ledger end."
+Clients SHOULD NOT assume that the set of active contracts they receive reflects the state at the ledger end.
+If the given offset is different than the ledger end, and there are (un)assignments in-flight at the given offset,
+the snapshot may fail with \"FAILED_PRECONDITION/PARTICIPANT_PRUNED_DATA_ACCESSED\".
+Note that it is ok to request acs snapshots for party migration with offsets other than ledger end, because party
+migration is not concerned with incomplete (un)assignments."
 ---
 
 <div class="x2mdx-ref-page x2mdx-ref-page--operation"></div>
@@ -51,7 +55,7 @@ Clients SHOULD NOT assume that the set of active contracts they receive reflects
 
   <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">WebSocket</span>
 
-  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-3-5">Updated 3.5</a>
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-3-7">Updated 3.7</a>
 
 </div>
 
@@ -71,6 +75,10 @@ Once the stream of GetActiveContractsResponses completes,
 the client SHOULD begin streaming updates from the update service,
 starting at the GetActiveContractsRequest.active_at_offset specified in this request.
 Clients SHOULD NOT assume that the set of active contracts they receive reflects the state at the ledger end.
+If the given offset is different than the ledger end, and there are (un)assignments in-flight at the given offset,
+the snapshot may fail with "FAILED_PRECONDITION/PARTICIPANT_PRUNED_DATA_ACCESSED".
+Note that it is ok to request acs snapshots for party migration with offsets other than ledger end, because party
+migration is not concerned with incomplete (un)assignments.
 
 ## Protocol Details
 
@@ -154,6 +162,17 @@ Clients SHOULD NOT assume that the set of active contracts they receive reflects
 
   </div>
 
+  <div class="x2mdx-ref-field-row">
+    <div class="x2mdx-ref-field-main">
+      <code class="x2mdx-ref-field-name">eventFormat</code>
+      <span class="x2mdx-ref-type-badge">object</span>
+
+      <span class="x2mdx-ref-required-badge">required</span>
+
+    </div>
+
+  </div>
+
 </div>
 
 
@@ -197,6 +216,17 @@ Clients SHOULD NOT assume that the set of active contracts they receive reflects
 
   </div>
 
+  <div class="x2mdx-ref-field-row">
+    <div class="x2mdx-ref-field-main">
+      <code class="x2mdx-ref-field-name">eventFormat</code>
+      <span class="x2mdx-ref-type-badge">object</span>
+
+      <span class="x2mdx-ref-required-badge">required</span>
+
+    </div>
+
+  </div>
+
 </div>
 
 
@@ -211,6 +241,16 @@ Clients SHOULD NOT assume that the set of active contracts they receive reflects
 ## History
 
 <div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-7">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Updated</span>
+      <code class="x2mdx-ref-history-event-version">3.7</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">channel description updated; publish required fields added: `eventFormat`</p>
+
+  </div>
 
   <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-5">
     <div class="x2mdx-ref-history-event-head">
@@ -239,7 +279,7 @@ Clients SHOULD NOT assume that the set of active contracts they receive reflects
 ```bash wscat
 npx wscat \
   -c <WEBSOCKET_URL> \
-  -x '{"activeAtOffset": "<integer>"}' \
+  -x '{"activeAtOffset": "<integer>", "eventFormat": {"filtersByParty": {}, "filtersForAnyParty": {"cumulative": ["<object>"]}, "verbose": "<boolean>"}}' \
   -w -1
 ```
 
@@ -257,7 +297,16 @@ npx wscat \
 
 ```json message
 {
-  "activeAtOffset": "<integer>"
+  "activeAtOffset": "<integer>",
+  "eventFormat": {
+    "filtersByParty": {},
+    "filtersForAnyParty": {
+      "cumulative": [
+        "<object>"
+      ]
+    },
+    "verbose": "<boolean>"
+  }
 }
 ```
 
