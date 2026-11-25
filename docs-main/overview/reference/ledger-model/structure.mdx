@@ -13,8 +13,8 @@ import LedgerModelSimpleDvPSCRIPTACCEPTANDSETTLE from '/snippets/daml-docs/ledge
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.5/overview/explanations/ledger-model/index.rst" hash="ae83009a" */}
 
-Canton enables multi-party workflows by providing parties with a *virtual global ledger* (VGL),
-which encodes the current state of their shared contracts written in a smart contract language.
+Canton enables multi-party workflows by providing parties with a **virtual global ledger (VGL)**.
+The VGL records interactions between actors, called **parties**, resulting in shared facts that are stored as **contracts**.
 At a high level, the interactions are visualized below:
 Three parties Alice, Bob, and Charlie connect independently to a virtual global ledger, depicted as a large box.
 They hold different views of that ledger in their local databases shown as blue icons.
@@ -31,6 +31,7 @@ The Ledger Model defines:
   1. Who sees which changes and data - the [privacy model](/overview/reference/ledger-model/privacy) for the Canton Ledger
   1. What changes to the ledger are allowed and who can request them - the [integrity model](/overview/reference/ledger-model/integrity) for the Canton Ledger
 
+## Introduction
 
 {/* Paragraph below is from ledger-structure.rst, moved ahead of the running example for reading order. */}
 
@@ -38,8 +39,24 @@ This section looks at the structure of a ledger that records the interactions be
 The definitions presented here address the first question: "What do changes and ledgers look like?".
 The basic building blocks of the recorded interactions are [actions](#actions), which get grouped into [transactions](#transactions), *updates*, *commits*, and the [Ledger](#ledger).
 
+Parties are the entities that authorize actions, sign transactions, and hold specific viewing rights.
+They can represent the people, organizations, or automated systems participating in a workflow.
+When parties interact and agree on a set of facts or obligations, 
+this agreement is recorded on the ledger as a **contract**. 
+A contract holds the actual data or state of the ledger at any given point in time.
+Every contract is assigned a unique, system-generated **contract ID** so the ledger can track its lifecycle.
+
+A contract is instantiated from a blueprint known as a Daml **template**, which defines the rules of engagement with it.
+A template specifies what data the contract must contain, who is required to authorize it, and what subsequent
+actions (called **choices**) parties can take on it.
+
+A contract can also optionally be assigned a **contract key**, which is a unique, human-readable identifier tied to
+real-world data that allows parties to easily look up and interact with the contract over time.
+
 
 ## Running example
+
+This section introduces the [templates](#templates) and the [workflow](#workflow) that will be used throughout the Ledger Model.
 
 ### Templates
 
@@ -81,7 +98,7 @@ Bob accepts the proposal and settles the DvP.
 
 <LedgerModelSimpleDvPSCRIPT />
 
-Acceptance and settlement can happen either in a single step via the `AcceptAndSettle` choice.
+Acceptance and settlement can happen either in a single step via the `AcceptAndSettle` choice:
 
 <LedgerModelSimpleDvPACCEPTANDSETTLE />
 
@@ -141,9 +158,9 @@ Overall, the settlement in the above example contains two types of actions:
 
 1. Exercising choices on contracts.
 
-These are also the two main kinds of actions in the Ledger Model.
-
-A **node** is one of the following:
+These are also the two main types of actions in the Ledger Model.
+To understand the ledger structure, we distinguish between an action node (the discrete event data) and an action (the entire execution tree).
+An action node or simply a **node** is one of the following:
 
 1. A **Create** node records the creation of the contract.
    It contains the following pieces of information:
@@ -171,7 +188,7 @@ A **node** is one of the following:
    It contains the following pieces of information:
 
    - An exercise **kind**, which is either **consuming** or
-     **non-consuming**. Once consumed, a contract cannot be used again;
+     **non-consuming**. Once consumed, a contract cannot be used again (i.e. fetched or exercised a choice on);
      for example, Alice must not be able to transfer her asset twice, as this would be double spending.
      In contrast, contracts exercised in a non-consuming fashion can be reused, for example for expressing a delegation from one party to another.
 
@@ -180,7 +197,7 @@ A **node** is one of the following:
 
    - The **interface ID** if this choice was exercised through a Daml interface.
 
-   - The **template ID** that defines the smart contract code for the choice with the given **choice name**;
+   - The **template ID** that defines the smart contract code for the choice with the given **choice name**,
      and the **choice arguments** that are passed to the smart contract code.
 
    - An associated set of parties called **actors**.
@@ -199,7 +216,7 @@ A **node** is one of the following:
 
    <img src="/images/docs_website/exercise-node.svg" className="align-center" style={{width: "30.0%"}} alt="The structure of an Exercise node." />
 
-1. A **Fetch** node on a contract, which demonstrates that the contract exists and is active at the time of fetching.
+1. A **Fetch** node acting on a contract, which demonstrates that the contract exists and is active at the time of fetching.
    A Fetch behaves like a non-consuming Exercise with no consequences, and can be repeated.
    The fetch node contains the following pieces of information, analogous to Exercise nodes:
    **contract ID**, **interface ID**, **template ID**, and the **actors**, namely the parties who fetch the contract.
@@ -210,7 +227,7 @@ A **node** is one of the following:
 
    <img src="/images/docs_website/fetch-node.svg" className="align-center" style={{width: "30.0%"}} alt="The structure of a Fetch node." />
 
-An **action** consists of a **root node** and a list of **consequences**, which are themselves actions.
+An **action** consists of a **root node** and a ordered list of **consequences**, which are themselves actions that get triggered as a result of exercising the choice at the root node.
 This gives rise to the tree structure of an action: The root node of an action has as children the root nodes of its consequences.
 
 An action inherits its kind from its root node:
@@ -219,7 +236,7 @@ An action inherits its kind from its root node:
    The consequences are empty.
 
 1. An **Exercise action** has an Exercise node as the root
-   and the consequences are the subactions.
+   and the consequences are the subactions triggered immediately by evaluating the choice body.
    The Exercise action is the **parent action** of its consequences.
 
 1. A **Fetch action** has a Fetch node as the root.
@@ -259,9 +276,12 @@ The diagram also shows that fetches have the same effect: input contract #2 is u
 This example again highlights the hierarchical structure of actions:
 The `AcceptAndSettle` action contains the corresponding actions for `Accept` and `Settle` as its consequences.
 
-More generally, for an action *act*, its **proper subactions** are all actions in the consequences of
-*act*, together with all of their proper subactions.
-Additionally, *act* is a (non-proper) **subaction** of itself.
+More generally, since actions trigger consequences recursively, every action generates a tree of subsequent events.
+For an action `act`, its **subactions** are the action itself together with its **proper subactions**, 
+which are defined recursively as the subactions of its immediate consequences.
+**Create** and **Fetch** actions have no consequences and are thus leaf nodes.
+So they are their sole own subaction, meaning they have no proper subactions.
+The proper subactions of an **Exercise** action are the events triggered while evaluating the choice body.
 
 The subaction relation is visualized below for Bob's `Settle` Exercise.
 Each borderless box contains an action (via its tree of nodes) and the nesting of these boxes encodes the subaction relation.
@@ -272,11 +292,29 @@ The green box is a proper subaction of the blue and the grey boxes, and the yell
 
 <img src="/images/docs_website/dvp-settle-subactions.svg" className="align-center" style={{width: "60.0%"}} alt="The subactions of Bob exercising the `Settle` choice on the DvP contract." />
 
+A node <em>n</em><sub>1</sub> is said to be an **ancestor** of node <em>n</em><sub>2</sub>, and <em>n</em><sub>2</sub> is a **descendant** of <em>n</em><sub>1</sub> if <em>n</em><sub>2</sub> is a proper subaction of <em>n</em><sub>1</sub>.
+
+### Action Execution Order
+
+This hierarchical structure establishes a local **Action Execution Order**. 
+Since the root node of an action triggers its consequences, the root node is said to execute before its consequences.
+Within the list of consequences, actions execute according to their order in the list (left-to-right). 
+
+Mathematically, an action's tree structure assigns a unique position to each node, represented as a sequence of integers:
+
+* The root node has the empty position ε.
+* If a node has position *c*, the root node of its *i*-th consequence has the coordinate *c.i*.
+
+Then the execution order of the nodes within an action is simply the **lexicographical order** of their positions.
+For example, the root at position ε executes before its first child at position *1*, which executes before its own first child at position *1.1*, which executes before the root's second child at position *2*.
+This corresponds to what is called a pre-order traversal.
+
 ## Transactions
 
 A **transaction** is a list of actions that are executed atomically.
 Those actions are called the **root actions** of the transaction.
 That is, for a transaction <em>tx = act</em><sub>1</sub><em>, …, act</em><sub>n</sub>, every <em>act</em><sub>i</sub> is a root action.
+
 For example, if Alice and Charlie have made one DvP proposal each for Bob, then Bob may want to both accept simulataneously.
 To that end, Bob exercises both `Accept` choices in a single transaction with two root actions (blue and purple), as shown next.
 Visually, transactions are delimited by the dashed lines on both sides, to distinguish them from actions.
@@ -296,17 +334,44 @@ The transaction consists of two root actions (blue and purple), namely the two `
 
 <img src="/images/docs_website/dvp-settle-consequences-are-transactions.svg" className="align-center" style={{width: "50.0%"}} alt="The consequences of the Settle action are a transaction of two actions, namely the two Transfer legs of the DvP." />
 
-The hierarchical structure of actions extends to transactions and yields the notion of subtransactions.
-A **proper subtransaction** of a transaction is obtained by (repeatedly) replacing an action by its consequences;
-and a **subtransaction** of a transaction is either the transaction itself or a proper subtransaction thereof.
+### Transaction Execution Order
 
-For example, given the transaction shown above consisting only of the two consequences of the `Settle` action,
-the next diagram shows all seven proper non-empty subtransactions, each with their dashed delimiters.
+The list of actions extends the position system and establishes a **Transaction Execution Order**:
+Nodes in an earlier action <em>act</em><sub>i</sub> execute before nodes in later actions <em>act</em><sub>j</sub> in the transaction, 
+i.e., when *i* is less that *j*.
+
+Mathematically, the position of a node in the transaction is obtained by prefixing the list index *i* of its action <em>act</em>act<sub>i</sub> to the node's position within <em>act</em><sub>i</sub>.
+For example, the root node of <em>act</em><sub>1</sub> has position *1*, and its first consequence has position *1.1*. 
+The root node of <em>act</em><sub>2</sub> has position *2*.
+Just as with individual actions, the execution order within the transaction is simply the **lexicographical order** of the nodes' positions.
+
+### Subtransaction
+
+The hierarchical structure of actions extends to transactions and yields the notion of subtransactions.
+Conceptually, a **subtransaction** is a version of the original transaction that has been iteratively "unrolled" to varying depths across its branches:
+In each step, any one root action is chosen and replaced by its consequences, if any.
+This yields another transaction, to which the same unrolling can be applied again.
+A **proper subtransaction** is obtained by performing at least one iteration starting from the initial transaction.
+
+For example, the next diagram shows this unrolling step-by-step for the transaction that consists of the `Settle` action shown above.
+Each step indicated by a green arrow makes exactly one Replace choice, where the node at the given position is replaced by the consequences.
+Step by step, this enumerates all possible subactions of the initial transaction.
+When the only root action at position *1* is replaced first, its two consequences become the new roots of the first subtransaction.
+Next, one of the roots of this first subtransaction is replaced, which makes its only consequence a new root (a Create node).
+When this Create node without consequences is replaced, only the other root action remains (third level at the outsides).
+And so on, until all actions have been eliminated in the empty transaction at the bottom.
 
 {/* https://lucid.app/lucidchart/c5ff472e-3161-42a0-ac2d-275774a2b9b8/edit */}
 
-<img src="/images/docs_website/dvp-settle-consequences-subtransactions.svg" className="align-center" style={{width: "100.0%"}} alt="All proper subtransactions of the consequences of the `Settle` action." />
+<img src="/images/docs_website/dvp-settle-consequences-subtransactions.svg" className="align-center" style={{width: "100.0%"}} alt="All subtransactions of the `Settle` action." />
 
+Formally, every subtransaction of a transaction is identified by its frontier, 
+namely the set of positions in the original transaction whose nodes are still retained as roots of the subtransaction.
+The above diagram shows these frontiers as the yellow boxes above each subtransaction.
+A **frontier** is a subset of the positions in a transactions such that no two positions in a frontier are a prefix of one another,
+i.e. a frontier is an [anti-chain](https://en.wikipedia.org/wiki/Antichain) in the prefix order of the positions .
+
+This absence of prefixes in the frontier ensures that every part of the original execution is represented (completeness) and no action can appear in a subtransaction alongside its own ancestor or descendant (vertical exclusion).
 The [privacy model](/overview/reference/ledger-model/privacy) uses the concept of subtransactions to define the visibility rules.
 
 ## Inputs and outputs
@@ -320,7 +385,7 @@ modifications happen by consuming a contract ID and recreating a new contract wi
 
 This Ledger Model extends the UTxO model in two aspects:
 
-- A transaction may use a contract without consuming it, for example by exercising a non-consuming choice or fetching it.
+- A transaction may use a contract without consuming it, namely, by exercising a non-consuming choice or fetching it.
   In such a case, the contract ID remains in the set of UTxOs even though it appears as an input to a transaction.
 
 - Transactions are structured hierarchically and contract IDs created in the transaction may be consumed within the same transaction.
@@ -345,16 +410,30 @@ It consists of a single transaction and the so-called **update ID**, a string.
 Examples in the Ledger Model use update IDs of the form `TX i` for some number `i`, similar to the transaction view in Daml Studio.
 On the Ledger API, update IDs are arbitrary strings whose lexicographic order is independent from their order on the ledger.
 
-A **commit** adds the information *who requested a party interaction*.
-It consists of an update and the one or more parties that requested it.
-Those parties are called the **requesters** of the commit.
+A **commit** records the information on *who* requested a party interaction.
+It bundles an update (the transaction and its unique ID) with the one or more parties that requested it.
+These parties are called the **requesters** of the commit.
 In Daml Script, the requesters correspond to the `actAs` parties given to the `submit` commands.
+
+Up to this point, we have focused on the constituents of a single interaction.
+To build a ledger, it must also be defined how multiple interactions are arranged relative to one another.
+When commits are recorded, they are linked together in a graph structure, with the commits represented as **vertices** and the links between them represented as directed edges.
+This structure is forms **Directed Acyclic Graph (DAG)**.
+
+<Callout icon="book-open">
+
+A **Directed Acyclic Graph (DAG)** *G = (V, E)* consists of a set of vertices (nodes) *V* and a set of directed edges *E*, i.e., pairs of vertices.
+The graph is acyclic, meaning that for no vertex *v* in *V* there is a non-empty path that starts and ends at *v*.
+
+</Callout>
+
+Using this general structure, we can formally define the Ledger.
 
 <Callout icon="book-open">
 
 **Definition: Ledger**
 
-A **Ledger** is a directed acyclic graph (DAG) of commits, where the update IDs are unique.
+A **Ledger** is a directed acyclic graph (DAG) where the vertices are commit and every commit has a unique update IDs.
 
 </Callout>
 
@@ -368,17 +447,6 @@ A top-level action of any ledger commit is also a top-level action of the ledger
 </Callout>
 
 A Canton Ledger thus represents the full history of all actions taken by parties.
-The graph structure of the Ledger induces a **happens-before order** on the commits in the ledger.
-We say that commit <em>c</em><sub>1</sub> *happens before* <em>c</em><sub>2</sub> if and only if the ledger contains a non-empty path from <em>c</em><sub>1</sub> to <em>c</em><sub>2</sub>,
-or equivalently, the transitive closure of the graph contains an edge from <em>c</em><sub>1</sub> to <em>c</em><sub>2</sub>.
-
-<Note>
-
-The [integrity conditions](/overview/reference/ledger-model/integrity) on a ledger require that the happens-before order respects the lifecycle of contracts.
-For example, the commit that creates a contract must happen before the commit that spends the contract unless they are the same.
-For the next few sections, we will consider only ledgers that meet these conditions.
-
-</Note>
 
 Visually, a ledger can be represented as a sequence growing from left to right as time progresses.
 Below, dashed vertical lines in purple mark the boundaries of commits,
@@ -406,16 +474,56 @@ This workflow gives rise to the ledger shown below with four commits:
 
 <img src="/images/docs_website/dvp-ledger.svg" className="align-center" alt="The sequence of commits for the whole DvP workflow. First, banks 1 and 2 issue the assets, then Alice proposes the DvP, and finally Bob accepts and settles it." />
 
-<Note>
+### Happens-before order
 
-The integrity constraints do not impose an order between independent commits.
-In this example, there need not be edges among the first three commits `TX 0`, `TX 1`, and `TX 2`,
+The edges of the ledger's graph structure naturally induces a happens-before order on the commits in the ledger.
+
+<Callout icon="book-open">
+
+**Definition: happens-before order**
+
+We say that commit <em>c</em><sub>1</sub> **happens before** <em>c</em><sub>2</sub> if and only if the ledger contains a non-empty path from <em>c</em><sub>1</sub> to <em>c</em><sub>2</sub>,
+or equivalently, the transitive closure of the graph contains an edge from <em>c</em><sub>1</sub> to <em>c</em><sub>2</sub>.
+
+</Callout>
+
+At this stage, the edges in the Ledger are arbitrary.
+Any arrangement of commits that satisfies the acyclic property of a DAG constitutes a valid mathematical ledger.
+However, for a ledger to be useful in practice, these edges must follow the logic of the smart contracts they record.
+
+The [integrity conditions](/overview/reference/ledger-model/integrity) on a ledger require that the happens-before order respects the lifecycle of contracts.
+For example, the commit that creates a contract must happen before the commit that spends the contract unless they are the same.
+For the next few sections, we will consider only ledgers that meet these conditions.
+
+As the graph is acyclic, the happens-before relationship forms a **strict partial order** on the commits.
+It is transitive (if <em>c</em><sub>1</sub> happens before <em>c</em><sub>2</sub> and <em>c</em><sub>2</sub> happens before <em>c</em><sub>3</sub>, then <em>c</em><sub>1</sub> also happens before <em>c</em><sub>3</sub>) and irreflexive (a commit cannot happen before itself).
+
+Yet the integrity constraints do not impose an order between independent commits.
+In the above example, there need not be edges among the first three commits `TX 0`, `TX 1`, and `TX 2`,
 so they could be presented in any order.
+Therefore, happens-before is only a *partial* order, where not all commits can be compared.
+For example, `TX 0` need not happen before `TX 1` nor vice versa.
 
-As the Ledger is a DAG, one can always extend the order into a linear sequence via a topological sort.
-For the next sections, we pretend that the Ledger is totally ordered (unless otherwise specified).
-We discuss the more general partial orders in the [causality section](/overview/reference/ledger-model/causality).
+It is a well-known property that any partial order can be extended into a **total order** (a linear sequence), or equivalently, the vertices of any finite Directed Acyclic Graph can be arranged into a linear sequence by [topological sorting](https://en.wikipedia.org/wiki/Topological_sorting).
+For the next sections on Integrity and Privacy, we assume that the Ledger is totally ordered (unless otherwise specified).
+We will return to the more general partial order in the [causality section](/overview/reference/ledger-model/causality).
 
-</Note>
+By combining the happens-before order of commits with the execution order within transactions,
+we establish a **Global Execution Order** for all action nodes on the ledger.
+
+<a id="da-ledger-execution-order"></a>
+
+<Callout icon="book-open">
+
+**Definition: Ledger Execution Order**
+
+A node <em>n</em><sub>1</sub> **executes before** <em>n</em><sub>2</sub> on the ledger if all of the following holds:
+
+* If both nodes are in the same commit, then <em>n</em><sub>1</sub> precedes <em>n</em><sub>2</sub> in the transaction execution order.
+* If the two nodes are in different commits <em>c</em><sub>1</sub> and <em>c</em><sub>2</sub>, then <em>c</em><sub>1</sub> happens before <em>c</em><sub>2</sub> on the ledger.
+
+</Callout>
+
+For a total happens-before order, the execution order on the ledger is also total: the entire ledger can be viewed as a single, chronological timeline of actions.
 
 {/* COPIED_END */}

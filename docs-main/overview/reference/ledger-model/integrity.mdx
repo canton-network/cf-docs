@@ -14,7 +14,7 @@ import LedgerModelSimpleDvPACCEPTANDSETTLEDVPSCRIPT from '/snippets/daml-docs/le
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.5/overview/explanations/ledger-model/ledger-integrity.rst" hash="e441af8b" */}
 
-The section on the [ledger structure](/overview/reference/ledger-model/structure) section answered the question “What does the Ledger look like?” by introducing a hierarchical format to record the party interactions as changes to the Ledger.
+The section on the [ledger structure](/overview/reference/ledger-model/structure) answered the question “What does the Ledger look like?” by introducing a hierarchical format to record the party interactions as changes to the Ledger.
 The section on [privacy](/overview/reference/ledger-model/privacy) answered the question “Who sees which changes and data?” by introducing projections.
 This section addresses the question "Who can request which changes?" by defining which ledgers are valid.
 
@@ -121,7 +121,7 @@ The transaction structure provides no evidence that the actor Carol has agreed t
 ### Interaction with projection
 
 Apart from introducing the validity notion, this page also discusses how validity interacts with privacy, which is defined via [projection](/overview/reference/ledger-model/privacy#projection).
-To that end, the sections on the different validity conditions analyse the prerequisites under what the following two properties hold:
+To that end, the sections on the different validity conditions analyse the prerequisites under which the following two properties hold:
 
 - **Preservation**: If the Ledger adheres to a condition, then so do the projections.
   This property ensures that a valid Ledger does not appear as invalid to individual parties,
@@ -144,27 +144,19 @@ This section introduces the notions that are needed to make this precise:
 
 - [(Contract) Consistency](#definition) strengthens internal consistency in that all used contracts must also have been created.
 
-### Execution order
+### Execution order recap
 
-The meaning of "before" and "after" is given by establishing an execution order on the [nodes](/overview/reference/ledger-model/structure#definition) of a ledger.
-The ledger's graph structure already defines a [happens-before order](/overview/reference/ledger-model/structure#ledger) on ledger commits.
-The execution order extends this happens-before order to all the nodes within the commits' transactions
-so that "before" and "after" are also defined for the nodes of a single transaction.
-This is necessary because a contract can be created and used multiple times within a transaction.
+The meaning of "before" and "after" for actions has been formally defined by the [(ledger) execution order](/overview/reference/ledger-model/structure#da-ledger-execution-order).
+
+Recall that this (ledger) execution order is established by seamlessly combining two levels of hierarchy:
+* The happens-before order of the ledger, which orders the commits themselves.
+* The transaction execution order, which strictly orders the nodes within each commit, corresponding to a pre-order traversal of the transaction forest.
+
+This combination is necessary because a contract can be created and used multiple times within a single transaction.
+
 In the `AcceptAndSettle` [action of the DvP example](/overview/reference/ledger-model/structure#da-dvp-propose-accept-and-settle-action), for example,
 contract #3 is used twice (once in the non-consuming exercise at the root and once consumingly in the first consequence)
 and contract #4 is created and consumed in the same action.
-
-<Callout icon="book-open">
-
-**Definition: execution order**
-
-For two distinct nodes <em>n</em><sub>1</sub> and <em>n</em><sub>2</sub> within the same action or transaction, <em>n</em><sub>1</sub> **executes before** <em>n</em><sub>2</sub>
-if <em>n</em><sub>1</sub> appears before <em>n</em><sub>2</sub> in the [preorder traversal](https://en.wikipedia.org/wiki/Tree_traversal#Pre-order,_NLR) of the (trans)action, noting that the transaction is an ordered forest.
-For a ledger, every node in commit <em>c</em><sub>1</sub> **executes before** every node in commit <em>c</em><sub>2</sub>
-if the commit <em>c</em><sub>1</sub> happens before <em>c</em><sub>2</sub>.
-
-</Callout>
 
 Diagrammatically, the execution order is given by traversing the trees from root to leaf and left to right:
 the node of a parent action executes before the nodes in the subactions, and otherwise the nodes on the left precede the nodes on the right.
@@ -197,7 +189,7 @@ which may use as inputs the contracts created outside of the piece.
 
 <Callout icon="book-open">
 
-**Definition: internal consistency**
+**Definition: Internal consistency for a contract**
 
 An action, transaction, or ledger is **internally consistent for a contract** *c*
 if for any two distinct nodes <em>n</em><sub>1</sub> and <em>n</em><sub>2</sub> on *c* in the action, transaction, or ledger,
@@ -240,7 +232,7 @@ The nodes in the transaction involve six contracts #1 to #6.
 
 In contrast, the next diagram shows that the ledger in the [consistency violation example](#consistency-violation-example) is not internally consistent for contract #1.
 This contract appears in nodes ①, ②, and ④.
-The second condition is violated but violated for <em>n</em><sub>1</sub> = ④ and <em>n</em><sub>2</sub> = ② as ④ does not execute before ②.
+The second condition is violated only for <em>n</em><sub>1</sub> = ④ and <em>n</em><sub>2</sub> = ② as ④ does not execute before ②.
 Note that the second condition is satisfied for <em>n</em><sub>1</sub> = ② and <em>n</em><sub>2</sub> = ④, but the definition quantifies over both pairs (②, ④) and (④, ②).
 The first condition is also satisfied because the Create node ① executes before both other nodes ② and ④.
 
@@ -318,7 +310,7 @@ then so is the (trans)action or ledger itself.
 This statement can be shown with a similar argument.
 
 Importantly, reflection requires a *signatory* of the contracts in *P*, not just a stakeholder.
-The following example shows that the propery does not hold if *P* contains a stakeholder, but no signatory.
+The following example shows that the property does not hold if *P* contains a stakeholder, but no signatory.
 To that end, we extend the `SimpleAsset` template with a non-consuming `Present` choice
 so that the issuer and owner can show the asset to a choice observer `viewer`:
 
@@ -389,8 +381,8 @@ This essentially follows from two observations:
   That is, all inputs and outputs of a transaction are explicitly captured in contracts, choice arguments and exercise results.
 
 Not every such projection can be expressed as a set of commands on the Ledger API, though.
-The Ledger Model considers this lack of expressivity artificial, because future versions of the Ledger API may remove such restrictions.
-There are two kinds of cases where ledger API commads are less expressive than the ledger model defined here.
+The Ledger Model considers this lack of expressivity artificial, so future versions of the Ledger API may remove such restrictions.
+There are two kinds of cases where ledger API commands are less expressive than the ledger model defined here.
 First, a projection may contain a Fetch node at the root, like the [projection of the DvP](/overview/reference/ledger-model/privacy#da-dvp-acceptandsettle-projection) `AcceptAndSettle` choice for Bank 2.
 Yet, there is no Ledger API command to fetch a contract, as there are only commands for creating and exercising contracts.
 Second, the Ledger API command language does not support feeding the result of an Exercise as an argument to a subsequent command.
@@ -398,7 +390,7 @@ For example, suppose that the `AcceptAndSettle` choice of `ProposeSimpleDvP` was
 
 <LedgerModelSimpleDvPACCEPTANDSETTLEDVP />
 
-Bob can then execute accept and settle the DvP in one transaction by creating a helper contract and immediately exercising the `Execute` choice.
+Bob can then execute the `AcceptAndSettle` choice on the DvP in one transaction by creating a helper contract and immediately exercising the `Execute` choice.
 
 <LedgerModelSimpleDvPACCEPTANDSETTLEDVPSCRIPT />
 
@@ -441,9 +433,9 @@ This section introduces the notions to formalize this:
 
 - The [authorization context](#authorization-context) captures the parties who have actually authorized an action.
 
-- [Well-authorization](#well-authorization) demands that the authorization context includes all the required authorizers.
+- [Well-autohrization](#well-authorization) demands that the authorization context includes all the required authorizers.
 
-The running example of [Bob skipping the propose-accept workflow](#skip-the-propose-accept-workflow) will be used to show how node ③ requires more authorizers than its authorization context provides, and is thus not well auhtorized.
+The running example of [Bob skipping the propose-accept workflow](#skip-the-propose-accept-workflow) will be used to show how node ③ requires more authorizers than its authorization context provides, and is thus not well authorized.
 For ease of reference, the ledger diagram is repeated below.
 
 {/* https://lucid.app/lucidchart/cd2cef11-6f69-4f9c-8e1e-d79488547de2/edit */}
@@ -653,11 +645,11 @@ For example, consider a Ledger with a root action that no honest party is allowe
 So none of the projections contains this root action and therefore the projections cannot talk about its conformance or internal well-authorization.
 Fortunately, this is not necessary either, because we care only about the pieces of the Ledger that are visible to some honest party.
 
-More formally, two Ledgers are said to be **equivalent** for a set of parties *Q* if the projections of the two Ledgers to *Q* are the same.
-Then reflection holds in the sense that there is an equivalent weakly valid Ledger.
+More formally, two Ledgers *L* and *L'* are said to be **equivalent** for a set of parties *Q* if the projections of the two Ledgers to *Q* are the same, i.e., <em>Proj</em><sub>Q</sub>(<em>L</em>) = <em>Proj</em><sub>Q</sub>(<em>L'</em>).
+Then reflection holds in the sense that there is an equivalent weakly valid Ledger:
 Let *F* be a set of sets of parties whose union contains the set of parties *Q*.
-If for every set *P* in *F*, the projection of a Ledger *L* to *P* is weakly valid for *P* insterected with *Q*,
-then the projection of *L* to *Q* is weakly valid.
-Note that this projection of *L* to *Q* is equivalent to *L* for *Q* due to the [absorbtion property of projection](/overview/reference/ledger-model/privacy#transaction-projection).
+If for every set *P* in *F*, the projection <em>Proj</em><sub>P</sub>(<em>L</em>) of *L* to *P* is weakly valid for *P* intersected with *Q*,
+then the projection <em>Proj</em><sub>Q</sub>(<em>L</em>) of *L* to *Q* is weakly valid, too.
+Note that this projection <em>Proj</em><sub>Q</sub>(<em>L</em>) is equivalent to *L* for *Q* due to the [absorbtion property of projection](/overview/reference/ledger-model/privacy#transaction-projection).
 
 {/* COPIED_END */}

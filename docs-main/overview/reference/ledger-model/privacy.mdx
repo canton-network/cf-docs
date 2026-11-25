@@ -18,6 +18,14 @@ and the consequences of those interactions.
 The hierarchical structure is key here because it yields a natural notion of sub-transaction privacy.
 To make the sub-transaction privacy notion precise, we introduce the concepts of *informee* and *witness*.
 
+<Note>
+
+As mentioned in the [structure section](/overview/reference/ledger-model/structure),
+we assume throughout this section that the Ledger is a *totally ordered sequence of commits*.
+We defer the discussion of the general partial order (the DAG) to the [causality section](/overview/reference/ledger-model/causality).
+
+</Note>
+
 ## Informee
 
 A party can take different roles in Daml templates and choices;
@@ -33,9 +41,14 @@ For a contract, a party is a **stakeholder** if it is a signatory or contract ob
   they may not have a stake in the contract though.
 
 These observations motivate the following definition of an **informee**, namely the set of parties that should be informed about an action.
-The informees for a node are the union of the sets marked with X in the following table,
 
 <a id="def-informee"></a>
+
+<Callout icon="book-open">
+
+**Definition: Informee**
+
+The **informees** of a node are the union of the sets marked with X.
 
 | Action | Signatories | Contract observers | Actors | Choice observers |
 | --- | --- | --- | --- | --- |
@@ -43,6 +56,8 @@ The informees for a node are the union of the sets marked with X in the followin
 | consuming **Exercise** | X | X | X | X |
 | non-consuming **Exercise** | X |   | X | X |
 | **Fetch** | X |   | X |   |
+
+</Callout>
 
 For example, the informees of a **Create** node are the stakeholders of the created contract, that is, the signatories and observers.
 For consuming **Exercise** node, the informees consist of the stakeholders of the consumed contract, the action's actors and choice observers.
@@ -84,8 +99,17 @@ For example, the diagram below extends the [subaction diagram](/overview/referen
 Here, the Create node ③ is part of three subactions, namely those rooted at nodes ①, ②, and ③.
 Accordingly, this Create node is shown to the informees of all these actions, even if they are not informees of the node itself.
 Those parties are called witnesses.
-Formally, for a given transaction *tx*, the **witnesses** of a node in *tx* are the union of the informees of all subactions of *tx* that contain the node.
-In particular, every informee of the node is also a witness.
+
+<Callout icon="book-open">
+
+**Definition: witness**
+
+For a transaction *tx*, the **witnesses** of a node are the union of the informees of all subactions of `tx` that contain the node.
+Equivalently, in terms of the tree structure of the transaction, the witnesses of a node are the union of the informees over the node itself and all its ancestor nodes within `tx`.
+
+</Callout>
+
+In particular, every informee of a node is also a witness of that node.
 
 The diagram shows the witnesses of a subaction in purple on its root action.
 For node ③, the witnesses are Alice, Bob, and Bank 1, because Bob is an informee of ① and ③; Bank 1 is an informee of ② and ③; and Alice is an informee of ① and ②.
@@ -145,33 +169,42 @@ providing privacy to Alice and Bob with respect to the banks.
 
 The projection to both Bank 1 and Bank 2 at the bottom shows that a projection to several parties may contain strictly more information than the projections to each of the parties together.
 Said differently, it is impossible to reconstruct the projection to Bank 1 and Bank 2 solely from the projection for Bank 1 and the projection for Bank 2.
-Here, this is because the order of the three root actions cannot be uniquely determined from the individual projections.
+Here, this is because the order of the three root actions cannot be uniquely determined from the set of the individual projections.
 For this reason, projection is defined for a set of parties.
 
 <a id="def-tx-projection"></a>
 
 <Callout icon="book-open">
 
-**Definition: projection**
+**Definition: Projection**
 
-The **projection** of a transaction for a set *P* of parties is the
-subtransaction obtained by doing the following for each root action *act* of the transaciton.
+The **projection** <em>Proj</em><sub>P</sub>(<em>tx</em>) of a transaction *tx* for a set *P* of parties is the
+subtransaction obtained by applying the follwoing rules recursively to each root action *act* of *tx*.
 
-1. If *P* contains at least one of the informees of *act*, keep *act* as-is, including its consequences.
-1. Else, if *act* has consequences, replace *act* by the projection (for *P*) of its consequences,
-   which might be empty.
-1. Else, drop *act* including its consequences.
+1. **Keep:** If *P* contains at least one of the informees of *act*, keep *act* as-is, including its entire subtree of consequences.
+1. **Promote:** Otherwise, if *act* has consequences, replace *act* by the projection for *P* of its consequences.
+   This results in a possibly empty sequence of subactions.
+1. **Drop:** Otherwise, drop *act* as a whole.
 
 </Callout>
 
-This definition does not operate on nodes, but on actions, that is, subtrees of nodes.
-Accordingly, the projection of a transaction for a set of parties *P* contains a node if and only if *P* contains at least one of the witnesses of the node.
+The resulting projection is again a transaction, i.e., a forest of actions.
+It preserves the original ancenstral relationships and execution order between the surviving nodes.
+
+<Note>
+
+This definition operates on *actions*, i.e., entire subtrees, not on individual nodes.
+A node is included in the projection if and only if *P* contains at least one witness of that node.
+
+</Note>
 
 As a projection is a transaction, it is possible to project a projection further.
-The projection operation has the following **absorbtion** property:
+The projection operation has the following **absorption** property:
 
 Projection to decreasing subsets of parties is absorbing.
 That is, if a set of parties *P* is a subset of *Q*, then projecting a transaction first to *Q* and then to *P* is the same as projecting it directly to *P*.
+Symbolically, <em>Proj</em><sub>P</sub>(<em>Proj</em><sub>Q</sub>(<em>tx</em>)) = <em>Proj</em><sub>P</sub>(<em>tx</em>) if *P* ⊆ *Q*.
+
 Intuitively, this property expresses the fact that a group of parties jointly learns at least as much about a transaction as any subgroup of these parties learns by themselves.
 The converse is false, as the above example with projection to Banks 1 and 2 has shown.
 
@@ -187,19 +220,32 @@ as it hides who is involved in the hidden parts of the transaction.
 
 ### Ledger projection
 
-Finally, the **projection of a ledger** *l* for a set *P* of parties is a DAG of updates obtained as follows:
+Finally, the projection of a ledger is defined as follows:
 
-- Project the transaction of each update in *l* for *P*, but retain the update ID.
+<Callout icon="book-open">
 
-- Remove updates with empty transactions from the result.
+**Definition: Projection of a ledger**
 
-We defer defining the edges in the projection to the [causality section](/overview/reference/ledger-model/causality).
-Until then, we pretend that the ledger is totally ordered and projections retain the same ordering.
+The **projection** of a ledger *L* for a set *P* of parties is a DAG of updates obtained as follows:
 
-Notably, the projection of a ledger is not a ledger, but a DAG of updates.
-The requesters from the commit cannot be retained because they are typically witnesses of the actions in the projection,
-but not informees.
-Yet, the informees of the action must not know all the witnesses.
+* Project the transaction of each update in *L* for *P*, but retain the update ID.
+
+* Remove updates with empty transactions from the result.
+
+</Callout>
+
+Ledger projection filters action nodes while preserving the underlying graph edges.
+Under our working premise of a totally ordered ledger, the resulting projection naturally forms a linear sequence of updates.
+We defer defining the actual edges that form the general DAG of updates to the [causality section](/overview/reference/ledger-model/causality) section.
+
+The update IDs serve as the "glue" across projections.
+Even if two parties see entirely different action nodes within a commit, the fact that they share the same update ID allows them to correlate their views and verify that their respective projections belong to the same atomic transaction.
+
+Notably, the projection of a ledger is not formally a ledger itself.
+A ledger consists of *commits*, which include the requesters.
+Projection strips the requesters away for privacy, so the result of a projection is a *DAG of updates*, rather than a DAG of commits.
+The requesters are not retained because they are typically witnesses of the actions in the projection, but not informees.
+Yet, the informees of the action must not know all the witnesses. 
 For example, if Bank 1's projection did mention Bob as the requester of the last commit,
 then Bank 1 could infer that Bob is a witness of Alice exercising the `Transfer` choice on contract #1.
 
@@ -248,7 +294,8 @@ A user of a Participant Node can request the Ledger projection for the user's pa
 ## Divulgence: When non-stakeholders see contracts
 
 The guiding principle for the privacy model of Canton ledgers is that contracts should only be shown to their stakeholders.
-However, ledger projections can cause contracts to become visible to other parties as well.
+However, since actions are hierarchical, informees of a parent action are, by definition, witnesses to all of its consequences.
+This hierarchical visibility causes contracts to become visible to parties who are not stakeholders.
 Showing contracts to non-stakeholders through ledger projections is called **divulgence**.
 Divulgence is a deliberate choice in the design of Canton Ledgers and comes in two forms:
 
@@ -260,7 +307,7 @@ Divulgence is a deliberate choice in the design of Canton Ledgers and comes in t
   namely to see that the asset now belongs to Alice.
 
   In general, there is no point in hiding the consequences of an action.
-  Bob could anyway compute the consequences of the actions it is an informee of, because Daml is deterministic.
+  Bob could anyway compute the consequences of the actions he is an informee of, because Daml is deterministic.
 
 - **Retroactive divulgence** refers to an input contract being shown to the non-informee witnesses of a node using this contract.
   For example, the Fetch on Bob's `SimpleAsset` (contract #2) is visible to Alice
@@ -316,7 +363,7 @@ on which the Bob becomes a contract observer.
 This requires extending the contract model with a (consuming) exercise action on the `SimpleAsset`
 that creates a new `SimpleAsset`, with observers of Alice's choice.
 In addition to the increase in actions on the Ledger,
-the two approaches differ in in who learns about the parties that are informed about the contract:
+the two approaches differ in who learns about the parties that are informed about the contract:
 
 - If Alice discloses her `SimpleAsset` to Bob via an off-ledger channel,
   only Alice and Bob need to know about this disclosure.
@@ -336,6 +383,9 @@ A Create event with *N* observers appears in the projection of at least those *N
 So the size of all projections together is already quadratic in *N* as an action of size at least *N* appears in *N* different projection.
 If the observers are added one by one, then *N* archives and creations are needed,
 which means the size of all projections together is cubic in *N*.
+
+Thus, while adding observers is a valid Daml feature, this scaling issue highlights why it should only be used when parties truly require permanent, shared visibility.
+For temporary or targeted access, relying on explicit off-ledger disclosure is the recommended design pattern to ensure observer privacy and prevent unnecessary ledger bloat.
 
 ## Shape-revealing projection
 
