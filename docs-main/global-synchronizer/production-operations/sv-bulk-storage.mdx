@@ -4,8 +4,7 @@ description: "Export Scan's update history and ACS snapshots to S3-compatible ob
 ---
 
 Scan can export its update history and ACS snapshots to S3-compatible object storage. The exported files let anyone
-read the full history of the network without paging through the Scan API, and they are the source that a new Scan
-loads its history from. Each SV writes its own copy. A file is published only after other SVs produced the same
+read the full history of the network without paging through the Scan API. Each SV writes its own copy. A file is published only after other SVs produced the same
 content, so the published files carry the same BFT guarantees as Scan's API.
 
 Bulk storage needs Splice 0.10.3 or later. Enabling it is optional for now and will become required in a later release.
@@ -77,19 +76,6 @@ bulkStorage:
 ```
 
 Bulk storage is enabled when both `staging` and `committed` are set.
-
-### Scans whose history starts after genesis
-
-Scan exports from genesis. If your Scan's update history starts later than the genesis of the network, for example
-because the SV joined later, Scan copies the earlier files from other SVs' committed buckets. Enable this with:
-
-```yaml
-additionalEnvVars:
-  - name: ADDITIONAL_CONFIG_BULK_STORAGE_BACKFILLING
-    value: canton.scan-apps.scan-app.bulk-storage.backfilling.enabled = true
-```
-
-Without it, Scan logs an error that `bulkStorage.backfilling.enabled` must be set and does not start the export.
 
 ## Checking that it works
 
