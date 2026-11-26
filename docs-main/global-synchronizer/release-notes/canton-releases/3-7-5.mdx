@@ -1,0 +1,67 @@
+---
+title: "3.7.5"
+description: "Canton 3.7.5 release notes."
+---
+
+# Release of Canton 3.7.5
+
+Canton 3.7.5 has been released on November 25, 2026.
+
+## Summary
+
+This is a maintenance release that improves reliability during logical synchronizer upgrades and ACS replication,
+and fixes issues in topology authorization and Daml package upgrade checks.
+
+**Summary of documented breaking changes**
+
+No breaking changes are documented in these release notes.
+
+| Ledger API | Admin API and console | Protocol | Configuration |
+| :--------- | :-------------------- | :------- | :------------ |
+| no         | no                    | no       | no            |
+
+## What's New
+
+### ACS replication via `get_remote_acs`
+
+- Sequencer channel members need to be on this version of 3.7 to be able to establish a
+  secure sequencer channel with each other for ACS replication via `get_remote_acs`.
+
+### New configurable network timeout for sending requests
+
+- Nodes have a new configurable timeout `canton.parameters.timeouts.processing.network-send-request` (default: 15 seconds),
+  which is used specifically for sending requests to the sequencer. Until now, the `network` timeout was used (default: 2 minutes),
+  which meant that networking issues causing `DEADLINE_EXCEEDED` errors did not trigger timely retries.
+
+## Security Fixes
+
+- Upgraded Bouncy Castle to 1.87 to address security issues.
+- JDK base image has been upgraded to 21.0.13.1_2, incorporating several key security patches.
+
+## Bug Fixes
+
+- Fixed a logical synchronizer upgrade (LSU) losing traffic purchased for a member that had not yet registered
+  with the sequencer. `traffic_control.get_lsu_state` now includes these members, and `traffic_control.set_lsu_state`
+  restores their traffic on the new sequencers. Both the old and the new sequencers must run this version when the
+  traffic state is transferred.
+- Fixed ACS replication recovery after a participant restart by waiting for the relevant synchronizer to connect
+  before processing replication agreements found at startup.
+- Fixed ACS replication requests with a timestamp beyond the known topology to fail validation instead of waiting
+  for an unavailable topology snapshot.
+- Fixed Daml package upgrade checks to match package paths without case differences when selecting the compiler
+  from a DPM resolution file.
+
+## Compatibility
+
+The following Canton protocol versions are supported:
+
+| Dependency               | Version           |
+|--------------------------|-------------------|
+| Canton protocol versions | 36, 37 |
+
+Canton has been tested against the following versions of its dependencies:
+
+| Dependency   | Version          |
+|--------------|------------------|
+| Java Runtime | OpenJDK 64-Bit Server VM (build 21.0.12+2-nixos, mixed mode, sharing)     |
+| Postgres     | Recommended: PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) – Also tested: PostgreSQL 14.25 (Debian 14.25-1.pgdg13+1), PostgreSQL 15.20 (Debian 15.20-1.pgdg13+1), PostgreSQL 16.16 (Debian 16.16-1.pgdg13+1), PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1), PostgreSQL 18.7 (Debian 18.7-1.pgdg13+5) |
