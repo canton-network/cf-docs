@@ -33,6 +33,7 @@ This is expected.
 
 Create the two buckets in an S3-compatible object store reachable from the Scan pod. On Google Cloud Storage, use the
 endpoint `https://storage.googleapis.com` with HMAC keys.
+On AWS S3, use the Region-specific endpoint `https://s3.<region>.amazonaws.com` with the bucket's region.
 
 Create a service account (or one per bucket) with:
 
@@ -42,6 +43,9 @@ Create a service account (or one per bucket) with:
 | Committed | create and read objects; read objects in the staging bucket (Scan copies server-side from staging to committed) |
 
 Giving the committed credentials no delete or overwrite permission protects the published files against mistakes.
+On AWS S3, permissions cannot separate creating from overwriting an object. Enable versioning on the committed bucket
+to keep every version, or S3 Object Lock with a default retention period (only when creating the bucket) to prevent
+overwrites and deletions.
 
 Store the HMAC keys in Kubernetes secrets, with the keys `accessKey` and `secretAccessKey`:
 
