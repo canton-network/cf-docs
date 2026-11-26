@@ -1154,62 +1154,6 @@ paths:
                 $ref: '#/components/schemas/LookupTransferPreapprovalByPartyResponse'
         '404':
           $ref: '#/components/responses/404'
-  /v0/transfer-command-counter/{party}:
-    get:
-      summary: "GET /v0/transfer-command-counter/:party"
-      tags:
-        - internal
-        - scan
-      x-jvm-package: scan
-      operationId: lookupTransferCommandCounterByParty
-      description: Lookup a TransferCommandCounter by the receiver party.
-      parameters:
-        - name: party
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ok
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LookupTransferCommandCounterByPartyResponse'
-        '404':
-          description: No TransferCommandCounter exists for this party. This means the nonce that should be used is 0.
-          $ref: '#/components/responses/404'
-  /v0/transfer-command/status:
-    get:
-      summary: "GET /v0/transfer-command/status"
-      description: Retrieve the status of all transfer commands (up to a limit of 100) of the given sender for the specified nonce.
-      tags:
-        - internal
-        - scan
-      x-jvm-package: scan
-      operationId: lookupTransferCommandStatus
-      parameters:
-        - name: sender
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: nonce
-          in: query
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: ok
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LookupTransferCommandStatusResponse'
-        '404':
-          description: No TransferCommand exists with this contract id within the last 24h
-          $ref: '#/components/responses/404'
   /v0/migrations/schedule:
     get:
       summary: "GET /v0/migrations/schedule"
@@ -1390,6 +1334,76 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CountVoteResultsResponse'
+  /v1/admin/sv/voteresults:
+    post:
+      summary: "POST /v1/admin/sv/voteresults"
+      tags:
+        - internal
+        - scan
+      x-jvm-package: scan
+      operationId: listVoteRequestResultsV1
+      description: |
+        **EXPERIMENTAL**: This endpoint is experimental and subject to change, do not rely on it yet.
+        It is meant to replace `/v0/admin/sv/voteresults`, which will be deprecated once this endpoint is validated.
+
+        Lists the results of closed vote requests, i.e., of exercised `DsoRules_CloseVoteRequest` choices,
+        that match the request filters. Results are ordered by effective date, descending:
+        the effectiveAt of an accepted vote, or the completedAt of the result otherwise.
+
+        Fails with 503 Service Unavailable until this Scan holds all vote results since the start of the network.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListVoteResultsRequestV1'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListVoteResultsResponseV1'
+        '400':
+          $ref: '#/components/responses/400'
+        '500':
+          $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
+  /v1/admin/sv/voteresults/count:
+    post:
+      summary: "POST /v1/admin/sv/voteresults/count"
+      tags:
+        - internal
+        - scan
+      x-jvm-package: scan
+      operationId: countVoteRequestResultsV1
+      description: |
+        **EXPERIMENTAL**: This endpoint is experimental and subject to change, do not rely on it yet.
+        It is meant to replace `/v0/admin/sv/voteresults/count`, which will be deprecated once this endpoint is validated.
+
+        Counts the vote results that `/v1/admin/sv/voteresults` lists for the same filters.
+
+        Fails with 503 Service Unavailable until this Scan holds all vote results since the start of the network.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoteResultsFiltersV1'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountVoteResultsResponseV1'
+        '400':
+          $ref: '#/components/responses/400'
+        '500':
+          $ref: '#/components/responses/500'
+        '503':
+          $ref: '#/components/responses/503'
   /v0/admin/sv/previous-sv-reward-weight:
     post:
       summary: "POST /v0/admin/sv/previous-sv-reward-weight"
@@ -1479,6 +1493,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetBackfillingStatusResponse'
+  /v0/backfilling/votes-status:
+    get:
+      summary: "GET /v0/backfilling/votes-status"
+      tags:
+        - internal
+        - scan
+      x-jvm-package: scan
+      operationId: getVotesBackfillingStatus
+      description: |
+        Whether this Scan can serve `/v0/backfilling/votes-before` for all vote results before the
+        given record time.
+      parameters:
+        - name: before_record_time
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetVotesBackfillingStatusResponse'
+  /v0/backfilling/votes-before:
+    post:
+      summary: "POST /v0/backfilling/votes-before"
+      tags:
+        - internal
+        - scan
+      x-jvm-package: scan
+      operationId: getVotesBefore
+      description: |
+        Retrieve vote results strictly before the given `(record_time, event_number)`, for
+        backfilling `votes_store_results`. Meant for Scan-to-Scan backfilling only, and offers no
+        compatibility guarantees.
+
+        Fails unless `/v0/backfilling/votes-status` reports "available" for the same record time.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetVotesBeforeRequest'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetVotesBeforeResponse'
+        '400':
+          $ref: '#/components/responses/400'
   /v0/acs/{party}:
     get:
       summary: "GET /v0/acs/:party"
@@ -1506,32 +1574,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetAcsSnapshotResponse'
-  /v0/amulet-config-for-round:
-    get:
-      summary: "GET /v0/amulet-config-for-round"
-      deprecated: true
-      tags:
-        - deprecated
-      x-jvm-package: scan
-      operationId: getAmuletConfigForRound
-      description: |
-        **Deprecated**. Retrieve some information from the `AmuletRules` selected for the given round
-      parameters:
-        - in: query
-          name: round
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: ok
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetAmuletConfigForRoundResponse'
-        '404':
-          $ref: '#/components/responses/404'
   /v0/updates:
     post:
       summary: "POST /v0/updates"
@@ -2192,44 +2234,6 @@ components:
       properties:
         featured_app_right:
           $ref: '#/components/schemas/Contract'
-    GetAmuletConfigForRoundResponse:
-      type: object
-      required:
-        - amulet_create_fee
-        - holding_fee
-        - lock_holder_fee
-        - transfer_fee
-      properties:
-        amulet_create_fee:
-          type: string
-        holding_fee:
-          type: string
-        lock_holder_fee:
-          type: string
-        transfer_fee:
-          $ref: '#/components/schemas/SteppedRate'
-    SteppedRate:
-      type: object
-      required:
-        - initial
-        - steps
-      properties:
-        initial:
-          type: string
-        steps:
-          type: array
-          items:
-            $ref: '#/components/schemas/RateStep'
-    RateStep:
-      type: object
-      required:
-        - amount
-        - rate
-      properties:
-        amount:
-          type: string
-        rate:
-          type: string
     GetValidatorTrafficBalanceResponse:
       type: object
       required:
@@ -3562,101 +3566,6 @@ components:
       properties:
         transfer_preapproval:
           $ref: '#/components/schemas/ContractWithState'
-    LookupTransferCommandCounterByPartyResponse:
-      description: A Daml contract of template `Splice.ExternalPartyAmuletRules:TransferCommandCounter`.
-      type: object
-      required:
-        - transfer_command_counter
-      properties:
-        transfer_command_counter:
-          $ref: '#/components/schemas/ContractWithState'
-    LookupTransferCommandStatusResponse:
-      type: object
-      required:
-        - transfer_commands_by_contract_id
-      properties:
-        transfer_commands_by_contract_id:
-          $ref: '#/components/schemas/TransferCommandMap'
-    TransferCommandMap:
-      type: object
-      additionalProperties:
-        $ref: '#/components/schemas/TransferCommandContractWithStatus'
-    TransferCommandContractWithStatus:
-      description: |
-        A contract of Daml template `Splice.ExternalPartyAmuletRules:TransferCommand`,
-        and its status determined by the latest transactions.
-      type: object
-      required:
-        - contract
-        - status
-      properties:
-        contract:
-          $ref: '#/components/schemas/Contract'
-        status:
-          $ref: '#/components/schemas/TransferCommandContractStatus'
-    TransferCommandContractStatus:
-      type: object
-      oneOf:
-        - $ref: '#/components/schemas/TransferCommandCreatedResponse'
-        - $ref: '#/components/schemas/TransferCommandSentResponse'
-        - $ref: '#/components/schemas/TransferCommandFailedResponse'
-      discriminator:
-        propertyName: status
-        mapping:
-          created: '#/components/schemas/TransferCommandCreatedResponse'
-          sent: '#/components/schemas/TransferCommandSentResponse'
-          failed: '#/components/schemas/TransferCommandFailedResponse'
-    BaseLookupTransferCommandStatusResponse:
-      type: object
-      required:
-        - status
-      properties:
-        status:
-          type: string
-          description: |
-            The status of the transfer command.
-            created:
-              The transfer command has been created and is waiting for automation to complete it.
-            sent:
-              The transfer command has been completed and the transfer to the receiver has finished.
-            failed:
-              The transfer command has failed permanently and nothing has been transferred. Refer to
-              failure_reason for details. A new transfer command can be created.
-    TransferCommandCreatedResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/BaseLookupTransferCommandStatusResponse'
-    TransferCommandSentResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/BaseLookupTransferCommandStatusResponse'
-    TransferCommandFailedResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/BaseLookupTransferCommandStatusResponse'
-        - type: object
-          required:
-            - failure_kind
-            - reason
-          properties:
-            failure_kind:
-              type: string
-              description: |
-                The reason for the failure of the TransferCommand.
-                failed:
-                  Completing the transfer failed, check the reason for details.
-                withdrawn:
-                  The sender has withdrawn the TransferCommand before it could be completed.
-                expired:
-                  The expiry time on the TransferCommand was reached before it could be completed.
-              enum:
-                - failed
-                - expired
-                - withdrawn
-            reason:
-              type: string
-              description: |
-                Human readable description of the failure
     GetAcsSnapshotResponse:
       type: object
       required:
@@ -3998,6 +3907,220 @@ components:
 
             To determine the progress of individual backfilling processes, inspect the corresponding metrics.
           type: boolean
+    GetVotesBeforeRequest:
+      type: object
+      required:
+        - before_record_time
+        - before_event_number
+        - count
+      properties:
+        before_record_time:
+          description: |
+            Only return vote results with a record time strictly smaller than this time, or with
+            this record time and an event number strictly smaller than `before_event_number`.
+          type: string
+          format: date-time
+        before_event_number:
+          type: integer
+          format: int32
+        count:
+          description: |
+            Return at most this many vote results. The actual number returned may be smaller.
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 1000
+    GetVotesBackfillingStatusResponse:
+      type: object
+      required:
+        - availability
+      properties:
+        availability:
+          $ref: '#/components/schemas/VotesAvailability'
+    VotesAvailability:
+      type: string
+      description: |
+        Whether this Scan holds all vote results before the requested record time.
+        "available": it does.
+        "ingesting": not yet. Its vote results are fully backfilled, but its own ingestion has not
+        reached the requested record time yet; it will answer "available" once it has.
+        "backfilling": its own vote results are not fully backfilled yet, so it does not know
+        whether earlier vote results exist, and must not be used as a source for backfilling.
+      enum:
+        - available
+        - ingesting
+        - backfilling
+    GetVotesBeforeResponse:
+      type: object
+      required:
+        - votes
+      properties:
+        votes:
+          type: array
+          items:
+            $ref: '#/components/schemas/VoteResultForBackfilling'
+    VoteResultForBackfilling:
+      description: |
+        All essential data for a vote result. Scans store additional information that can be derived from the choice result.
+        Such properties are not included here to keep the API stable.
+      type: object
+      required:
+        - record_time
+        - synchronizer_id
+        - update_id
+        - event_number
+        - contract_id
+        - choice_result
+      properties:
+        record_time:
+          type: string
+          format: date-time
+        synchronizer_id:
+          type: string
+        update_id:
+          type: string
+        event_number:
+          type: integer
+          format: int32
+        contract_id:
+          description: |
+            The contract id of the DsoRules on which the `DsoRules_CloseVoteRequest` choice was exercised.
+          type: string
+        choice_result:
+          description: |
+            The JSON-encoded `DsoRules_CloseVoteRequestResult`, as stored by the Scan that serves it.
+          type: object
+    VoteResultsFiltersV1:
+      description: |
+        **EXPERIMENTAL**: subject to change.
+
+        Filters for vote results. A vote result is returned if it matches all filters that are set.
+      type: object
+      properties:
+        action_name:
+          description: |
+            Only return vote results whose action name contains this string, e.g., `SRARC_AddSv`.
+          type: string
+        accepted:
+          description: |
+            Only return vote results that were accepted (`true`), or that were rejected or expired (`false`).
+          type: boolean
+        requester:
+          description: |
+            Only return vote results whose requester name contains this string.
+          type: string
+        effective_from:
+          description: |
+            Only return vote results whose effectiveAt is at or after this time.
+            Vote results without an effectiveAt (rejected or expired ones) never match.
+          type: string
+          format: date-time
+        effective_to:
+          description: |
+            Only return vote results whose effectiveAt is at or before this time.
+            Vote results without an effectiveAt (rejected or expired ones) never match.
+          type: string
+          format: date-time
+    ListVoteResultsRequestV1:
+      description: |
+        **EXPERIMENTAL**: subject to change.
+      type: object
+      required:
+        - page_size
+      properties:
+        filters:
+          $ref: '#/components/schemas/VoteResultsFiltersV1'
+        page_size:
+          description: |
+            The maximum number of vote results returned for this request.
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 1000
+        page_token:
+          description: |
+            Cursor for pagination. To request the next page of results, pass the `next_page_token` of the previous
+            response, together with the same filters. The cursor is opaque.
+          type: string
+    ListVoteResultsResponseV1:
+      description: |
+        **EXPERIMENTAL**: subject to change.
+      type: object
+      required:
+        - vote_results
+      properties:
+        vote_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/VoteResultV1'
+        next_page_token:
+          description: |
+            Cursor for the next page of results. Pass this as `page_token` in the next request.
+            Absent if this page is empty, which means that there are no more pages.
+            A page that is not empty always has a cursor, even if it is the last one.
+          type: string
+    VoteResultV1:
+      description: |
+        **EXPERIMENTAL**: subject to change. Properties may be added, changed or removed.
+
+        The result of a closed vote request, i.e., of an exercised `DsoRules_CloseVoteRequest` choice.
+      type: object
+      required:
+        - record_time
+        - synchronizer_id
+        - update_id
+        - event_number
+        - dso_rules_contract_id
+        - vote_result
+      properties:
+        record_time:
+          description: |
+            The record time of the transaction in which the vote request was closed.
+          type: string
+          format: date-time
+        synchronizer_id:
+          description: |
+            The synchronizer of the transaction in which the vote request was closed.
+          type: string
+        update_id:
+          description: |
+            The update id of the transaction in which the vote request was closed.
+          type: string
+        event_number:
+          description: |
+            The number of the `DsoRules_CloseVoteRequest` exercise event within the transaction.
+            Identical across Scans: events are numbered by traversing the transaction in order.
+          type: integer
+          format: int32
+        dso_rules_contract_id:
+          description: |
+            The contract id of the DsoRules on which the `DsoRules_CloseVoteRequest` choice was exercised,
+            i.e., of the DsoRules at the time the vote request was closed.
+          type: string
+        vote_result:
+          description: |
+            The `DsoRules_CloseVoteRequestResult` of the choice, in the compact Daml JSON encoding.
+            Optional fields without a value may be encoded as `null` or omitted.
+          type: object
+        dso_rules:
+          description: |
+            **EXPERIMENTAL**: not populated yet, and its format may change.
+
+            The payload of the DsoRules with contract id `dso_rules_contract_id`, e.g., for mapping the SV names
+            in the vote result to SV party ids.
+          type: object
+    CountVoteResultsResponseV1:
+      description: |
+        **EXPERIMENTAL**: subject to change.
+      type: object
+      required:
+        - count
+      properties:
+        count:
+          description: |
+            The number of vote results matching the request filters.
+          type: integer
+          format: int64
     EventHistoryRequest:
       type: object
       required:
@@ -5076,6 +5199,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     '501':
       description: not implemented
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    '503':
+      description: service unavailable
       content:
         application/json:
           schema:
