@@ -1,0 +1,116 @@
+---
+title: "SV Bulk Storage"
+description: "Export Scan's update history and ACS snapshots to S3-compatible object storage"
+---
+
+Scan can export its update history and ACS snapshots to S3-compatible object storage. The exported files let anyone
+read the full history of the network without paging through the Scan API, and they are the source that a new Scan
+loads its history from. Each SV writes its own copy. A file is published only after other SVs produced the same
+content, so the published files carry the same BFT guarantees as Scan's API.
+
+Bulk storage needs Splice 0.10.3 or later. Enabling it is optional for now and will become required in a later release.
+
+## What gets written
+
+- **Update history**, one segment per UTC day, starting from the genesis of the network. Import updates are not
+  part of the export.
+- **ACS snapshots**, the daily snapshot that Scan takes at 00:00 UTC.
+- Every file exists in two encodings, `ledger_api_json` and `protobuf_json`, as zstd-compressed newline-delimited JSON.
+  Files are split at about 128 MiB.
+
+After it is enabled, Scan writes everything from genesis up to now from its own database, then keeps up with new days.
+
+## Staging and committed buckets
+
+Each SV needs two buckets:
+
+- **Staging.** Scan writes every file here first, then compares its checksums with other SVs' Scans.
+- **Committed.** Once enough SVs report the same checksums, Scan copies the files from staging to committed and
+  deletes them from staging. Files in committed are never overwritten or deleted by Scan.
+
+Committed stays empty until enough SVs run bulk storage and have written the same day. SVs without bulk storage
+answer `Bulk storage is not configured`, which Scan treats as "not available yet" and retries every 30 seconds. While
+few SVs run bulk storage, staging grows and committed stays empty; this is expected.
+
+## Buckets and credentials
+
+Create the two buckets in an S3-compatible object store reachable from the Scan pod. On Google Cloud Storage, use the
+endpoint `https://storage.googleapis.com` with HMAC keys.
+
+Create a service account (or one per bucket) with:
+
+| Bucket | Permissions |
+|---|---|
+| Staging | create, read, overwrite and delete objects |
+| Committed | create and read objects; read objects in the staging bucket (Scan copies server-side from staging to committed) |
+
+Giving the committed credentials no delete or overwrite permission protects the published files against mistakes.
+
+Store the HMAC keys in Kubernetes secrets, with the keys `accessKey` and `secretAccessKey`:
+
+```bash
+kubectl create secret --namespace sv generic splice-app-bulk-storage-staging-credentials \
+    --from-literal=accessKey=${STAGING_ACCESS_KEY} \
+    --from-literal=secretAccessKey=${STAGING_SECRET_KEY}
+
+kubectl create secret --namespace sv generic splice-app-bulk-storage-committed-credentials \
+    --from-literal=accessKey=${COMMITTED_ACCESS_KEY} \
+    --from-literal=secretAccessKey=${COMMITTED_SECRET_KEY}
+```
+
+## Configuration
+
+Add `bulkStorage` to the values of the `splice-scan` Helm chart (`scan-values.yaml`) and upgrade the release:
+
+```yaml
+bulkStorage:
+  staging:
+    endpoint: STAGING_ENDPOINT
+    region: STAGING_REGION
+    bucketName: STAGING_BUCKET_NAME
+    secretName: splice-app-bulk-storage-staging-credentials
+  committed:
+    endpoint: COMMITTED_ENDPOINT
+    region: COMMITTED_REGION
+    bucketName: COMMITTED_BUCKET_NAME
+    secretName: splice-app-bulk-storage-committed-credentials
+```
+
+Bulk storage is enabled when both `staging` and `committed` are set.
+
+### Scans whose history starts after genesis
+
+Scan exports from genesis. If your Scan's update history starts later than the genesis of the network, for example
+because the SV joined later, Scan copies the earlier files from other SVs' committed buckets. Enable this with:
+
+```yaml
+additionalEnvVars:
+  - name: ADDITIONAL_CONFIG_BULK_STORAGE_BACKFILLING
+    value: canton.scan-apps.scan-app.bulk-storage.backfilling.enabled = true
+```
+
+Without it, Scan logs an error that `bulkStorage.backfilling.enabled` must be set and does not start the export.
+
+## Checking that it works
+
+Within minutes of the upgrade, objects appear in the staging bucket, under one folder per day from genesis on.
+
+Scan logs these lines at INFO level:
+
+- `UpdateHistoryBulkStorageStaging starts` and `AcsSnapshotBulkStorageStaging starts` when the export starts.
+- `Successfully completed processing updates segment ...` for every day written.
+- `Successfully completed processing snapshots up to timestamp ...` for every snapshot written.
+- `Failure from scan ... treated as a data-not-yet-available` while other SVs do not have the data yet.
+
+These metrics show how far it got, as timestamps: `splice_history_bulk_storage_latest_updates_segment_staging`,
+`..._latest_updates_segment_committed`, `..._latest_acs_snapshot_staging` and `..._latest_acs_snapshot_committed`.
+
+Errors that need attention: `Checksums do not match for objects ...` and `Could not reach consensus on checksums ...`.
+
+## Operating it
+
+- Scan keeps its progress in its database. After a restart, or after disabling and enabling bulk storage again, it
+  continues where it stopped.
+- Leave the contents of both buckets to Scan. Removing objects from the staging bucket by hand leaves those days
+  missing from the committed bucket.
+- To turn it off, remove `bulkStorage` from the values and upgrade the release. The buckets keep their contents.
