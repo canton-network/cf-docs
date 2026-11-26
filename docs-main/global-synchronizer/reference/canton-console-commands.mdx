@@ -3,7 +3,7 @@ title: "Canton Console Commands"
 description: "Canton admin console command reference: participant, mediator, sequencer, and topology commands."
 ---
 
-{/* GENERATED_FROM source="canton-open-source-3.7.3.tar.gz" ref="v3.7.3" digest="sha256:366277df57096edc690ebe4bae11c66ff2d9a9d7ad8660493b6da2f62cfd622e" template_source="digital-asset/canton:docs-open/src/main/resources/console.rst.template" template_commit="4eab7a047040bb61798b66abde794c8cb27f7746" template_blob="3126accb7ff4175295a594648f25683f29b5e65c" raw_command_count="701" rendered_command_count="657" */}
+{/* GENERATED_FROM source="canton-open-source-3.7.4.tar.gz" ref="v3.7.4" digest="sha256:83da2e30a43334a2126bbdd5b1076ee7cec69584d34090886a4b2b19ab4557cc" template_source="digital-asset/canton:docs-open/src/main/resources/console.rst.template" template_commit="53625856fac791672754f4bbe308f799172d695c" template_blob="3126accb7ff4175295a594648f25683f29b5e65c" raw_command_count="702" rendered_command_count="658" */}
 
 <div id="canton_console_reference">
 
@@ -1332,16 +1332,23 @@ Performs the same DAR and Daml package validation checks that the upload call pe
 
 ### `dars.vetting.disable`
 
-Revoke vetting for all packages contained in the DAR archive identified by the provided main package-id.
+Revoke vetting for packages contained in the DAR archive identified by the provided main package-id.
 
-This command succeeds if the vetting command used to vet the DAR's packages was symmetric and resulted in a single vetting topology transaction for all the packages in the DAR.
+Revokes vetting for packages contained in a DAR archive. By default, this command will only revoke vetting for the main package of the DAR.
 
-This command is potentially dangerous and misuse can lead the participant to fail in processing transactions.
+Parameters:
+
+- `mainPackageId`: The main package ID of the DAR archive for which vetting should be revoked.
+- `synchronizerId`: Optional synchronizer ID on which the vetting revocation is effected. If not provided, the command will attempt to use the connected synchronizer. If the participant is connected to multiple synchronizers, this parameter must be provided otherwise the command will fail.
+- `unvetScope`: Specifies which packages of the DAR to unvet. If not specified, defaults to UNVET_SCOPE_MAIN_PACKAGE_ONLY.
+
+NOTE: Unvetting all package dependencies of a DAR (using UNVET_SCOPE_ALL_DAR_PACKAGES) is not safe as a DAR's dependencies might be used by other DARs. Use with caution.
 
 **Arguments**
 
 - `mainPackageId`: `String`
 - `synchronizerId`: `Option[com.digitalasset.canton.topology.SynchronizerId]`
+- `unvetScope`: `com.digitalasset.canton.admin.participant.v30.UnvetDarRequest.UnvetScope`
 
 
 <div id="dars.vetting.enable" />
@@ -5948,6 +5955,8 @@ The command uses the specified `asOf` time to determine the precise state of the
 
 Upon successful completion, the command writes a GZIP-compressed ACS snapshot file. While designed to work in tandem with the `import_party_acs` command, the resulting file is a standard ACS snapshot that can also be used with other compatible commands (such as `repair.import_acs`).
 
+Re-invoking the command with the same arguments while a previous invocation has not completed restarts the remote read from scratch (reusing an existing sequencer channel agreement if available), and the previous invocation fails. The snapshot is first written to a temporary file and only copied to `getRemoteAcsFilePath` once the command completes successfully.
+
 Parameters:
 
 - `parties`: The parties whose ACS is being read remotely. For now exactly one party must be specified, but the command may allow multiple parties in the future.
@@ -6845,6 +6854,27 @@ Transactions serialized this way should be loaded into another node with load_fr
 - `protocolVersion`: `com.digitalasset.canton.version.ProtocolVersion`
 
 
+<div id="topology.transactions.export_single_to_file" />
+
+### `topology.transactions.export_single_to_file`
+
+Exports a signed topology transaction to a file.
+
+Writes the signed topology transaction to a file, encrypted with the password if one is set. To load the file, use `load_single_from_file` with the same password.
+
+Parameters:
+
+- `transaction`: The signed topology transaction to export.
+- `file`: The file to write the signed transaction to.
+- `password`: Optional password. If set, the console encrypts the transaction with it. We recommend that the name of an encrypted file ends with `.enc`.
+
+**Arguments**
+
+- `transaction`: `com.digitalasset.canton.topology.transaction.SignedTopologyTransaction.GenericSignedTopologyTransaction`
+- `file`: `String`
+- `password`: `Option[String]`
+
+
 <div id="topology.transactions.export_topology_snapshot" />
 
 ### `topology.transactions.export_topology_snapshot`
@@ -7149,7 +7179,7 @@ The file must contain data serialized by SignedTopologyTransactions.
 
 Loads topology transactions from a file into the specified topology store.
 
-The file must contain data serialized by SignedTopologyTransaction.
+The file must contain data serialized by SignedTopologyTransaction. If `password` is set, the file must contain it encrypted with the password, as written by `export_single_to_file`. The console decrypts it.
 
 **Arguments**
 
@@ -7157,6 +7187,7 @@ The file must contain data serialized by SignedTopologyTransaction.
 - `store`: `com.digitalasset.canton.topology.admin.grpc.TopologyStoreId`
 - `forceFlags`: `com.digitalasset.canton.topology.ForceFlags`
 - `synchronize`: `Option[com.digitalasset.canton.config.NonNegativeDuration]`
+- `password`: `Option[String]`
 
 
 <div id="topology.transactions.load_single_from_files" />
@@ -10005,11 +10036,12 @@ Help for specific commands (use help() or help("method") for more information).
 
 Return the last traffic state update of the given members, per member.
 
-Use this command to get the last traffic state update of each member. It will be last updated when a member consumed traffic.
+Use this command to get the last traffic state update of each member. It will be last updated when a member consumed traffic. Set includeOnboardingMembers to true to also return members that traffic was purchased for before they joined the synchronizer. Such members have not consumed traffic yet, so their state does not show the purchase.
 
 **Arguments**
 
 - `members`: `Seq[com.digitalasset.canton.topology.Member]`
+- `includeOnboardingMembers`: `Boolean`
 
 **Returns:** `com.digitalasset.canton.synchronizer.sequencer.traffic.SequencerTrafficStatus`
 
@@ -10072,11 +10104,12 @@ Returns: The max sequencing time used for the update. After and only after that 
 
 Return the traffic state of the all members.
 
-Use this command to get the traffic state of all members. Set latestApproximate to true to get an approximation of the traffic state (including base traffic) at the latest possible timestamp the sequencer can calculate it. This an approximation only because the sequencer may use its wall clock which could be beyond the synchronizer time.
+Use this command to get the traffic state of all members. Set latestApproximate to true to get an approximation of the traffic state (including base traffic) at the latest possible timestamp the sequencer can calculate it. This an approximation only because the sequencer may use its wall clock which could be beyond the synchronizer time. Set includeOnboardingMembers to true to also return members that traffic was purchased for before they joined the synchronizer.
 
 **Arguments**
 
 - `latestApproximate`: `Boolean`
+- `includeOnboardingMembers`: `Boolean`
 
 **Returns:** `com.digitalasset.canton.synchronizer.sequencer.traffic.SequencerTrafficStatus`
 
@@ -10087,11 +10120,12 @@ Use this command to get the traffic state of all members. Set latestApproximate 
 
 Return the traffic state of the given members.
 
-Use this command to get the traffic state of a list of members at the latest safe timestamp.
+Use this command to get the traffic state of a list of members at the latest safe timestamp. Set includeOnboardingMembers to true to also return members that traffic was purchased for before they joined the synchronizer.
 
 **Arguments**
 
 - `members`: `Seq[com.digitalasset.canton.topology.Member]`
+- `includeOnboardingMembers`: `Boolean`
 
 **Returns:** `com.digitalasset.canton.synchronizer.sequencer.traffic.SequencerTrafficStatus`
 
@@ -10106,9 +10140,12 @@ Use this command to get the traffic state of a list of members using the latest 
 
 CAREFUL: The returned state is only an approximation in the future and might not be the actual correct state by the time this timestamp is reached by the synchronizer.
 
+Set includeOnboardingMembers to true to also return members that traffic was purchased for before they joined the synchronizer.
+
 **Arguments**
 
 - `members`: `Seq[com.digitalasset.canton.topology.Member]`
+- `includeOnboardingMembers`: `Boolean`
 
 **Returns:** `com.digitalasset.canton.synchronizer.sequencer.traffic.SequencerTrafficStatus`
 
@@ -10119,12 +10156,13 @@ CAREFUL: The returned state is only an approximation in the future and might not
 
 Return the traffic state of the given members at a specific timestamp.
 
-Use this command to get the traffic state of specified members at a given timestamp.
+Use this command to get the traffic state of specified members at a given timestamp. Set includeOnboardingMembers to true to also return members that traffic was purchased for before they joined the synchronizer.
 
 **Arguments**
 
 - `members`: `Seq[com.digitalasset.canton.topology.Member]`
 - `timestamp`: `com.digitalasset.canton.data.CantonTimestamp`
+- `includeOnboardingMembers`: `Boolean`
 
 **Returns:** `com.digitalasset.canton.synchronizer.sequencer.traffic.SequencerTrafficStatus`
 

@@ -45,8 +45,6 @@ import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePa
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/parties/parties.rst" hash="5dabde1e" */}
 
-# Party Management
-
 Parties are the entities that interact with the Daml ledger, representing users or organizations. They can be onboarded to a Participant Node, which allows them to submit transactions and access the ledger.
 
 The following section explains how to onboard a (local) party. Refer to the following howtos for onboarding of other kind of parties:
@@ -159,7 +157,7 @@ The simplest and safest way to multi-host a party is only available to you while
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/parties/party_replication.rst" hash="2ed3947c" */}
 
-# Party replication
+## Party replication
 
 *Party replication* is the process of duplicating an existing party onto an additional participant **within a single synchronizer**. In this process, the participant that already hosts the party is called the *source* participant, while the new participant is called the *target* participant.
 
@@ -175,13 +173,13 @@ Otherwise, you must apply an offline party replication procedure.
 Party offboarding, and thus party migration, is currently not supported.
 </Note>
 
-## Party replication authorization
+### Party replication authorization
 
-### How authorization works
+#### How authorization works
 
 Both the party and the new hosting participant must grant their consent by issuing each a party-to-participant mapping topology transaction. This ensures mutual agreement for the party replication.
 
-### External parties
+#### External parties
 
 For external parties, changes to the party's topology must be explicitly authorized with a signature of the external party's namespace key. Whenever in the how-to authorization from the party is required, the distinction will be made between *local* and *external* parties. The procedure for external parties will refer to an abstract function authorizing updates to the party's party-to-participant mapping:
 
@@ -202,15 +200,15 @@ An example implementation of this function is given in the external party onboar
 
 When the `source` participant is used in this how-to for actions other than authorizing topology changes, one of the existing confirming participants of the external party must be used.
 
-### Parties with multiple owners
+#### Parties with multiple owners
 
 When a party is owned by a group of members in a decentralized namespace, a minimum number (a defined threshold) of those owners must approve the new hosting arrangement. This threshold is met once enough individual owners each issue their own party-to-participant mapping topology transaction.
 
-### Activation
+#### Activation
 
 Completing the mutual authorization process *activates* the party on the target participant.
 
-## Simple party replication
+### Simple party replication
 
 The simplest and safest way to replicate a party is to do so **before** it becomes a stakeholder in any contract.
 
@@ -242,7 +240,7 @@ The following demonstrates these steps using two participants:
     synchronizerId : SynchronizerId = da::1220a82692ab...
 ```
 
-### 1. Create party
+#### 1. Create party
 
 Create a party Alice:
 
@@ -254,7 +252,7 @@ In this example, the **local party Alice** is owned by the `source` participant,
 Alternatively, you can create the party in its own dedicated namespace, or create an external party.
 </Note>
 
-### 2. Vet packages
+#### 2. Vet packages
 
 Vet packages on the target participant(s) **before** proceeding.
 
@@ -262,13 +260,13 @@ Vet packages on the target participant(s) **before** proceeding.
 If you are unfamiliar with this process, read this general explanation of package vetting.
 </Note>
 
-### 3. Multi-host party
+#### 3. Multi-host party
 
 Party Alice needs to agree to be hosted on the target participant.
 
 Because the source participant owns party Alice, you need to issue the party-to-participant mapping topology transaction on the `source` participant.
 
-#### Authorize hosting update on the source participant
+##### Authorize hosting update on the source participant
 
 **Local Party**
 
@@ -280,7 +278,7 @@ A participant can host a party with different permissions. In this example, the 
 
 The onboarding process for external parties demonstrates how to declare the hosting relationship of the party during the creation of the party, including hosting on multiple nodes (multi-hosted external party). Unlike local parties who are always first hosted on a single node, and therefore always need to amend their party-to-participant mapping after the fact to be multi-hosted, external parties can do this in one step during the onboarding process. See onboarding process for more details.
 
-#### Authorize hosting update on the target participant
+##### Authorize hosting update on the target participant
 
 To complete the process, also the target participant needs to agree to newly host Alice. Therefore, you need to issue the **same** party-to-participant mapping topology transaction on the `target` participant:
 
@@ -294,7 +292,7 @@ Once the party-to-participant mapping takes effect, the replication is complete.
 
 To replicate Alice to more participants, repeat the procedure by first vetting the packages on a `newTarget` participant. Then, perform the replication again using the original `source` and `newTarget` participants.
 
-### 3.a Replicate party with simultaneous confirmation threshold change (Variant to 3)
+#### 3.a Replicate party with simultaneous confirmation threshold change (Variant to 3)
 
 <Note>
 For **external parties**, the threshold is defined during the onboarding process already, so this section is not relevant to them.
@@ -309,7 +307,7 @@ The following example continues from the previous one, demonstrating how to repl
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication4 />
 
 
-## Offline party replication
+### Offline party replication
 
 Offline party replication is a multi-step, manual process.
 
@@ -329,18 +327,18 @@ Afterwards, the replication consists of exporting the party's Active Contract Se
 This ensures you have a clean recovery point if the ACS import is interrupted (crash, unintended node restart, etc.), or when you otherwise were unable to follow this manual operational steps to completion. Having this backup allows you to safely reset the target participant and **still complete the ongoing offline party replication**.
 </Warning>
 
-## Trust Assumptions
+### Trust Assumptions
 
 Offline party replication involves exporting a party's Active Contract Set (ACS) from a source participant and importing it into a target participant. This process introduces a critical dependency on the integrity of the source participant.
 
-### Core Trust Requirement
+#### Core Trust Requirement
 
 It is assumed that both the target participant operator and the replicated party maintain a high level of trust in the source participant. Specifically, they must trust the source to:
 
 - Provide a complete and accurate snapshot of the ACS representing the ledger state at the time of export.
 - Ensure the exported data has not been tampered with or truncated.
 
-### Validation Constraints
+#### Validation Constraints
 
 While the target participant performs integrity checks during the import process, this validation is conducted on a best-effort basis.
 
@@ -348,7 +346,7 @@ While the target participant performs integrity checks during the import process
 Because the target participant was not a witness to the original transactions comprising the ACS, it cannot independently verify the entire historical provenance of the contracts against the underlying ledger. Therefore, the source participant acts as the "root of trust" for the party's state on the new node.
 </Note>
 
-## Offline party replication steps
+### Offline party replication steps
 
 These are the steps, which you must perform in **the exact order** they are listed:
 
@@ -372,13 +370,13 @@ Offline party replication must be performed with care, strictly following the do
 This documentation provides a guide. Your environment may require adjustments. Test thoroughly in a test environment before production use.
 </Warning>
 
-### Scenario description
+#### Scenario description
 
 The following steps show how to replicate party `alice` from the `source` participant to a new `target` participant on the synchronizer `mysynchronizer`. The `source` can be any participant already hosting the party.
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication5 />
 
-### 1. Vet packages
+#### 1. Vet packages
 
 Ensure the target participant vets all packages associated with contracts where the party is a stakeholder.
 
@@ -390,7 +388,7 @@ Hence, upload the missing DAR package to the `target` participant.
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication8 />
 
-### 2. Data Retention
+#### 2. Data Retention
 
 Ensure that the retention period on the source participant is long enough to cover the entire duration between the following two events:
 
@@ -411,7 +409,7 @@ Clear the pruning schedule, disabling the automatic pruning on the `source` node
 Manual pruning cannot be programmatically disabled on the `source` participant. Coordinate closely with other operators and ensure that no external automation triggers pruning until the ACS export is complete.
 </Warning>
 
-### 3. Authorize new hosting on the target participant
+#### 3. Authorize new hosting on the target participant
 
 First, have the `target` participant agree to host party Alice with the desired participant permission (*observation* in this example).
 
@@ -421,17 +419,17 @@ Please ensure the onboarding flag is set with `requiresPartyToBeOnboarded = true
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication11 />
 
-### 4. Disconnect target participant from all synchronizers
+#### 4. Disconnect target participant from all synchronizers
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication12 />
 
-### 5. Disable auto-reconnect on target participant
+#### 5. Disable auto-reconnect on target participant
 
 Ensure the target participant does not automatically reconnect to the synchronizer upon restart.
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication13 />
 
-### 6. Authorize new hosting for the party
+#### 6. Authorize new hosting for the party
 
 To later *find* the ledger offset of the topology transaction which authorizes the new hosting arrangement, take the current ledger end offset on the `source` participant as a starting point:
 
@@ -460,7 +458,7 @@ update_external_party_hosting(
 )
 ```
 
-### 7. Export ACS
+#### 7. Export ACS
 
 Export Alice's ACS from the `source` participant.
 
@@ -470,7 +468,7 @@ It then exports Alice's ACS from the `source` participant at that exact offset, 
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication20 />
 
-### 8. Optional: Re-enable automatic pruning
+#### 8. Optional: Re-enable automatic pruning
 
 If you previously disabled automatic pruning on the `source` participant by following the data retention step, you may now re-enable it.
 
@@ -478,13 +476,13 @@ Run the following command using the original configuration parameters you record
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication21 />
 
-### 9. Back up target participant
+#### 9. Back up target participant
 
 <Warning>
 **Please back up the target participant before importing the ACS!**
 </Warning>
 
-### 10. Import ACS
+#### 10. Import ACS
 
 Import Alice's ACS on the `target` participant:
 
@@ -494,7 +492,7 @@ Import Alice's ACS on the `target` participant:
 Providing the party ID is optional for backward compatibility. However, omitting it prevents automatic onboarding flag clearance, requiring you to [clear the flag manually](#13-complete-the-onboarding-of-the-party).
 </Note>
 
-### 11. Reconnect target participant to synchronizer
+#### 11. Reconnect target participant to synchronizer
 
 To later find the topology transaction that authorized the new hosting arrangement on the `target` participant, record the current ledger end offset:
 
@@ -504,13 +502,13 @@ Now, reconnect that `target` participant to the synchronizer.
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication24 />
 
-### 12. Optional: Re-enable auto-reconnect on target participant
+#### 12. Optional: Re-enable auto-reconnect on target participant
 
 If you previously disabled auto-reconnect following the [earlier step](#5-disable-auto-reconnect-on-target-participant), you may now re-enable it. This is only necessary if the target participant was originally configured to reconnect automatically upon restart.
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication25 />
 
-### 13. Complete the onboarding of the party
+#### 13. Complete the onboarding of the party
 
 To complete the replication, you must clear the [previously set onboarding flag](#3-authorize-new-hosting-on-the-target-participant) using the `target` participant. This signals that the participant is fully ready to host the party.
 
@@ -520,7 +518,7 @@ If you run protocol version 35 or later and provided the party ID during the [AC
 Background flag clearance execution is observable in the participant logs.
 </Note>
 
-#### Optional: Manual onboarding flag clearance
+##### Optional: Manual onboarding flag clearance
 
 If automatic clearance does not apply, or if there are issues with the background clearance, you must clear the flag manually.
 
@@ -547,7 +545,7 @@ However, because this command is idempotent, you *may* call it repeatedly. Thus,
 The `timeout` is based on the default *decision timeout* of 1 minute.
 </Note>
 
-### Summary
+#### Summary
 
 You have successfully multi-hosted Alice on `source` and `target` participants.
 
@@ -557,7 +555,7 @@ You have successfully multi-hosted Alice on `source` and `target` participants.
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/parties/decentralized_parties.rst" hash="f99bf5c3" */}
 
-# Decentralized party overview
+## Decentralized party overview
 
 A decentralized party combines three different features:
 
@@ -565,7 +563,7 @@ A decentralized party combines three different features:
 - Decentralization of transaction confirmations for the party: A `party to participant mapping` containing multiple confirming participants and a threshold to ensure that transactions requiring confirmations from that party also require confirmation from a threshold of participant nodes.
 - Decentralization of transaction submissions for the party: Optionally, a `party to key mapping` to support submitting transactions that require direct authorization of the external party, for example creating a contract that the party is a signatory on by signing the prepared transaction with a threshold of keys. If no party-to-key mapping is defined, then the initial contracts need to be created when the `party to participant` threshold is 1 (if this was ever the case), and a node has submission rights, not just confirmation rights.
 
-## Setup a decentralized party
+### Setup a decentralized party
 
 While the decentralized namespace, the party to participant mapping, and the party to key mapping can be configured fully independently, a common scenario is that a set of entities jointly control all three i.e. all three have the same number of members and the same threshold. The instructions here describe that setup with the three members being `alice`, `bob`, and `charlie`, who use `participant1`, `participant2`, and `participant3` respectively.
 
@@ -929,19 +927,19 @@ With the keys set up, you can now create the `PartyToKey` topology transaction. 
 
 With that, the party is fully set up and can be used.
 
-## Changing the set of members
+### Changing the set of members
 
 To add and remove members, the steps are the same: There is a threshold of the existing members and any new members must submit the three topology transactions. It is also possible to only add them to some, but not all, of the three mappings, but usually it makes sense to keep the three in sync.
 
 Note that adding a member to `PartyToParticipant` requires not just a topology transaction but a full party migration including an ACS export and import. The details of this are outside of the scope of this topic.
 
-## Next steps
+### Next steps
 
 For details on how to submit an externally signed Daml transaction enabled by the `PartyToKey` mapping, refer to the external submission docs.
 
 In this tutorial, both the namespace and protocol keys are held by the participant itself. It is also possible to hold them outside of the participant. The actual flow stays the same, but each submission of a topology transaction must be signed externally. Refer to the external topology signing docs for details on how to do this.
 
-## Decentralized namespace computation
+### Decentralized namespace computation
 
 In the above example, we used `DecentralizedNamespaceDefinition.computeNamespace(Set(aliceNamespace, bobNamespace, charlieNamespace))` to compute the decentralized namespace from the namespaces of the initial owners. Note that only the initial owners matter here, the decentralized namespace does not change as owners get added or removed.
 

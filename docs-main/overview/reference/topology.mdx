@@ -29,13 +29,7 @@ To understand the approach to Canton's topology management, a few key principles
 
 Similar to how there is no single globally trusted entity for synchronizing Daml transactions, there is also no single globally trusted entity for establishing identities, which leads us to the first principle:
 
-<div className="todo">
-
-cross-reference to the multi-synchronizer motivation \<[https://github.com/DACH-NY/canton/issues/25656](https://github.com/DACH-NY/canton/issues/25656)\>
-
-*Principle 1: For global synchronization to work in reality, there cannot be a single trust anchor.*
-
-</div>
+> *Principle 1: For global synchronization to work in reality, there cannot be a single trust anchor.*
 
 A cryptographic key pair can uniquely be identified through the fingerprint of the public key. By owning the associated private key, an entity can always prove unambiguously through a signature that the entity is the owner of the public key. We are using this principle heavily in our system to verify and authorize the activities of Canton key holders acting on a Canton Synchronizer. As such, we can introduce the second principle:
 
@@ -97,12 +91,6 @@ For definitions of all mappings and the respective unique keys, please refer to 
 
 The serial of a topology transaction is used to evolve the mapping of a particular unique key. The first serial of a unique key always starts at `1`. Any subsequent topology transaction must increase the serial of the preceding topology transaction for the same key by exactly one. There must be no gaps (going from `1` to `3` is not permitted) or repetitions (same serial but different content). However, additional signatures of expected authorizers can be added to an already fully authorized and currently effective topology transaction. More on that later.
 
-<div className="todo">
-
-link to the section that covers the "more on that later". \<[https://github.com/DACH-NY/canton/issues/25656](https://github.com/DACH-NY/canton/issues/25656)\>
-
-</div>
-
 The serial on the topology transaction prevents replay attacks. A malicious actor cannot simply take a previously fully authorized transaction and submit it again, because the Canton nodes on the Synchronizer detect an unexpected serial and therefore reject the topology transaction.
 
 ### Change operation
@@ -116,12 +104,6 @@ All topology mappings precisely define which identities must provide their autho
 For example, hosting a party(`alice::abc123`) on Participant Node (`p1::xyz789`) requires the authorization, and therefore signatures, of both the owner of the party and the owner of the Participant Node. The party has to authorize that it wants the Participant Node to handle the party's sensitive data. On the other hand, the Participant Node has to accept the operational responsibilities of hosting a party, such as receiving and handling the party's transactions. If both party and Participant Node are owned by the same identity, one signature is sufficient.
 
 The cryptographic signature of a topology transaction covers the mapping, the serial, and the change operation. Therefore, tampering with any of these attributes of a topology transaction invalidates the existing signatures. Likewise, the signature of a previous topology transaction cannot be used for any other topology transaction, because the data that is covered by the signature is not the same, not even for the same unique key and the same content. At least the serial must change in a later evolution of the value for the unique key.
-
-<div className="todo">
-
-Section "Binding topology transactions to Synchronizers" \<[https://github.com/DACH-NY/canton/issues/25656](https://github.com/DACH-NY/canton/issues/25656)\>
-
-</div>
 
 ## Types of topology mappings
 
@@ -169,12 +151,6 @@ A party's owner may decide to have the party hosted on multiple Participant Node
 
 Validating Daml Transactions ultimately means running Daml code written by third parties. This exposes the Participant Node to certain risks, as Daml code can run for an arbitrarily long time and consume a large amount of memory. Therefore, a Participant Node's owner must explicitly declare which packages they agree to run on their Participant Node. They do this via the topology mapping `VettedPackages`. The Participant Node's owner may restrict the vetting of a package to a specific window of time, which can be open-ended on either side. Furthermore, the `VettedPackages` topology mapping determines what version of a Daml template will be used for interpreting a Ledger API command.
 
-<div className="todo">
-
-add section Synchronizer Parameters \<[https://github.com/DACH-NY/canton/issues/25656](https://github.com/DACH-NY/canton/issues/25656)\>
-
-</div>
-
 ### Membership with a Synchronizer
 
 To onboard a Canton node to a Synchronizer, it must provide its identity topology transactions, which include at the very least the node's root certificate `NamespaceDelegation` and the node's cryptographic keys in an `OwnerToKeyMapping` topology transaction. This specific bundle of topology transactions is called *identity transactions*. The actual membership of a Canton node is expressed differently for each of the three node types:
@@ -207,12 +183,6 @@ The starting point is a `PartyToParticipant` mapping for party `Alice::abc123` a
 
 <img src="/images/docs_website/topology-simple-proposal.svg" className="align-center" style={{width: "80.0%"}} alt="image" />
 
-<div className="todo">
-
-link to the PartyToParticipant mapping topology proto documentation. \<[https://github.com/DACH-NY/canton/issues/25656](https://github.com/DACH-NY/canton/issues/25656)\>
-
-</div>
-
 ### Concurrent / competing proposals
 
 When Canton nodes submit proposals for a mapping with the same unique key, the same serial, but varying content, they have produced competing proposals. These topology transactions are proposals because they are not yet fully authorized, and they are competing because the first proposal to become fully authorized automatically invalidates all other proposals for the same unique key and the same serial.
@@ -228,12 +198,6 @@ To illustrate, consider the scenario where the Participant Node `P1::abc123` hos
 Upon validating a topology transaction received from the Sequencer, Canton nodes deterministically compute the so-called *effective time* of the topology transaction based on its sequencing time. For more details about the computation of the effective time, please refer to the sections `topology-sequential-validation` and `topology-future-dating`. The effective time of the topology transaction for a unique key with serial `n` marks the exclusive beginning of the topology transactions validity period and simultaneously marks the inclusive end timestamp of the predecessor topology transaction for the same unique key with serial `n-1` and all proposals for the same unique key with serial `n`. The fully authorized topology transaction with serial `n` triggers the "expiry" of the proposals with serial `n`, because it prevents those proposals from becoming fully authorized, because the next fully authorized topology transaction must have serial `n+1`. Conversely, a successfully validated proposal with serial `n+1` does not determine the end of the validity period of the fully authorized topology transaction with serial `n`.
 
 As a consequence of the definition of the validity period, all fully authorized topology transaction for a unique key build a "validity timeline" with no gaps, which unambiguously defines which topology transaction is considered effective for any given point in time.
-
-<div className="todo">
-
-Add pointers to API docs and howtos in "Operate" and "Dedicated Synchronizer" subsites \<[https://github.com/DACH-NY/canton/issues/25656](https://github.com/DACH-NY/canton/issues/25656)\>
-
-</div>
 
 ## Disseminating topology transactions
 
@@ -261,12 +225,6 @@ The downside of this simple approach is that any topology transaction puts a tem
 
 One way to work around the problem of topology transactions pausing the processing of messages in the various protocol layers is to make topology transactions effective at some point in the future. The concept of *effective time* was already introduced in the section `topology-effectiveness`. While a topology transaction is sequenced at time `t`, it only becomes effective after the *topology change delay* `ε`. The time `t+ε` gives the lower bound for the effective time. If the topology change delay hasn't been changed recently, the effective time is equal to the lower bound `t+ε`. The topology change delay is a dynamic Synchronizer parameter in the topology state and can be changed by the Synchronizer owners. Therefore the actual topology change delay used for the calculation of the effective time must be read from the topology state during the validation of topology transactions.
 
-<div className="todo">
-
-link to a howto for changing Synchronizer parameters \<[https://github.com/DACH-NY/canton/issues/25656](https://github.com/DACH-NY/canton/issues/25656)\>
-
-</div>
-
 This mechanism allows other messages and events between `t` and `t+ε` to be processed normally without having to wait for the topology processing layer.
 
 How big should `ε`, the topology change delay, be? The trade off is between not blocking the processing of other messages and not waiting too long for a topology transaction to become effective. Topology change delay should be just larger than it takes to process a topology transaction. With a topology change delay of 0 ms, topology transactions become effective immediately, but as described in previous section, the processing of other messages needs to wait until the Canton node can be sure that there are no pending topology transactions for the topology snapshot required for that message. On the other hand, with a topology change delay of 30 s, Daml transactions are unlikely to be blocked from processing, but it takes quite a while before, for example, a party can actually be used in a transaction.
@@ -274,12 +232,6 @@ How big should `ε`, the topology change delay, be? The trade off is between not
 To illustrate the benefits of future dating, consider the following example. The effective time of the topology transaction at t`3` is computed to be t`5`. Therefore, once the processing of the topology transaction completes, the processing of the Daml Transaction at t`4` can access the topology snapshot at t`4`, because the Canton node knows, that it has seen all changes to the topology state that are relevant for a snapshot up to t`5`.
 
 <img src="/images/docs_website/topology-change-delay.svg" className="align-center" style={{width: "80.0%"}} alt="image" />
-
-<div className="todo">
-
-link to dynamic Synchronizer parameters reference. \<[https://github.com/DACH-NY/canton/issues/25656](https://github.com/DACH-NY/canton/issues/25656)\>
-
-</div>
 
 ## Authorization
 

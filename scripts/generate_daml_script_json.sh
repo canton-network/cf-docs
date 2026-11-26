@@ -188,6 +188,25 @@ generate_daml_script_json() {
     return 1
   fi
 
+  # Since SDK 3.6 some modules (for example Daml.Script.Internal.LowLevel.Stable.*) ship in
+  # separate daml-script-stable-*.dar files next to the main DAR. Merge their sources into the
+  # main source root so the entrypoints can import them.
+  local source_root stable_dar stable_dir stable_daml_dir
+  source_root="$(dirname -- "$(dirname -- "$script_file")")"
+  for stable_dar in "$(dirname -- "$dar_path")"/daml-script-stable-*.dar; do
+    [[ -f "$stable_dar" ]] || continue
+    stable_dir="$(mktemp -d "${TMPDIR:-/tmp}/daml-script-stable-src.XXXXXX")"
+    if ! unzip -q "$stable_dar" '*.daml' -d "$stable_dir"; then
+      echo "Failed to extract .daml files from $stable_dar" >&2
+      rm -rf "$stable_dir"
+      return 1
+    fi
+    while IFS= read -r stable_daml_dir; do
+      cp -R "$stable_daml_dir/." "$source_root/Daml/"
+    done < <(find "$stable_dir" -mindepth 2 -maxdepth 2 -type d -name Daml | sort)
+    rm -rf "$stable_dir"
+  done
+
   daml_docs_log "Generating daml-script JSON"
   daml_docs_log "source=$DAML_DOCS_SDK_SOURCE sdk=$DAML_DOCS_SDK_VERSION lf_target=$DAML_DOCS_LF_TARGET package=daml-script dar=$dar_path entrypoints=2"
   "${DAML_DOCS_DOCS_CMD[@]}" \

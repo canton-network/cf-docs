@@ -530,9 +530,21 @@ def test_checked_in_json_openapi_target_is_fully_manual_and_conformant() -> None
         directory="reference/json-api-reference",
     )
     expected_page_refs = [operation["page_ref"] for operation in operations]
+    # Operations removed from the published spec keep a history page and nav entry.
+    history_report = json.loads(
+        (
+            REPO_ROOT / "docs-main/reference/json-api-reference/history-report.json"
+        ).read_text(encoding="utf-8")
+    )
+    removed_page_refs = [
+        item["route"].lstrip("/")
+        for item in history_report["items"]
+        if not item.get("current_present") and item.get("route")
+    ]
     output_directory = REPO_ROOT / "docs-main/reference/json-api-reference"
     expected_files = {
-        REPO_ROOT / f"docs-main/{page_ref}.mdx" for page_ref in expected_page_refs
+        REPO_ROOT / f"docs-main/{page_ref}.mdx"
+        for page_ref in [*expected_page_refs, *removed_page_refs]
     } | {output_directory / "overview.mdx"}
     assert set(output_directory.glob("*.mdx")) == expected_files
 
@@ -549,8 +561,16 @@ def test_checked_in_json_openapi_target_is_fully_manual_and_conformant() -> None
     openapi_group = module._find_group(ledger_group["pages"], "OpenAPI")
     assert openapi_group == {
         "group": "OpenAPI",
-        "pages": ["reference/json-api-reference/overview", *expected_page_refs],
+        "pages": [
+            "reference/json-api-reference/overview",
+            *expected_page_refs,
+            *removed_page_refs,
+        ],
     }
+    for page_ref in removed_page_refs:
+        removed_page = (REPO_ROOT / f"docs-main/{page_ref}.mdx").read_text(encoding="utf-8")
+        assert "(removed)" in removed_page
+        assert "Removed in " in removed_page
     assert {
         "source": "/reference/json-api-reference/details",
         "destination": "/reference/json-api-reference/overview",

@@ -111,6 +111,29 @@ def source_config_changes(before_path: Path, after_path: Path, *, label: str) ->
     return changes
 
 
+def history_report_changes(before_path: Path | None, after_path: Path) -> list[str]:
+    """Report publish-version and newly listed versions between two history reports."""
+    after = load_json(after_path)
+    before = load_json(before_path) if before_path is not None else {}
+    label = after.get("title") or after.get("surface_id") or after_path.stem
+    changes: list[str] = []
+    if before.get("publish_version") != after.get("publish_version"):
+        changes.append(
+            f"- {label} publish_version: "
+            f"{format_value(before.get('publish_version'))} -> {format_value(after.get('publish_version'))}"
+        )
+    before_versions = {version for version in before.get("comparison_versions", []) if isinstance(version, str)}
+    added = [
+        version
+        for version in after.get("comparison_versions", [])
+        if isinstance(version, str) and version not in before_versions
+    ]
+    if added:
+        listed = ", ".join(added) if len(added) <= 8 else f"{added[0]} ... {added[-1]}"
+        changes.append(f"- {label} added {len(added)} version(s): {listed}")
+    return changes
+
+
 def package_source_config_changes(before_path: Path, after_path: Path, *, label: str) -> list[str]:
     before = load_json(before_path)
     after = load_json(after_path)
@@ -152,6 +175,7 @@ def versioned_source_config_changes(before_path: Path, after_path: Path, *, labe
             continue
         before_item = before_versions.get(version)
         if before_item is None:
+            changes.append(f"- {label} {version} added: {format_value(item.get('canton_version'))}")
             continue
         for field in ("canton_version",):
             if before_item.get(field) != item.get(field):
@@ -159,6 +183,11 @@ def versioned_source_config_changes(before_path: Path, after_path: Path, *, labe
                     f"- {label} {version} {field}: "
                     f"{format_value(before_item.get(field))} -> {format_value(item.get(field))}"
                 )
+    if before.get("publish_version") != after.get("publish_version"):
+        changes.append(
+            f"- {label} publish_version: "
+            f"{format_value(before.get('publish_version'))} -> {format_value(after.get('publish_version'))}"
+        )
     return changes
 
 
