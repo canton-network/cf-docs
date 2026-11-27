@@ -616,6 +616,8 @@ val exportedInternalNotYetHosted = internal -- hostedHere
 require(exportedInternalNotYetHosted.isEmpty, s"Internal party migration failed. Missing $exportedInternalNotYetHosted. See the checks of step 8")
 
 participant.synchronizers.disconnect_all()
+// Large imports take longer than the console's default timeout of 1 minute
+console.set_command_timeout(60.minutes)
 participant.repair.import_acs(syncId, "acs-internal.gz", workflowIdPrefix = "recovery-internal", excludedStakeholders = Set(dso))
 
 // Remove the old participant's traffic top-up record that the import brought back
@@ -752,6 +754,8 @@ val dso = PartyId.tryFromProtoPrimitive("<DSO party ID>")
 val i = Files.readString(Paths.get("external-parties.txt")).linesIterator.indexOf(partyId.toProtoPrimitive)
 require(i >= 0, s"$partyId isn't in external-parties.txt")
 
+// Large imports take longer than the console's default timeout of 1 minute
+console.set_command_timeout(60.minutes)
 participant.repair.import_acs(syncId, "acs_snapshot", workflowIdPrefix = s"recovery-external-scan-$i")
 participant.repair.import_acs(syncId, s"acs-external-$i.gz", workflowIdPrefix = s"recovery-external-$i", excludedStakeholders = Set(dso))
 participant.synchronizers.reconnect_all()
@@ -971,6 +975,8 @@ participant.repair.export_acs(
 Copy `party-acs.gz` over, back up the participant database, then:
 
 ```scala
+// Large imports take longer than the console's default timeout of 1 minute
+console.set_command_timeout(60.minutes)
 participant.repair.import_acs(syncId, "party-acs.gz", workflowIdPrefix = "recovery-multi-hosted")
 participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = false))
 participant.synchronizers.reconnect_all()
@@ -1013,6 +1019,7 @@ Then repeat both checks of step 13 on the target, and the mismatch search on the
 | `Cannot apply a repair command as the last event is a topology offset` | steps 10, 11, G6 | a check on Canton 3.7 | step 10: reconnect, wait a minute, disconnect, import again. Step 11: don't reconnect; run the failed import again with `forceRepairWhenTopologyTransactionAtLedgerEnd = true`, then the lines after it. G6: don't reconnect; stop and contact DA support. See [Why do steps 10, 11 and G6 handle the topology offset error differently?](#why-do-steps-10-11-and-g6-handle-the-topology-offset-error-differently) |
 | `TOPOLOGY_SERIAL_MISMATCH` | step 11 | the party's hosting changed after the owner signed | run the first snippet of step 11 again, and have the owner sign the new hash |
 | `Cannot add previously archived contract` | steps 10, 11, G6 | the export has a contract that the new node has already seen archived | stop and contact DA support |
+| `DEADLINE_EXCEEDED` in the console, then `PROTO_DESERIALIZATION_FAILURE` and `Repair operation failed with exception` in the participant log | steps 10, 11, G6 | the console's default timeout of 1 minute cut off the import | don't reconnect. In the same console session, run `console.set_command_timeout(60.minutes)`, then the failed import again and the lines after it. The participant first removes what the failed import wrote |
 | `Insufficient funds to buy configured traffic amount` | whenever the validator app runs after step 8, validator app log | the validator party's CC doesn't cover one top-up | send CC to the validator party or lower the target throughput |
 | `No computations done` | `lookup_received_acs_commitments` | the command doesn't work on protocol version 36 and later | use the log checks of step 13 |
 | `ACS_COMMITMENT_MISMATCH` | step 13 | the new node and a counter-participant disagree on shared contracts | if its period ends before the disconnect that preceded your last import (see step 13), nothing. Otherwise see step 13 |
