@@ -1,0 +1,413 @@
+---
+title: "Deploy your own Daml app to LocalNet"
+description: "Compile your own Daml, start LocalNet without the QuickStart demo, authenticate, upload DARs, allocate parties, and drive contracts through the JSON Ledger API."
+---
+
+This guide is the shortest path for app developers and agents who want to compile their own Daml, deploy it to a local Canton Network, and drive it through the JSON Ledger API. It does not build the QuickStart licensing demo.
+
+For the demo application with a Java backend and React frontend, see [Prerequisites and Installation](/appdev/quickstart/prerequisites). For LocalNet ports, topology, and auth reference detail, see [LocalNet](/sdks-tools/development-tools/localnet).
+
+## Versions
+
+Pin LocalNet and the Daml SDK to the network you are targeting. Check current numbers on the [Version Compatibility Dashboard](/shared/version-compatibility-dashboard) before you start.
+
+This guide uses the **MainNet** row as an example:
+
+| Component | Version (example) |
+| --- | --- |
+| Splice / LocalNet `IMAGE_TAG` | `0.9.4` |
+| Canton | `3.6.4` |
+| Daml SDK | `3.6.3` |
+
+Install the matching SDK with `dpm` (or your usual toolchain) before you build DARs. Do not copy version pins from an older cn-quickstart `.env` unless that file matches the dashboard for your target network.
+
+## LocalNet source
+
+Two trees ship the same Compose layout and auth conventions:
+
+| Source | Path | Versions |
+| --- | --- | --- |
+| **Splice release bundle** (documented here) | `splice-node/docker-compose/localnet` after extracting the release tarball | Matches the dashboard (`IMAGE_TAG` = release version) |
+| cn-quickstart | `quickstart/docker/modules/localnet` | Pins whatever Splice version is in cn-quickstart `.env` (often behind the dashboard) |
+
+Use the Splice release bundle so LocalNet images match the network versions you will deploy against. The cn-quickstart Compose path is fine for studying the reference app; for your own DARs, prefer the release-matched bundle unless you intentionally override `IMAGE_TAG` and confirm compatibility.
+
+## Project layout
+
+Put interfaces and implementing templates in **separate packages**. A single package that both defines an interface and implements it fails the upgrade check with an error that includes:
+
+```text
+It is recommended that interfaces are defined in their own package separate from their implementations.
+```
+
+See [Define interfaces in their own package](/appdev/modules/m3-interfaces#define-interfaces-in-their-own-package).
+
+Minimal layout:
+
+```text
+my-project/
+├── multi-package.yaml
+├── note-interface/
+│   ├── daml.yaml
+│   └── daml/Note.daml
+└── simple-note/
+    ├── daml.yaml
+    └── daml/SimpleNote.daml
+```
+
+`multi-package.yaml`:
+
+```yaml
+packages:
+  - ./note-interface
+  - ./simple-note
+```
+
+`note-interface/daml.yaml` (set `sdk-version` from the dashboard):
+
+```yaml
+sdk-version: 3.6.3
+name: note-interface
+version: 0.0.1
+source: daml
+dependencies:
+  - daml-prim
+  - daml-stdlib
+```
+
+`note-interface/daml/Note.daml`:
+
+```daml
+module Note where
+
+data NoteView = NoteView with
+    owner : Party
+    text : Text
+  deriving (Eq, Show)
+
+interface INote where
+  viewtype NoteView
+
+  getOwner : Party
+
+  nonconsuming choice INote_GetText : Text
+    controller getOwner this
+    do pure (view this).text
+
+  choice INote_Archive : ()
+    controller getOwner this
+    do pure ()
+```
+
+`simple-note/daml.yaml`:
+
+```yaml
+sdk-version: 3.6.3
+name: simple-note
+version: 0.0.1
+source: daml
+dependencies:
+  - daml-prim
+  - daml-stdlib
+data-dependencies:
+  - ../note-interface/.daml/dist/note-interface-0.0.1.dar
+```
+
+`simple-note/daml/SimpleNote.daml`:
+
+```daml
+module SimpleNote where
+
+import Note
+
+template SimpleNote
+  with
+    owner : Party
+    text : Text
+  where
+    signatory owner
+
+    interface instance INote for SimpleNote where
+      view = NoteView with owner, text
+      getOwner = owner
+```
+
+Build from the project root:
+
+```bash
+dpm build --all
+```
+
+The DAR you upload is `simple-note/.daml/dist/simple-note-0.0.1.dar` (it embeds the interface package).
+
+## Start LocalNet
+
+Needs Docker with the Compose plugin. Does **not** need Nix, a JDK, Node.js, or `make build`.
+
+1. Download the Splice node bundle for your target version from the dashboard release links (MainNet example: [0.9.4_splice-node.tar.gz](https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.9.4/0.9.4_splice-node.tar.gz)), then extract it:
+
+```bash
+tar xzvf 0.9.4_splice-node.tar.gz
+export LOCALNET_DIR=$PWD/splice-node/docker-compose/localnet
+export IMAGE_TAG=0.9.4
+```
+
+2. Start the three validators. Docker pulls release images from the public registry `ghcr.io/digital-asset/decentralized-canton-sync/docker/` — no login is required. If a pull fails with `denied`, run `docker logout ghcr.io` and retry; a leftover GHCR login can block anonymous pulls.
+
+```bash
+docker compose --env-file $LOCALNET_DIR/compose.env \
+               --env-file $LOCALNET_DIR/env/common.env \
+               -f $LOCALNET_DIR/compose.yaml \
+               -f $LOCALNET_DIR/resource-constraints.yaml \
+               --profile sv \
+               --profile app-provider \
+               --profile app-user up -d
+```
+
+Stop and wipe data by replacing `up -d` with `down -v`.
+
+If PostgreSQL port 5432 is taken, set `export DB_PORT=5440` (or another free port) before `up`. Port clashes on 2000/3000/4000 affect UIs only; the Ledger APIs still start.
+
+### Readiness and ports
+
+Wait until the validators and JSON APIs answer:
+
+```bash
+curl -f http://localhost:2903/api/validator/readyz   # App User validator
+curl -f http://localhost:3903/api/validator/readyz   # App Provider validator
+curl -f http://localhost:4903/api/validator/readyz   # Super Validator
+
+curl -f http://localhost:2975/readyz   # App User JSON API
+curl -f http://localhost:3975/readyz   # App Provider JSON API
+curl -f http://localhost:4975/readyz   # Super Validator JSON API
+```
+
+This walkthrough uses the **App Provider** JSON API on port **3975**. Upload the DAR to every validator that will host a stakeholder of your contracts.
+
+## Authenticate
+
+LocalNet (without OAuth2) expects an HS256 JWT on every Ledger API request:
+
+| Claim | Value |
+| --- | --- |
+| Algorithm | HS256 |
+| Secret | `unsafe` |
+| `aud` | `https://canton.network.global` |
+| `sub` | `ledger-api-user` |
+
+Use the resolved audience string. A token that embeds the literal `${AUTH_..._AUDIENCE:-https://canton.network.global}` expression from an env file is rejected with HTTP **401**.
+
+Mint a one-hour token with the Python standard library:
+
+```bash
+TOKEN=$(python3 - <<'EOF'
+import base64, hashlib, hmac, json, time
+b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+header = b64(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+claims = b64(json.dumps({
+  "sub": "ledger-api-user",
+  "aud": "https://canton.network.global",
+  "exp": int(time.time()) + 3600
+}).encode())
+signature = b64(hmac.new(b"unsafe", f"{header}.{claims}".encode(), hashlib.sha256).digest())
+print(f"{header}.{claims}.{signature}")
+EOF
+)
+
+export TOKEN
+curl -sS http://localhost:3975/v2/parties -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+`ledger-api-user` is an admin user: it can upload DARs and allocate parties. Admin rights do **not** grant `CanActAs` for a party. `ParticipantAdmin` alone is not enough to create contracts.
+
+## Upload the DAR
+
+```bash
+curl -X POST "http://localhost:3975/v2/dars?vetAllPackages=true" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @simple-note/.daml/dist/simple-note-0.0.1.dar
+```
+
+An empty JSON object `{}` means success. Repeat against each stakeholder validator (for example `2975` if an App User party will also see the contract).
+
+## Allocate a party with act-as rights
+
+Pass `"userId": "ledger-api-user"` so the allocate call also grants that user `CanActAs` for the new party:
+
+```bash
+PARTY=$(curl -sS -X POST http://localhost:3975/v2/parties \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"partyIdHint":"Alice","identityProviderId":"","userId":"ledger-api-user"}' \
+  | jq -r .partyDetails.party)
+echo "$PARTY"
+```
+
+Without `userId`, create commands fail with HTTP **403** because the user has no act-as right for the party.
+
+## Create, exercise through an interface, and query
+
+Use **package-name** IDs (`#package-name:Module:Name`), not package-id hashes. Package-id interface IDs in `InterfaceFilter` fail with HTTP **400** and `INVALID_FIELD` — for example: `Invalid field packageId: Received an identifier with package ID …, but expected a package name.`
+
+### Create
+
+`POST /v2/commands/submit-and-wait` takes a flat commands body:
+
+```bash
+curl -sS http://localhost:3975/v2/commands/submit-and-wait \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @- <<EOF
+{
+  "commands": [{
+    "CreateCommand": {
+      "templateId": "#simple-note:SimpleNote:SimpleNote",
+      "createArguments": {
+        "owner": "$PARTY",
+        "text": "hello LocalNet"
+      }
+    }
+  }],
+  "userId": "ledger-api-user",
+  "commandId": "create-note-1",
+  "actAs": ["$PARTY"],
+  "readAs": ["$PARTY"]
+}
+EOF
+```
+
+Success returns `updateId` and `completionOffset`.
+
+To get the created contract ID in the same call, use `POST /v2/commands/submit-and-wait-for-transaction`. That endpoint nests the commands object under `commands` and takes `transactionFormat` beside it:
+
+```bash
+CREATE_TX=$(curl -sS http://localhost:3975/v2/commands/submit-and-wait-for-transaction \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @- <<EOF
+{
+  "commands": {
+    "commands": [{
+      "CreateCommand": {
+        "templateId": "#simple-note:SimpleNote:SimpleNote",
+        "createArguments": {
+          "owner": "$PARTY",
+          "text": "hello LocalNet"
+        }
+      }
+    }],
+    "userId": "ledger-api-user",
+    "commandId": "create-note-$(date +%s)",
+    "actAs": ["$PARTY"],
+    "readAs": ["$PARTY"]
+  },
+  "transactionFormat": {
+    "eventFormat": {
+      "filtersByParty": {
+        "$PARTY": {
+          "cumulative": [{
+            "identifierFilter": {
+              "WildcardFilter": {
+                "value": { "includeCreatedEventBlob": false }
+              }
+            }
+          }]
+        }
+      },
+      "verbose": true
+    },
+    "transactionShape": "TRANSACTION_SHAPE_ACS_DELTA"
+  }
+}
+EOF
+)
+
+CID=$(echo "$CREATE_TX" | jq -r '.transaction.events[0].CreatedEvent.contractId')
+echo "$CID"
+```
+
+A flat body (the `submit-and-wait` shape) on this endpoint returns HTTP **400** with `Missing required field at 'commands.commands'`.
+
+### Exercise an interface choice
+
+Exercise `INote_GetText` through the interface package-name ID:
+
+```bash
+curl -sS http://localhost:3975/v2/commands/submit-and-wait \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @- <<EOF
+{
+  "commands": [{
+    "ExerciseCommand": {
+      "templateId": "#note-interface:Note:INote",
+      "contractId": "$CID",
+      "choice": "INote_GetText",
+      "choiceArgument": {}
+    }
+  }],
+  "userId": "ledger-api-user",
+  "commandId": "get-text-$(date +%s)",
+  "actAs": ["$PARTY"],
+  "readAs": ["$PARTY"]
+}
+EOF
+```
+
+### Query with InterfaceFilter
+
+```bash
+OFFSET=$(curl -sS http://localhost:3975/v2/state/ledger-end \
+  -H "Authorization: Bearer $TOKEN" | jq -r .offset)
+
+curl -sS http://localhost:3975/v2/state/active-contracts \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @- <<EOF | jq .
+{
+  "eventFormat": {
+    "filtersByParty": {
+      "$PARTY": {
+        "cumulative": [{
+          "identifierFilter": {
+            "InterfaceFilter": {
+              "value": {
+                "interfaceId": "#note-interface:Note:INote",
+                "includeInterfaceView": true,
+                "includeCreatedEventBlob": false
+              }
+            }
+          }
+        }]
+      }
+    },
+    "verbose": false
+  },
+  "activeAtOffset": $OFFSET
+}
+EOF
+```
+
+With `includeInterfaceView: true`, each matching `createdEvent` includes `interfaceViews` with a `viewValue` (`owner`, `text`) without depending on the concrete template ID.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| HTTP **401** on Ledger API calls | Token `aud` is the unresolved `${AUTH_...}` expression, wrong secret, or wrong algorithm | Sign HS256 with secret `unsafe`, `aud` `https://canton.network.global`, `sub` `ledger-api-user` |
+| HTTP **403** on create / exercise | User has no `CanActAs` for the party (`ParticipantAdmin` is not enough) | Allocate with `"userId": "ledger-api-user"`, or grant rights via `POST /v2/users/ledger-api-user/rights` |
+| HTTP **400** `INVALID_FIELD` / `packageId` on `InterfaceFilter` (message includes `expected a package name`) | Interface ID used a package-id hash | Use a package-name ID: `#note-interface:Note:INote` |
+| HTTP **400** `Missing required field at 'commands.commands'` on `submit-and-wait-for-transaction` | Flat commands body (as used by `submit-and-wait`) | Nest commands under `"commands": { "commands": [...], "commandId", "actAs", ... }` and set `transactionFormat` beside it |
+| Compile error recommending separate packages for interfaces | Interface and template in the same package | Split into interface + implementation packages with `multi-package.yaml` (see [m3 interfaces](/appdev/modules/m3-interfaces#define-interfaces-in-their-own-package)) |
+| Version / image mismatch, unexpected API behaviour | LocalNet from an old cn-quickstart `.env` while docs assume dashboard versions | Use the Splice release bundle and `IMAGE_TAG` from the [Version Dashboard](/shared/version-compatibility-dashboard) |
+| `denied` pulling `ghcr.io/digital-asset/decentralized-canton-sync/...` | Stale GHCR credentials overriding public anonymous pulls | `docker logout ghcr.io` and retry (release images need no login) |
+| `address already in use` on `docker compose up` | Host port taken (often PostgreSQL 5432) | `export DB_PORT=5440` (or another free port) and retry |
+| Empty ACS query result | Wrong `activeAtOffset`, or party / filter mismatch | Use `GET /v2/state/ledger-end` for the offset; confirm `actAs` party and interface ID |
+
+## Next steps
+
+- [LocalNet](/sdks-tools/development-tools/localnet) — ports, health checks, multi-synchronizer, OAuth2 vs shared-secret auth
+- [JSON Ledger API tutorial](/appdev/modules/m4-json-api-tutorial) — sandbox walkthrough, auth subsection, TypeScript client
+- [QuickStart JSON API](/appdev/quickstart/json-api) — same APIs against the full demo stack with Keycloak
+- [Development lifecycle](/appdev/modules/m5-localnet-development#the-development-lifecycle) — when to grow from LocalNet-only into the cn-quickstart project layout
