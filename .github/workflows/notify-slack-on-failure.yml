@@ -13,9 +13,36 @@ on:
       - completed
 
 jobs:
+  # Scheduled generation runs fail for reasons that a repeat clears: the runner pod is evicted,
+  # the Nix daemon is not up yet, or an upstream service drops a connection for longer than the
+  # in-process retries last. Repeat the failed jobs once before alerting anyone. The repeat is a
+  # second attempt of the same run, so its failure arrives here with run_attempt 2 and alerts.
+  # This runs on a GitHub-hosted runner so it still works when the self-hosted pool is the problem.
+  rerun-generated-docs:
+    runs-on: ubuntu-latest
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'failure'
+      && github.event.workflow_run.name == 'Update generated docs'
+      && github.event.workflow_run.run_attempt == 1 }}
+    permissions:
+      actions: write
+    steps:
+      - name: Re-run failed jobs once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh run rerun "$RUN_ID" --failed --repo "$REPOSITORY"
+
   notify-on-failure:
     runs-on: canton-network-cf-docs
-    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    needs: rerun-generated-docs
+    # Alert unless the re-run above was started: it is skipped for every other workflow and for
+    # second attempts, and a failed re-run request must not swallow the alert.
+    if: >-
+      ${{ always()
+      && github.event.workflow_run.conclusion == 'failure'
+      && needs.rerun-generated-docs.result != 'success' }}
     steps:
       - name: Send Slack notification
         uses: slackapi/slack-github-action@v2
@@ -24,5 +51,5 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "❌ *${{ github.event.workflow_run.name }}* failed on `${{ github.event.workflow_run.head_branch }}` (triggered by ${{ github.event.workflow_run.actor.login }})\n<${{ github.event.workflow_run.html_url }}|View run>"
+              "text": "❌ *${{ github.event.workflow_run.name }}* failed on `${{ github.event.workflow_run.head_branch }}` (triggered by ${{ github.event.workflow_run.actor.login }}, attempt ${{ github.event.workflow_run.run_attempt }})\n<${{ github.event.workflow_run.html_url }}|View run>"
             }
