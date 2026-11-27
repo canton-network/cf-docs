@@ -50,6 +50,29 @@ Stop the environment:
 
 <DamlDocsSdksToolsDevelopmentToolsLocalnetL61 />
 
+### Start LocalNet without the QuickStart application
+
+If you only need the network, for example to deploy and test your own DAR, you can start LocalNet without `make setup` and `make build`. This needs Docker with the Compose plugin, but not Nix, direnv, a JDK or Node.js.
+
+From the `quickstart/` directory of the cn-quickstart repository, point `LOCALNET_DIR` at the LocalNet module and set `IMAGE_TAG` to the Splice version that cn-quickstart pins in `.env`:
+
+```bash
+export LOCALNET_DIR=$PWD/docker/modules/localnet
+export IMAGE_TAG=$(grep '^SPLICE_VERSION=' .env | cut -d= -f2)
+
+docker compose --env-file $LOCALNET_DIR/compose.env \
+               --env-file $LOCALNET_DIR/env/common.env \
+               -f $LOCALNET_DIR/compose.yaml \
+               -f $LOCALNET_DIR/resource-constraints.yaml \
+               --profile sv \
+               --profile app-provider \
+               --profile app-user up -d
+```
+
+Stop it and remove its data with the same command, replacing `up -d` with `down -v`. To check when the validators are ready, see [Health Checks](#health-checks).
+
+If a host port is already taken, `docker compose up` exits with `address already in use`. LocalNet's PostgreSQL binds port 5432, which clashes with a local PostgreSQL server. Set `DB_PORT` to a free port before you run the command, for example `export DB_PORT=5440`. The web UIs need ports 2000, 3000 and 4000 for the `nginx` container. If one of those is taken, `nginx` doesn't start and the UIs are unavailable, but the validators and their Ledger APIs still run.
+
 ## Network Topology
 
 ```mermaid
@@ -145,6 +168,208 @@ For example, the App User's Ledger API is at `localhost:2901`, and the App Provi
 The Admin API and PostgreSQL ports are exposed for development convenience. Do not expose these ports in non-local deployments.
 </Warning>
 
+## Authenticating to the Ledger API
+
+Each validator's JSON Ledger API is at `http://localhost:<prefix>975`: `2975` for the App User, `3975` for the App Provider and `4975` for the Super Validator. The gRPC Ledger API is on `<prefix>901`.
+
+The LocalNet started by the command above, and cn-quickstart with OAuth2 turned off in `make setup`, accept JWTs signed with a shared secret. Every Ledger API request needs a token with these values:
+
+- **Algorithm**: HS256 (`unsafe-jwt-hmac-256`)
+- **Secret**: `unsafe`
+- **Audience (`aud`)**: `https://canton.network.global`
+- **Subject (`sub`)**: `ledger-api-user`, which is an admin user on every validator
+
+The env files in `docker/modules/localnet/env/` write the audience as `${AUTH_APP_PROVIDER_AUDIENCE:-https://canton.network.global}`. Use the resolved value; a token that carries the expression itself is rejected with HTTP 401. LocalNet sets no maximum token lifetime.
+
+This creates a token valid for one hour, using only the Python standard library:
+
+```bash
+TOKEN=$(python3 - <<'EOF'
+import base64, hashlib, hmac, json, time
+b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+header = b64(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+claims = b64(json.dumps({"sub": "ledger-api-user", "aud": "https://canton.network.global", "exp": int(time.time()) + 3600}).encode())
+signature = b64(hmac.new(b"unsafe", f"{header}.{claims}".encode(), hashlib.sha256).digest())
+print(f"{header}.{claims}.{signature}")
+EOF
+)
+
+curl http://localhost:3975/v2/parties -H "Authorization: Bearer $TOKEN"
+```
+
+`ledger-api-user` is an admin, so it can upload DARs, allocate parties and manage users. Admin rights don't let it submit commands as a party or read a party's contracts. Give it `CanActAs` or `CanReadAs` for each party first, for example by setting `"userId": "ledger-api-user"` when you allocate the party. See [Use the JSON Ledger API with authentication](/appdev/modules/m4-json-api-tutorial#use-the-json-ledger-api-with-authentication).
+
+With OAuth2 turned on, the App Provider and App User participants validate tokens issued by the bundled Keycloak instead, and the shared secret doesn't work on them. See [Keycloak in the QuickStart](/appdev/quickstart/keycloak).
+
+## Test Token Standard flows
+
+LocalNet doesn't run registries for third-party tokens, such as the Digital Asset Registry. To test Token Standard workflows locally, use Canton Coin (Amulet) as the token. It implements both [CIP-0056](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md) (Token Standard V1) and [CIP-0112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md) (V2), and LocalNet runs its registry and the Canton Coin faucet. Because every token goes through the same Token Standard interfaces, testing your workflows against Canton Coin in CI catches most integration problems before you test against a real registry. Test against other issuers' registries on DevNet or TestNet, through the test support those issuers provide.
+
+The script below uses the [Wallet SDK](/sdks-tools/sdks/wallet-sdk/overview) to run a two-step transfer on the App User validator. It creates two external parties, funds Alice from the faucet, lists her holdings, sends 100 CC to Bob and has Bob accept the pending transfer.
+
+Before you run it, make sure that:
+
+- LocalNet is running with the default ports. The SDK reaches the validator API on port 2000 and Scan on `scan.localhost:4000`, both through the `nginx` container.
+- Node.js is installed.
+
+Install the SDK and `tsx` in an empty directory:
+
+```bash
+npm init -y
+npm install @canton-network/wallet-sdk tsx
+```
+
+Save the script as `token-flows.mts`. The `.mts` extension makes Node treat it as an ES module, which the top-level `await` calls need.
+
+```typescript
+import {
+    SDK,
+    localNetStaticConfig,
+    type TokenProviderConfig,
+} from '@canton-network/wallet-sdk'
+
+// LocalNet accepts self-signed tokens for the default ledger API user
+const auth: TokenProviderConfig = {
+    method: 'self_signed',
+    issuer: 'unsafe-auth',
+    credentials: {
+        clientId: 'ledger-api-user',
+        clientSecret: 'unsafe',
+        audience: 'https://canton.network.global',
+        scope: '',
+    },
+}
+
+// On LocalNet, Canton Coin's registry is served through the validator's Scan Proxy
+const registryUrl = localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+
+const sdk = await SDK.create({
+    auth,
+    ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    // Pick the Global Synchronizer by its alias
+    synchronizerId: (synchronizers) =>
+        synchronizers.find((s) => s.synchronizerAlias === 'global')!
+            .synchronizerId,
+    token: { registries: [registryUrl], auth },
+    amulet: {
+        scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
+        registryUrl,
+        auth,
+    },
+})
+
+// 1. Create two external parties
+const aliceKeys = sdk.keys.generate()
+const alice = await sdk.party.external
+    .create(aliceKeys.publicKey, { partyHint: 'alice' })
+    .sign(aliceKeys.privateKey)
+    .execute()
+
+const bobKeys = sdk.keys.generate()
+const bob = await sdk.party.external
+    .create(bobKeys.publicKey, { partyHint: 'bob' })
+    .sign(bobKeys.privateKey)
+    .execute()
+
+// 2. Fund Alice from the Canton Coin faucet (LocalNet and DevNet only)
+const [tapCommand, tapDisclosedContracts] = await sdk.amulet.tap(
+    alice.partyId,
+    '2000'
+)
+await sdk.ledger
+    .prepare({
+        partyId: alice.partyId,
+        commands: tapCommand,
+        disclosedContracts: tapDisclosedContracts,
+    })
+    .sign(aliceKeys.privateKey)
+    .execute({ partyId: alice.partyId })
+
+// 3. List Alice's holdings
+const aliceHoldings = await sdk.token.utxos.list({ partyId: alice.partyId })
+console.log(
+    'Alice holdings:',
+    aliceHoldings.map((h) => h.interfaceViewValue.amount)
+)
+
+// 4. Alice sends 100 CC to Bob. Bob has no transfer preapproval,
+//    so this creates a pending transfer instruction.
+const [transferCommand, transferDisclosedContracts] =
+    await sdk.token.transfer.create({
+        sender: alice.partyId,
+        recipient: bob.partyId,
+        amount: '100',
+        instrumentId: 'Amulet',
+        registryUrl,
+    })
+await sdk.ledger
+    .prepare({
+        partyId: alice.partyId,
+        commands: transferCommand,
+        disclosedContracts: transferDisclosedContracts,
+    })
+    .sign(aliceKeys.privateKey)
+    .execute({ partyId: alice.partyId })
+
+// 5. Bob accepts the pending transfer
+const pending = await sdk.token.transfer.pending(bob.partyId)
+console.log('Bob pending transfers:', pending.length)
+
+const [acceptCommand, acceptDisclosedContracts] =
+    await sdk.token.transfer.accept({
+        transferInstructionCid: pending[0].contractId,
+        registryUrl,
+    })
+await sdk.ledger
+    .prepare({
+        partyId: bob.partyId,
+        commands: acceptCommand,
+        disclosedContracts: acceptDisclosedContracts,
+    })
+    .sign(bobKeys.privateKey)
+    .execute({ partyId: bob.partyId })
+
+// 6. Check both balances
+for (const [name, party] of [
+    ['Alice', alice.partyId],
+    ['Bob', bob.partyId],
+] as const) {
+    const holdings = await sdk.token.utxos.list({ partyId: party })
+    console.log(
+        `${name} holdings:`,
+        holdings.map((h) => h.interfaceViewValue.amount)
+    )
+}
+process.exit(0)
+```
+
+Run it:
+
+```bash
+npx tsx token-flows.mts
+```
+
+Besides the SDK's own log lines, the script prints the balances before and after the transfer:
+
+```text
+Alice holdings: [ '2000.0000000000' ]
+Bob pending transfers: 1
+Alice holdings: [ '1900.0000000000' ]
+Bob holdings: [ '100.0000000000' ]
+```
+
+This was tested with Wallet SDK 1.7.0 on LocalNet with Splice 0.9.4. External parties sign each transaction with their own key, so the faucet tap, the transfer and the acceptance each go through `prepare`, `sign` and `execute`.
+
+To test other transfer paths, see [Transfer types](/sdks-tools/sdks/wallet-sdk/guides/transfer-types). It covers one-step transfers to a receiver with a transfer preapproval, and rejecting or withdrawing a pending transfer.
+
+Allocations for delivery-versus-payment settle through an app that requests the allocations and then executes the trade, so testing them needs such an app. The `splice` container ships test trading apps for this in `/app/splice-node/dars`. Copy one out with `docker cp`, for example:
+
+```bash
+docker cp splice:/app/splice-node/dars/splice-token-test-trading-app-1.0.2.dar .
+```
+
+For complete allocation flows that use these apps with the Wallet SDK, see the example scripts [04-token-standard-allocation.ts](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/docs/wallet-integration-guide/examples/scripts/04-token-standard-allocation.ts) (V1) and [19-token-standard-allocation-v2.ts](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/docs/wallet-integration-guide/examples/scripts/19-token-standard-allocation-v2.ts) (V2) in the Wallet SDK repository.
+
 ## Configuration Options
 
 ### Deployment Profiles
@@ -176,6 +401,14 @@ Verify that validators are healthy:
 <DamlDocsSdksToolsDevelopmentToolsLocalnetL197 />
 
 An empty response indicates a healthy service.
+
+Each validator's JSON Ledger API also answers on `/livez` and `/readyz`. Both return HTTP 200 once the API accepts requests:
+
+```bash
+curl -f http://localhost:2975/readyz  # App User
+curl -f http://localhost:3975/readyz  # App Provider
+curl -f http://localhost:4975/readyz  # Super Validator
+```
 
 {/* COPIED_START source="splice:docs/src/app_dev/testing/localnet.rst" hash="a3270359" */}
 

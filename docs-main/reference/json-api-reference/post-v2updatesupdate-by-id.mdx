@@ -22,7 +22,7 @@ sidebarTitle: "/v2/updates/update-by-id"
 
   <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
 
-  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-3-5">Updated 3.5</a>
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-3-7">Updated 3.7</a>
 
 </div>
 
@@ -708,7 +708,7 @@ This filter matches contracts that implement a specific interface.
 <ParamField body="interfaceId" type="string" required>
 
 
-The interface that a matching contract must implement. The ``interface_id`` needs to be valid: corresponding interface should be defined in one of the available packages at the time of the query. Both package-name and package-id reference formats for the identifier are supported. Note: The package-id reference identifier format is deprecated. We plan to end support for this format in version 3.4. Required
+The interface that a matching contract must implement. The ``interface_id`` needs to be valid: corresponding interface should be defined in one of the available packages at the time of the query. Only package-name reference format for the identifier is supported. Note: The package-id reference identifier format was removed in version 3.5. Required
 
 
 
@@ -818,7 +818,7 @@ This filter matches contracts of a specific template.
 <ParamField body="templateId" type="string" required>
 
 
-A template for which the payload should be included in the response. The ``template_id`` needs to be valid: corresponding template should be defined in one of the available packages at the time of the query. Both package-name and package-id reference formats for the identifier are supported. Note: The package-id reference identifier format is deprecated. We plan to end support for this format in version 3.4. Required
+A template for which the payload should be included in the response. The ``template_id`` needs to be valid: corresponding template should be defined in one of the available packages at the time of the query. Only package-name reference format for the identifier is supported. Note: The package-id reference identifier format was removed in version 3.5. Required
 
 
 
@@ -1180,7 +1180,7 @@ This filter matches contracts that implement a specific interface.
 <ParamField body="interfaceId" type="string" required>
 
 
-The interface that a matching contract must implement. The ``interface_id`` needs to be valid: corresponding interface should be defined in one of the available packages at the time of the query. Both package-name and package-id reference formats for the identifier are supported. Note: The package-id reference identifier format is deprecated. We plan to end support for this format in version 3.4. Required
+The interface that a matching contract must implement. The ``interface_id`` needs to be valid: corresponding interface should be defined in one of the available packages at the time of the query. Only package-name reference format for the identifier is supported. Note: The package-id reference identifier format was removed in version 3.5. Required
 
 
 
@@ -1290,7 +1290,7 @@ This filter matches contracts of a specific template.
 <ParamField body="templateId" type="string" required>
 
 
-A template for which the payload should be included in the response. The ``template_id`` needs to be valid: corresponding template should be defined in one of the available packages at the time of the query. Both package-name and package-id reference formats for the identifier are supported. Note: The package-id reference identifier format is deprecated. We plan to end support for this format in version 3.4. Required
+A template for which the payload should be included in the response. The ``template_id`` needs to be valid: corresponding template should be defined in one of the available packages at the time of the query. Only package-name reference format for the identifier is supported. Note: The package-id reference identifier format was removed in version 3.5. Required
 
 
 
@@ -2385,7 +2385,7 @@ Party on whose behalf the unassign command was executed. Empty if the unassignme
 
 <ResponseField name="reassignmentCounter" type="integer (int64)" required>
 
-Each corresponding assigned and unassigned event has the same reassignment_counter. This strictly increases with each unassign command for the same contract. Creation of the contract corresponds to reassignment_counter equals zero. Required
+The reassignment counter associated with this unassignment on the source synchronizer. Reassignment counters strictly increase with each unassign command for the same contract. Creation of the contract corresponds to reassignment_counter equal to zero. Required
 
 
 
@@ -2398,7 +2398,7 @@ Each corresponding assigned and unassigned event has the same reassignment_count
 
 <ResponseField name="assignmentExclusivity" type="string">
 
-Assignment exclusivity Before this time (measured on the target synchronizer), only the submitter of the unassignment can initiate the assignment Defined for reassigning participants. Optional
+Assignment exclusivity Before this time (measured on the target synchronizer), only the submitter of the unassignment can initiate the assignment Defined for reassigning participants, up to protocol version 36. Starting with protocol version 37, it is not set: any stakeholder can submit the assignment as soon as the unassignment is completed. Optional
 
 
 
@@ -4190,7 +4190,7 @@ The time at which the transaction was recorded. The record time refers to the sy
 
 <ResponseField name="externalTransactionHash" type="string">
 
-For transaction externally signed, contains the external transaction hash signed by the external party. Can be used to correlate an external submission with a committed transaction. Optional: can be empty
+Deprecated: please use ``transaction_hash`` which has the same value. For transaction externally signed, contains the external transaction hash signed by the external party. Can be used to correlate an external submission with a committed transaction. Optional: can be empty
 
 
 
@@ -4204,6 +4204,19 @@ For transaction externally signed, contains the external transaction hash signed
 <ResponseField name="paidTrafficCost" type="integer (int64)">
 
 The traffic cost that this participant node paid for the confirmation request for this transaction. Not set for transactions that were - initiated by another participant - initiated offline via the repair service - processed before the participant started serving traffic cost on the Ledger API - returned as part of a query filtering for a non submitting party Optional
+
+
+
+
+
+
+</ResponseField>
+
+
+
+<ResponseField name="transactionHash" type="string">
+
+The transaction hash signed by the external party for prepared transactions that were submitted using `InteractiveSubmissionService.ExecuteSubmission` or one of its variants. Use this to correlate prepared transactions with their execution result on the *same participant* that executed the transaction. Not available for: - transactions executed on Canton versions prior to 3.6 - transactions of internal parties submitted using `CommandSubmissionService.Submit` and its variants Optional: can be empty
 
 
 
@@ -4413,6 +4426,26 @@ Invalid value, Invalid value for: body
 ## History
 
 <div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-7">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Updated</span>
+      <code class="x2mdx-ref-history-event-version">3.7</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The POST /v2/updates/update-by-id operation changed in this snapshot.</p>
+
+  </div>
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-6">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Updated</span>
+      <code class="x2mdx-ref-history-event-version">3.6</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The POST /v2/updates/update-by-id operation changed in this snapshot.</p>
+
+  </div>
 
   <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-5">
     <div class="x2mdx-ref-history-event-head">

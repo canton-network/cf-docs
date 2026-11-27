@@ -125,6 +125,29 @@ def version_key(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
 
 
+def release_tag_names(release_repo: str) -> list[str]:
+    """List every release tag of a repository.
+
+    The repository hosts releases for many packages, so the list is long (thousands) and older
+    releases of a package fall off any fixed cap. Page through the whole list instead.
+    """
+    tag_names: list[str] = []
+    page = 1
+    while True:
+        payload = json.loads(
+            gh(["api", f"repos/{release_repo}/releases?per_page=100&page={page}"], capture=True)
+        )
+        if not isinstance(payload, list):
+            raise ValueError(f"Expected release list from gh for {release_repo}")
+        for entry in payload:
+            tag_name = entry.get("tag_name") if isinstance(entry, dict) else None
+            if isinstance(tag_name, str):
+                tag_names.append(tag_name)
+        if len(payload) < 100:
+            return tag_names
+        page += 1
+
+
 def stable_release_versions(
     *,
     release_repo: str,
@@ -133,23 +156,11 @@ def stable_release_versions(
     max_version: str | None,
     include_versions: set[str] | None,
 ) -> list[str]:
-    releases_raw = gh(
-        ["release", "list", "-R", release_repo, "--json", "tagName", "--limit", "1000"],
-        capture=True,
-    )
-    payload = json.loads(releases_raw)
-    if not isinstance(payload, list):
-        raise ValueError(f"Expected release list from gh for {release_repo}")
     semver_re = re.compile(rf"^{re.escape(tag_prefix)}(?P<version>\d+\.\d+\.\d+)$")
     selected: list[str] = []
     minimum = version_key(min_version)
     maximum = version_key(max_version) if max_version else None
-    for entry in payload:
-        if not isinstance(entry, dict):
-            continue
-        tag_name = entry.get("tagName")
-        if not isinstance(tag_name, str):
-            continue
+    for tag_name in release_tag_names(release_repo):
         match = semver_re.fullmatch(tag_name)
         if not match:
             continue

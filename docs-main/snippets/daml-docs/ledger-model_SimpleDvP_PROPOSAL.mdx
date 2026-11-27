@@ -1,0 +1,32 @@
+
+```haskell
+template ProposeSimpleDvP with
+    proposer : Party
+    counterparty : Party
+    allocated : ContractId SimpleAsset
+    expected : SimpleAsset
+  where
+    signatory proposer
+    observer counterparty
+
+    choice Accept : ContractId SimpleDvP
+      with
+        toBeAllocated : ContractId SimpleAsset
+      controller counterparty
+      do
+        fetchedAsset <- fetch toBeAllocated
+        assert $ fetchedAsset == expected
+        create $ SimpleDvP with
+          party1 = proposer
+          party2 = counterparty
+          asset1 = allocated
+          asset2 = toBeAllocated
+
+    nonconsuming choice AcceptAndSettle : (ContractId SimpleAsset, ContractId SimpleAsset)
+      with
+        toBeAllocated: ContractId SimpleAsset
+      controller counterparty
+      do
+        dvp <- exercise self $ Accept with ..
+        exercise dvp $ Settle with actor = counterparty
+```

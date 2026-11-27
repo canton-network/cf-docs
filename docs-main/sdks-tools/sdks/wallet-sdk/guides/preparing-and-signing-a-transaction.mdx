@@ -28,19 +28,19 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
   {/* include ../../examples/scripts/02-two-step-transfer/index.ts */}
   ```typescript
   import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
-  import _accept from './_accept.js'
-  import type { TransferTestScriptParameters } from './types.js'
-  import _reject from './_reject.js'
-  import _withdraw from './_withdraw.js'
-  import _expire from './_expire.js'
+
+  import { configureLogging } from '../utils/configure-logging.ts'
   import {
       TOKEN_NAMESPACE_CONFIG,
       TOKEN_PROVIDER_CONFIG_DEFAULT,
       AMULET_NAMESPACE_CONFIG,
       localNetGlobalSynchronizer,
-  } from '../utils/index.js'
-
-  import { configureLogging } from '../utils/configure-logging.js'
+  } from '../utils/index.ts'
+  import _accept from './_accept.ts'
+  import _expire from './_expire.ts'
+  import _reject from './_reject.ts'
+  import _withdraw from './_withdraw.ts'
+  import type { TransferTestScriptParameters } from './types.ts'
   const logger = await configureLogging()
 
   const sdk = await SDK.create({
@@ -83,7 +83,7 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
       .sign(senderKeys.privateKey)
       .execute({ partyId: sender.partyId })
 
-  const senderUtxos = await sdk.token.utxos.list({ partyId: sender.partyId })
+  const senderUtxos = await sdk.token.v1.utxos.list({ partyId: sender.partyId })
 
   const senderAmuletUtxos = senderUtxos.filter((utxo) => {
       return (
@@ -124,13 +124,14 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
   {/* include ../../examples/scripts/02-two-step-transfer/_accept.ts */}
   ```typescript
   import { localNetStaticConfig } from '@canton-network/wallet-sdk'
-  import type { TransferTestScriptParameters } from './types.js'
+
+  import type { TransferTestScriptParameters } from './types.ts'
 
   export default async (args: TransferTestScriptParameters) => {
       const { sdk, sender, receiver, senderKeys, receiverKeys, logger } = args
 
       const [transferCommand, transferDisclosedContracts] =
-          await sdk.token.transfer.create({
+          await sdk.token.v1.transfer.create({
               sender: sender.partyId,
               recipient: receiver.partyId,
               instrumentId: 'Amulet',
@@ -153,7 +154,7 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
           { sender, receiver },
           'Submitted transfer command from Sender to Receiver'
       )
-      const receiverPendingTransfers = await sdk.token.transfer.pending(
+      const receiverPendingTransfers = await sdk.token.v1.transfer.pending(
           receiver.partyId
       )
       logger.info(
@@ -162,7 +163,7 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
       )
 
       const [acceptCommand, acceptDisclosedContracts] =
-          await sdk.token.transfer.accept({
+          await sdk.token.v1.transfer.accept({
               transferInstructionCid: receiverPendingTransfers[0].contractId,
               registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
           })
@@ -177,7 +178,7 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
           .execute({ partyId: receiver.partyId })
       logger.info('Receiver accepted the transfer instruction')
 
-      const receiverUtxos = await sdk.token.utxos.list({
+      const receiverUtxos = await sdk.token.v1.utxos.list({
           partyId: receiver.partyId,
       })
       logger.info(
@@ -209,13 +210,14 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
   {/* include ../../examples/scripts/02-two-step-transfer/_reject.ts */}
   ```typescript
   import { localNetStaticConfig } from '@canton-network/wallet-sdk'
-  import type { TransferTestScriptParameters } from './types.js'
+
+  import type { TransferTestScriptParameters } from './types.ts'
 
   export default async (args: TransferTestScriptParameters) => {
       const { sdk, receiver, sender, senderKeys, receiverKeys, logger } = args
 
       const [transferCommand, transferDisclosedContracts] =
-          await sdk.token.transfer.create({
+          await sdk.token.v1.transfer.create({
               sender: sender.partyId,
               recipient: receiver.partyId,
               instrumentId: 'Amulet',
@@ -239,12 +241,14 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
           'Submitted transfer command from Sender to Receiver'
       )
 
-      const pendingTransfer = await sdk.token.transfer.pending(receiver.partyId)
+      const pendingTransfer = await sdk.token.v1.transfer.pending(
+          receiver.partyId
+      )
 
       if (!pendingTransfer.length) throw Error('pendingTransfer is empty')
 
       const [rejectCommand, rejectDisclosedContracts] =
-          await sdk.token.transfer.reject({
+          await sdk.token.v1.transfer.reject({
               transferInstructionCid: pendingTransfer[0].contractId,
               registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
           })
@@ -260,7 +264,7 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
               partyId: receiver.partyId,
           })
 
-      const pendingTransferAfterReject = await sdk.token.transfer.pending(
+      const pendingTransferAfterReject = await sdk.token.v1.transfer.pending(
           receiver.partyId
       )
       if (pendingTransferAfterReject.length)
@@ -277,13 +281,14 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
   {/* include ../../examples/scripts/02-two-step-transfer/_withdraw.ts */}
   ```typescript
   import { localNetStaticConfig } from '@canton-network/wallet-sdk'
-  import type { TransferTestScriptParameters } from './types.js'
+
+  import type { TransferTestScriptParameters } from './types.ts'
 
   export default async (args: TransferTestScriptParameters) => {
       const { sdk, receiver, sender, senderKeys, logger } = args
 
       const [transferCommand, transferDisclosedContracts] =
-          await sdk.token.transfer.create({
+          await sdk.token.v1.transfer.create({
               sender: sender.partyId,
               recipient: receiver.partyId,
               instrumentId: 'Amulet',
@@ -307,12 +312,14 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
           'Submitted transfer command from Sender to Receiver'
       )
 
-      const pendingTransfer = await sdk.token.transfer.pending(receiver.partyId)
+      const pendingTransfer = await sdk.token.v1.transfer.pending(
+          receiver.partyId
+      )
 
       if (!pendingTransfer.length) throw Error('pendingTransfer is empty')
 
       const [withdrawCommand, withdrawDisclosedContracts] =
-          await sdk.token.transfer.withdraw({
+          await sdk.token.v1.transfer.withdraw({
               transferInstructionCid: pendingTransfer[0].contractId,
               registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
           })
@@ -328,7 +335,7 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
               partyId: sender.partyId,
           })
 
-      const pendingTransferAfterWithdraw = await sdk.token.transfer.pending(
+      const pendingTransferAfterWithdraw = await sdk.token.v1.transfer.pending(
           receiver.partyId
       )
       if (pendingTransferAfterWithdraw.length)
@@ -382,11 +389,11 @@ The Wallet SDK allow us to build such a command easily:
       const sender = global.EXISTING_PARTY_1
       const receiver = global.EXISTING_PARTY_2
 
-      const utxos = await sdk.token.utxos.list({ partyId: sender })
+      const utxos = await sdk.token.v1.utxos.list({ partyId: sender })
 
       const utxosToUse = utxos.filter((t) => t.interfaceViewValue.amount != '50') //we filter out the 50, since we want to send 125
 
-      await sdk.token.transfer.create({
+      await sdk.token.v1.transfer.create({
           sender,
           recipient: receiver,
           amount: '2000',
@@ -520,7 +527,7 @@ export default async function () {
     const sender = global.EXISTING_PARTY_1
     const receiver = global.EXISTING_PARTY_2
 
-    await sdk.token.transfer.create({
+    await sdk.token.v1.transfer.create({
         sender,
         recipient: receiver,
         amount: '2000',
@@ -570,7 +577,7 @@ To prepare a transaction we need to send the commands to the ledger.
       const receiver = global.EXISTING_PARTY_2
 
       const [transferCommand, disclosedContracts] =
-          await sdk.token.transfer.create({
+          await sdk.token.v1.transfer.create({
               sender,
               recipient: receiver,
               amount: '2000',
@@ -652,7 +659,7 @@ export default async function () {
         throw Error('Prepared tx not found')
     }
 
-    const calculatedTxHash = await sdk.utils.hash.preparedTransacation(
+    const calculatedTxHash = await sdk.utils.hash.preparedTransaction(
         transaction.preparedTransaction
     )
     const hex = calculatedTxHash.toHex()
@@ -664,6 +671,79 @@ export default async function () {
 ```
 
 You can then compare the `hash` with the `transaction.preparedTransactionHash` to ensure they match.
+
+### Verifying the Transaction Hash Before Signing
+
+The prepare response provides the hash only for convenience. If you do not trust the validator, also check the hashing scheme, and sign the hash you computed rather than the validator's.
+
+`sdk.utils.hash.preparedTransaction`, which replaces the deprecated `preparedTransacation` used above, takes the hashing scheme as its second argument, V2 by default.
+
+The example below calls `@canton-network/core-tx-hashing` directly:
+
+{/* include ../../examples/snippets/verify-transaction-hash.ts */}
+```typescript
+import { computePreparedTransactionHash } from '@canton-network/core-tx-hashing'
+import {
+    SDK,
+    localNetStaticConfig,
+    signTransactionHash,
+} from '@canton-network/wallet-sdk'
+
+export default async function () {
+    const sdk = await SDK.create({
+        auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+        ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
+    })
+    const myParty = global.EXISTING_PARTY_1
+    const keys = global.EXISTING_PARTY_1_KEYS
+
+    const { response } = await sdk.ledger
+        .prepare({
+            partyId: myParty,
+            commands: sdk.utils.ping.create([
+                { initiator: myParty, responder: myParty },
+            ]),
+        })
+        .toJSON()
+
+    // The SDK's prepare sets no hashing scheme, so the validator uses V2, and
+    // sdk.ledger.execute submits as V2. Refuse any other scheme.
+    const expected = 'HASHING_SCHEME_VERSION_V2'
+    if (response.hashingSchemeVersion !== expected)
+        throw Error(
+            `The validator hashed with ${response.hashingSchemeVersion}`
+        )
+
+    const hash = await computePreparedTransactionHash(
+        response.preparedTransaction,
+        response.hashingSchemeVersion
+    )
+
+    // Do not sign if the validator returned another hash
+    if (!Buffer.from(response.preparedTransactionHash, 'base64').equals(hash))
+        throw Error('Prepared transaction hash does not match')
+
+    // Sign the hash computed here, not the one the validator returned
+    const signature = signTransactionHash(
+        Buffer.from(hash).toString('base64'),
+        keys.privateKey
+    )
+
+    const signed = sdk.ledger.fromSignature(response, signature)
+    await sdk.ledger.execute(signed, { partyId: myParty })
+}
+```
+
+- If the computation throws or the two hashes differ, do not sign anything, not even the validator's hash.
+- Compare with the raw 32-byte hash, which `preparedTransactionHash` holds in base64, not with a multihash such as the hash of a topology transaction.
+
+The package also refuses some prepared transactions whose display could differ from what the hash covers, for example:
+
+- two nodes with the same id;
+- a V2 transaction with a field that V2 does not hash, such as a contract key or `maxRecordTime`.
+
+The package's [README](https://github.com/canton-network/wallet/tree/main/core/tx-hashing#readme) lists the errors, the limits and the two fields it accepts although no scheme hashes them.
 
 
 
@@ -1478,7 +1558,7 @@ below you can have a look at different event types and how to potentially visual
 
 ## Signing the Transaction
 
-Once the transaction is validated, the hash retrieved from the prepare step can be signed using the private key of the party.
+Once the transaction is validated and its hash verified (see [Verifying the Transaction Hash Before Signing](#verifying-the-transaction-hash-before-signing)), the hash can be signed using the private key of the party.
 
 Below shows an example in the Wallet SDK and using cURL commands:
 
@@ -1542,14 +1622,14 @@ import {
     SDK,
     signTransactionHash,
 } from '@canton-network/wallet-sdk'
+
+import { configureLogging } from './utils/configure-logging.ts'
 import {
     TOKEN_NAMESPACE_CONFIG,
     TOKEN_PROVIDER_CONFIG_DEFAULT,
     AMULET_NAMESPACE_CONFIG,
     localNetGlobalSynchronizer,
-} from './utils/index.js'
-
-import { configureLogging } from './utils/configure-logging.js'
+} from './utils/index.ts'
 const logger = await configureLogging()
 
 const onlineLogger = logger.child({ name: 'online' })
@@ -1619,7 +1699,7 @@ onlineLogger.info(
 
 const senderParty = await senderPartyPrepared.execute(senderSignedTopologyTx)
 
-onlineLogger.info(`Created sender party: ${senderParty}`)
+onlineLogger.info(`Created sender party: ${senderParty.partyId}`)
 
 offlineLogger.info(
     '===================== OFFLINE GENERATE KEYS RECEIVER ====================='
@@ -1675,7 +1755,7 @@ const receiverParty = await receiverPartyPrepared.execute(
     receiverSignedTopologyTx
 )
 
-onlineLogger.info(`Created receiver party: ${receiverParty}`)
+onlineLogger.info(`Created receiver party: ${receiverParty.partyId}`)
 
 // Configure amulet namespace for online sdk
 
@@ -1701,7 +1781,7 @@ onlineLogger.info(
 offlineLogger.info(
     '===================== OFFLINE TAP SIGNING AND HASH RECOMPUTATION ====================='
 )
-const calculatedTxHash = await offlineSdk.utils.hash.preparedTransacation(
+const calculatedTxHash = await offlineSdk.utils.hash.preparedTransaction(
     preparedTapCommandResponse.preparedTransaction
 )
 
@@ -1736,7 +1816,7 @@ onlineLogger.info(
 )
 
 const [transferCommand, transferDisclosedContracts] =
-    await onlineSDK.token.transfer.create({
+    await onlineSDK.token.v1.transfer.create({
         sender: senderParty.partyId,
         recipient: receiverParty.partyId,
         instrumentId: 'Amulet',
@@ -1761,7 +1841,7 @@ onlineLogger.info(
 )
 
 const calculatedCreateTransferHash =
-    await offlineSdk.utils.hash.preparedTransacation(
+    await offlineSdk.utils.hash.preparedTransaction(
         preparedTransferResponse.preparedTransaction
     )
 
@@ -1800,7 +1880,7 @@ onlineLogger.info(
     '===================== ONLINE ACCEPT TRANSFER (PREPARE) ====================='
 )
 
-const pendingOffers = await onlineSDK.token.transfer.pending(
+const pendingOffers = await onlineSDK.token.v1.transfer.pending(
     receiverParty.partyId
 )
 
@@ -1815,7 +1895,7 @@ onlineLogger.info(`Found pending offer: ${pendingOffers[0].contractId}`)
 const pendingOffer = pendingOffers[0]
 
 const [acceptTransferCommand, transferDisclosedContractsAccept] =
-    await onlineSDK.token.transfer.accept({
+    await onlineSDK.token.v1.transfer.accept({
         transferInstructionCid: pendingOffer.contractId,
         registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
     })
@@ -1837,7 +1917,7 @@ offlineLogger.info(
 )
 
 const calculatedAcceptTransferHash =
-    await offlineSdk.utils.hash.preparedTransacation(
+    await offlineSdk.utils.hash.preparedTransaction(
         preparedTransferAcceptResponse.preparedTransaction
     )
 

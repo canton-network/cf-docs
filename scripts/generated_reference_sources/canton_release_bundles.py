@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from typing import Any
 
 import generate_canton_protobuf_history as canton_protobuf_history
 
+from generate_canton_protobuf_history import semver_key
 from generated_reference_sources.common import SourceUpdate, load_json, write_json
 
 
@@ -109,78 +111,119 @@ def release_bundle_exists(
         return False
 
 
-def latest_public_canton_bundle_version(
+STABLE_BUNDLE_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def release_line(version: str) -> str:
+    major, minor, *_rest = version.split(".")
+    return f"{major}.{minor}"
+
+
+def line_key(line: str) -> tuple[int, int]:
+    major, minor = line.split(".")
+    return (int(major), int(minor))
+
+
+def latest_public_canton_bundle_versions(
     source_config: LedgerApiSourceConfig,
     *,
-    docs_version: str,
+    min_line: str,
     repo_dir: Path = DEFAULT_REPO_DIR,
     remote: str = DEFAULT_CANTON_REMOTE,
-) -> str:
-    candidates = stable_canton_bundle_candidates(
-        docs_version=docs_version,
-        repo_dir=repo_dir,
-        remote=remote,
-    )
-    for version in reversed(candidates):
-        if release_bundle_exists(source_config, canton_version=version):
-            return version
-    raise ValueError(f"No public Canton release bundle found for docs version {docs_version}")
+) -> dict[str, str]:
+    """Return the newest stable Canton release with a public bundle for each release line.
 
-
-def stable_canton_bundle_candidates(
-    *,
-    docs_version: str,
-    repo_dir: Path,
-    remote: str,
-) -> tuple[str, ...]:
+    Lines older than ``min_line`` are ignored. A line with no public bundle is omitted.
+    """
     repo = canton_protobuf_history.ensure_repo(repo_dir, remote=remote, fetch=True)
-    return tuple(
-        version
-        for version, _tag in canton_protobuf_history.stable_tags(
-            repo,
-            min_version=f"{docs_version}.0",
-            include_versions=None,
-        )
-        if version.startswith(f"{docs_version}.")
-    )
+    versions_by_line: dict[str, list[str]] = {}
+    for version, _tag in canton_protobuf_history.stable_tags(
+        repo,
+        min_version=f"{min_line}.0",
+        include_versions=None,
+    ):
+        versions_by_line.setdefault(release_line(version), []).append(version)
+
+    latest_by_line: dict[str, str] = {}
+    for line, versions in versions_by_line.items():
+        for version in reversed(versions):
+            if release_bundle_exists(source_config, canton_version=version):
+                latest_by_line[line] = version
+                break
+    return latest_by_line
 
 
 def update_source(
     *,
     source_config_path: Path,
     dry_run: bool,
-) -> SourceUpdate | None:
+) -> list[SourceUpdate]:
+    """Keep the JSON Ledger API pins on the newest public Canton releases.
+
+    - Every release line pinned to a stable release moves to that line's latest public patch.
+      Snapshot pins are deliberate and are left alone.
+    - Release lines newer than any configured line are added once a public bundle exists.
+    - ``publish_version`` always names the newest configured line.
+    """
     source_config = parse_source_config(source_config_path)
-    publish_entry = next(
-        (entry for entry in source_config.versions if entry.version == source_config.publish_version),
-        None,
-    )
-    if publish_entry is None:
-        available = ", ".join(entry.version for entry in source_config.versions)
-        raise ValueError(f"Publish version {source_config.publish_version} not found in versions: {available}")
-
-    current_version = latest_public_canton_bundle_version(
+    configured_lines = [entry.version for entry in source_config.versions]
+    latest_by_line = latest_public_canton_bundle_versions(
         source_config,
-        docs_version=source_config.publish_version,
+        min_line=min(configured_lines, key=line_key),
     )
-    if publish_entry.canton_version == current_version:
-        return None
 
-    update = SourceUpdate(
-        source=SOURCE_LABEL,
-        path=source_config_path,
-        field=f"versions[{publish_entry.version}].canton_version",
-        previous=publish_entry.canton_version,
-        current=current_version,
-    )
-    if not dry_run:
+    updates: list[SourceUpdate] = []
+    updated_versions: list[dict[str, Any]] = []
+    for entry in source_config.versions:
+        updated_entry = dict(entry.raw)
+        latest = latest_by_line.get(entry.version)
+        if (
+            latest is not None
+            and STABLE_BUNDLE_VERSION_RE.fullmatch(entry.canton_version)
+            and semver_key(latest) > semver_key(entry.canton_version)
+        ):
+            updated_entry["canton_version"] = latest
+            updates.append(
+                SourceUpdate(
+                    source=SOURCE_LABEL,
+                    path=source_config_path,
+                    field=f"versions[{entry.version}].canton_version",
+                    previous=entry.canton_version,
+                    current=latest,
+                )
+            )
+        updated_versions.append(updated_entry)
+
+    newest_configured = max(configured_lines, key=line_key)
+    for line in sorted(latest_by_line, key=line_key):
+        if line_key(line) <= line_key(newest_configured):
+            continue
+        updated_versions.append({"version": line, "canton_version": latest_by_line[line]})
+        updates.append(
+            SourceUpdate(
+                source=SOURCE_LABEL,
+                path=source_config_path,
+                field=f"versions[{line}]",
+                previous="(not configured)",
+                current=latest_by_line[line],
+            )
+        )
+
+    publish_version = max((entry["version"] for entry in updated_versions), key=line_key)
+    if publish_version != source_config.publish_version:
+        updates.append(
+            SourceUpdate(
+                source=SOURCE_LABEL,
+                path=source_config_path,
+                field="publish_version",
+                previous=source_config.publish_version,
+                current=publish_version,
+            )
+        )
+
+    if updates and not dry_run:
         updated_config = dict(source_config.raw)
-        updated_versions: list[dict[str, Any]] = []
-        for entry in source_config.versions:
-            updated_entry = dict(entry.raw)
-            if entry.version == publish_entry.version:
-                updated_entry["canton_version"] = current_version
-            updated_versions.append(updated_entry)
         updated_config["versions"] = updated_versions
+        updated_config["publish_version"] = publish_version
         write_json(source_config_path, updated_config)
-    return update
+    return updates

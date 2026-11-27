@@ -1,0 +1,1045 @@
+---
+title: "Recovering Stuck Validators after the November 2026 LSU"
+description: "Recover a validator node that missed the MainNet logical synchronizer upgrade of 2026-11-07"
+---
+
+This page describes how to recover a validator node that is stuck on the predecessor physical synchronizer after the [logical synchronizer upgrade](/global-synchronizer/production-operations/logical-synchronizer-upgrade) (LSU) of November 2026.
+
+## Why is my validator stuck?
+
+Your validator is stuck if it was running a Splice version before 0.8.3 (Canton 3.5.18) when the LSU was announced. Those Canton versions didn't recognize the LSU announcement and kept processing timestamps from the old synchronizer. This moved the node's internal clocks past the clocks of the successor synchronizer.
+
+When the participant then tries to move over to the new synchronizer, it finds that the clock ticks overlap. Since this shouldn't happen, it stops processing.
+
+| | MainNet | TestNet |
+|---|---|---|
+| Old physical synchronizer ID ends in | `::35-6` | `::35-3` |
+| New physical synchronizer ID ends in | `::36-7` | `::36-4` |
+
+## Choose your path
+
+1. **You have a database backup from before the freeze and from the last 30 days.** Restore it, upgrade to the Splice version the network runs now, and let the node replay the events. Follow [Restoring a validator from backups](/global-synchronizer/production-operations/validator-disaster-recovery#restoring-a-validator-from-backups). This is the simplest and safest option. Use the rest of this page only if you don't have such a backup.
+2. **Your parties hold only Canton Coin (CC) and CNS entries** (no other Daml applications or tokens, no wallet contracts such as transfer offers or minting delegations, no external parties, no multi-hosted parties). Run the [pre-flight check](#pre-flight-check) to confirm it. Then run steps 1 to 3, 7, 8 and 15 to 17, and leave the validator app running after step 8 (skip the warning box in that step). About an hour after step 8, check the node as at the end of step 14. Other users of your wallet then onboard again. They keep their CC and CNS entries.
+3. **Otherwise**, follow the full procedure below.
+
+## What the procedure does
+
+The procedure creates a new validator node that takes over the namespace keys and parties of the stuck node and connects to the successor synchronizer. The validator app moves your internal parties (the parties of your namespace that aren't external) to the new node and imports their contracts that are shared with the DSO party (CC among them) from Scan. All other contracts come from exports that you take from the stuck node. External parties move in step 11, once their owners sign the new hosting, and multi-hosted parties of other namespaces in phase G.
+
+From step 8 on, the stuck node stays stopped. You only start it again, still disconnected, to export something you missed.
+
+| Phase | Steps | Runs on |
+|---|---|---|
+| [Before you start](#before-you-start) | | stuck node, read-only |
+| [A. Prepare the stuck node](#phase-a-prepare-the-stuck-node) | 1 to 3 | stuck node |
+| [B. Export from the stuck node](#phase-b-export-from-the-stuck-node) | 4 to 7 | stuck node |
+| [C. Deploy the new node](#phase-c-deploy-the-new-node) | 8 | new node |
+| [D. Restore the contracts](#phase-d-restore-the-contracts) | 9 to 12 | new node |
+| [E. Check the ACS commitments](#phase-e-check-the-acs-commitments) | 13 | new node |
+| [F. Go live](#phase-f-go-live) | 14 to 17 | new node |
+| [G. Add a recovered node as a host of a multi-hosted party](#phase-g-add-a-recovered-node-as-a-host-of-a-multi-hosted-party) | G1 to G7 | two new nodes, only for multi-hosted parties of another node's namespace |
+
+### What applies to you
+
+Some instructions depend on your setup and are shown in tabs: **Docker Compose** or **Helm**, and **Local keys** or **KMS** (participant keys in an AWS or GCP KMS configured in Canton). Choose your setup in one of these tabs, and the other tabs on this page switch to it too.
+
+## Limitations
+
+### Loss of update history
+
+The new node is provisioned only with the active contracts of your parties, through ACS imports. The Ledger API update history up to the point where a party is onboarded on the new validator is lost, in particular:
+
+* archived contracts and non-consuming events
+* creates where a party hosted on the node is an observer
+* contracts where a party was only a non-stakeholder informee (that is, they were disclosed to the party)
+* command completions
+
+The wallet's transaction history comes from these updates too, so it starts empty on the new node.
+
+Keep the backup from step 1 if you need this history for audit purposes. Neither that backup nor the new node has the updates between the LSU upgrade time and the onboarding of the new validator.
+
+### Ledger API client applications need to rebuild their state
+
+The new node has a different Ledger API update lineage, most importantly with changed offsets. Additionally, Ledger API update and command completion history isn't preserved. Client applications (wallet backends, PQS, custom indexers, etc.) MUST therefore rebuild their internal data storage from the new validator from scratch.
+
+### New participant ID
+
+The new node gets a new participant ID. Party IDs don't change.
+
+Traffic belongs to the participant ID (`PAR::...`), not to a party. Traffic bought for the old participant ID stays with that ID, so the new participant needs its own, and anyone who buys traffic for your node (a traffic provider, your own scripts) must use the new ID from now on. Until it has some, every message it sends is throttled to the base rate. Step 8 explains how to buy it.
+
+### Contracts that changed after the LSU without your node
+
+The exports of steps 4 and 5 contain your contracts as the stuck node saw them at the LSU upgrade time. Contracts your parties only observe may have been archived since then without your node, and importing them brings them back as active. Contracts created since then where your parties are only observers are missing from the exports. Both usually cause ACS commitment mismatches in step 13. Step 13 can't detect them if they're the only contracts your node shares with the other participant: then only one of the two participants sends a commitment, and the other one ignores it without logging anything.
+
+Steps 8, 10 and 11 avoid this for contracts shared with the DSO party by importing those from Scan. The same issue can happen between your own parties if an internal party changes a contract shared with an external party between steps 10 and 11. Then the import of step 11 stops with `Cannot add previously archived contract` (see the [error reference](#error-reference)).
+
+### Multi-hosted parties
+
+A multi-hosted party is hosted on more than one participant. This page covers a multi-hosted party only if it has exactly two hosts and threshold 1, the owning node (below) hosts it with `Submission` permission, and **both** hosts are stuck nodes that you recover with this page.
+
+The node whose namespace the party belongs to is the **owning node**. The pre-flight check shows which one it is. Recover the nodes in this order:
+
+1. The other host: steps 1 to 17, without the party. Its step 8 removes the old node as a host of the party.
+2. The owning node: steps 1 to 17. Its steps 4 and 10 bring back the party's contracts.
+3. The other host: [phase G](#phase-g-add-a-recovered-node-as-a-host-of-a-multi-hosted-party), which adds it back as a host.
+
+## Before you start
+
+Nothing in this section changes the stuck node.
+
+### Versions
+
+* **Stuck node:** there's no need to upgrade it. If you already upgraded it in place, carry on with that version.
+* **New node:** run the Splice version that the network runs now.
+
+### Console setup
+
+Enable repair and preview commands in the [console configuration file](/global-synchronizer/reference/canton-console-reference) of each console session:
+
+```hocon
+canton.features.enable-repair-commands=yes
+canton.features.enable-preview-commands=yes
+```
+
+The preview commands are needed for the key download in step 1 and for inspecting ACS commitments after step 13.
+
+Turn on debug logging for all participant sessions:
+
+```scala
+participant.health.set_log_level(Level.DEBUG)
+```
+
+The snippets call the participant `participant`. If your console names it differently (for example `participant2`), start each console session with `val participant = participant2`. Run each snippet as a whole: later lines use values that earlier lines define.
+
+The snippets write their files (party lists, exports, DARs, identities dump) to the console's working directory, and later steps read them. Keep them on the host, not only inside a container that can be removed. Steps 9 to 11 read them in the console of the new node, so run that console from the same directory or copy the files there.
+
+### Decide before you start
+
+* **New participant identifier:** a name that no participant in your namespace has used before, including earlier recovery attempts. You pass it in step 8 and on every later start of the new node.
+* **Traffic:** who buys traffic for the new participant ID as soon as step 8 creates it (see [Traffic for the new participant](#traffic-for-the-new-participant)).
+
+### Pre-flight check
+
+Run this read-only check in the console of the stuck participant. It changes nothing on the node. Replace the placeholder with the DSO party ID from `<scan-url>/api/scan/v0/dso-party-id`.
+
+If you already ran `participant.synchronizers.perform_manual_lsu`, `participant.repair.perform_late_lsu` or the SQL statements of an earlier recovery runbook on the stuck node, first restore the database backup taken before them.
+
+```scala
+import com.digitalasset.canton.config.RequireTypes.PositiveInt
+
+// 1. Node and keys
+println(s"Participant: ${participant.id.toProtoPrimitive}")
+participant.keys.secret.list().foreach { k =>
+  println(s"Key: name=${k.name.map(_.unwrap).getOrElse("<none>")} kms=${k.kmsKeyId.isDefined}")
+}
+
+// 2. Synchronizers: should only list the one from before the LSU
+println(s"Registered synchronizers: ${participant.synchronizers.list_registered().map(_._2)}")
+
+// 3. Hosted parties: own namespace or not, external or not, and all hosting participants
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+val keyMapped = participant.topology.party_to_key_mappings.list(syncId).map(_.item.party).toSet
+val mappings = (participant.topology.party_to_participant_mappings
+  .list(syncId, filterParticipant = participant.id.filterString)
+  .map(_.item))
+mappings.foreach { m =>
+  val own = m.partyId.uid.namespace == participant.id.uid.namespace
+  val external = m.partySigningKeysWithThreshold.isDefined || keyMapped(m.partyId)
+  val hosts = m.participants.map(h => s"${h.participantId.toProtoPrimitive} (${h.permission})").mkString(", ")
+  println(s"Party: ${m.partyId.toProtoPrimitive} own-namespace=$own external=$external threshold=${m.threshold.value} hosts=$hosts")
+}
+
+// 4. Contracts that step 8 doesn't restore from Scan, per party
+val dso = "<DSO party ID>"
+// The validator app creates these again, for other users when they onboard again
+val recreated = Set("Splice.Wallet.Install:WalletAppInstall", "Splice.Amulet:ValidatorRight", "Splice.Wallet.TopUpState:ValidatorTopUpState")
+mappings.map(_.partyId).foreach { party =>
+  val other = (participant.ledger_api.state.acs.of_party(party, limit = PositiveInt.tryCreate(1000000))
+    .filterNot(c => (c.event.signatories ++ c.event.observers).contains(dso))
+    .map(c => s"${c.templateId.moduleName}:${c.templateId.entityName}")
+    .filterNot(recreated))
+  println(s"Contracts not shared with the DSO party, of ${party.toProtoPrimitive}: ${other.size} ${other.distinct.take(5).mkString(", ")}")
+}
+```
+
+Go ahead if all of these hold:
+
+* The only registered synchronizer is the old one (see the table at the top). If it shows another one, someone ran `perform_manual_lsu`, `repair.perform_late_lsu` or the SQL statements of an earlier recovery runbook on this node. Restore the database backup from before that.
+* **Only with KMS:** the KMS is configured in Canton, not through a KMS driver. Every key has a name, only the namespace key's name contains `namespace`, and every key shows `kms=true`.
+* Every party with `external=false` and a single host shows `own-namespace=true`.
+* Every party with `external=true` has a single host, and its owner can sign a new hosting for it soon after step 10. Until then the party has no working host and can't use its assets.
+* Every party with more than one host fits [Multi-hosted parties](#multi-hosted-parties). Compare the output of its two hosts: the party shows `own-namespace=true` on one of them. If it doesn't on either, its owner is outside these nodes.
+
+Otherwise stop and send DA support the output.
+
+If every party has a single host, no party shows `external=true` and every party shows `Contracts not shared with the DSO party ...: 0`, you can take the CC-only path of [Choose your path](#choose-your-path).
+
+<Tabs>
+<Tab title="Local keys">
+
+Nothing more to do here. Step 1 gets the identities backup from the validator app.
+
+</Tab>
+<Tab title="KMS">
+
+Write the identities dump that step 8 needs. It holds the KMS key IDs and names, no private keys:
+
+```scala
+import com.digitalasset.canton.topology.store.TimeQuery
+import com.digitalasset.canton.topology.transaction.TopologyMapping
+import java.nio.file.{Files, Paths}
+import java.util.Base64
+
+val keys = participant.keys.secret.list().map { k =>
+  val keyType = if (k.publicKey.isSigning) "signing" else "encryption"
+  s"""{"type": "$keyType", "keyId": "${k.kmsKeyId.get.unwrap}", "name": "${k.name.get.unwrap}"}"""
+}
+val snapshot = participant.topology.transactions.export_topology_snapshot(
+  timeQuery = TimeQuery.Range(from = None, until = None),
+  filterMappings = Seq(
+    TopologyMapping.Code.NamespaceDelegation,
+    TopologyMapping.Code.OwnerToKeyMapping,
+    TopologyMapping.Code.VettedPackages,
+  ),
+  filterNamespace = participant.id.namespace.toProtoPrimitive,
+)
+val snapshotBase64 = Base64.getEncoder.encodeToString(snapshot.toByteArray)
+val dumpFile = s"${participant.id.toProtoPrimitive.split("::")(1)}-identities-dump.json"
+Files.writeString(
+  Paths.get(dumpFile),
+  s"""{"id": "${participant.id.toProtoPrimitive}", "keys": [${keys.mkString(",")}], "authorizedStoreSnapshot": "$snapshotBase64"}""",
+)
+println(s"Identities dump written to $dumpFile")
+```
+
+</Tab>
+</Tabs>
+
+## Phase A. Prepare the stuck node
+
+### Step 1. Back up your validator
+
+Take a full backup of your validator's databases as described in [Backups of postgres instances](/global-synchronizer/production-operations/validator-backups#backups-of-postgres-instances).
+
+Step 8 also needs a backup of the node identities. Get it now, because the validator app isn't started again after step 2.
+
+<Tabs>
+<Tab title="Local keys">
+
+Fetch it from the validator app as described in [Backup of Node Identities](/global-synchronizer/production-operations/validator-backups#backup-of-node-identities). If the validator app can't provide it, create it with the console script in [Obtaining an Identities Backup from a Participant Database Backup](/global-synchronizer/production-operations/validator-disaster-recovery#obtaining-an-identities-backup-from-a-participant-database-backup). Its output contains the private keys. If the stuck node runs Splice 0.10.0 or later, enable key downloads first, as that section describes.
+
+</Tab>
+<Tab title="KMS">
+
+Use the identities dump that the pre-flight check wrote.
+
+</Tab>
+</Tabs>
+
+Check that the identities backup is complete while the old participant can still write a new one:
+
+```bash
+jq '{id, keys: [.keys[] | {name, type, keyId, hasKeyPair: (.keyPair != null)}], snapshot: (.authorizedStoreSnapshot | length)}' <identities backup file>
+```
+
+It must show the old participant ID, a snapshot length above zero, and for every key either a `keyId` and a `name` (KMS) or `hasKeyPair: true` (local keys).
+
+### Step 2. Stop the validator app
+
+Stop the validator app, and any other service that uses the participant's Ledger API or Admin API (for example DAR upload or UI services). The validator app must never run again on the old node, so that it doesn't reconnect the participant to the synchronizer. As a safety net, add an invalid entry to its configuration so that it fails to start if launched by accident.
+
+<Tabs>
+<Tab title="Docker Compose">
+
+The validator app has `restart: always`, so Docker would start it again after a reboot. Turn that off before you stop it:
+
+```bash
+docker update --restart=no splice-validator-validator-1
+docker stop splice-validator-validator-1
+```
+
+Then add the invalid entry to the `environment` list of the `validator` service in `compose.yaml`. The unmatched brace can't be parsed, so the validator app stops at startup:
+
+```yaml
+- ADDITIONAL_CONFIG_DO_NOT_START=}
+```
+
+</Tab>
+<Tab title="Helm">
+
+Scale the validator app to zero:
+
+```bash
+kubectl scale deployment validator-app --replicas=0 -n <namespace>
+```
+
+Then add the invalid entry to the validator values, but don't run `helm upgrade` for it, since that would start the validator app again:
+
+```yaml
+additionalEnvVars:
+  - name: ADDITIONAL_CONFIG_DO_NOT_START
+    value: "}"
+```
+
+</Tab>
+</Tabs>
+
+### Step 3. Disconnect the participant from the synchronizer
+
+Prevent the participant from reconnecting when it restarts:
+
+<Tabs>
+<Tab title="Docker Compose">
+
+Add this line to the `environment` list of the `participant` service in `compose.yaml`:
+
+```yaml
+- ADDITIONAL_CONFIG_NO_RECONNECT=canton.participants.participant.parameters.connect-to-synchronizers-on-startup = false
+```
+
+Docker Compose reads it the next time the participant starts, so don't restart the node for it now.
+
+</Tab>
+<Tab title="Helm">
+
+Add this to the participant values, and run `helm upgrade` for the participant release:
+
+```yaml
+additionalEnvVars:
+  - name: ADDITIONAL_CONFIG_NO_RECONNECT
+    value: canton.participants.participant.parameters.connect-to-synchronizers-on-startup = false
+```
+
+</Tab>
+</Tabs>
+
+If the participant doesn't start with this setting because its Canton version doesn't have it yet (Splice before 0.6.9), remove the variable. The `manualConnect = true` flag set below also prevents reconnects on restarts.
+
+Then, in the Canton console:
+
+```scala
+participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = true),
+  validation = SequencerConnectionValidation.Disabled)
+
+// Disconnect the synchronizer
+participant.synchronizers.disconnect_all()
+
+// There should be no connected synchronizer anymore, also after a restart
+participant.synchronizers.list_connected()
+```
+
+## Phase B. Export from the stuck node
+
+### Step 4. Export the ACS of the internal parties
+
+Export the contracts of all parties in your namespace that aren't external, including multi-hosted parties that this node owns. The snippet also counts them for the check in step 10. Replace the placeholder with the DSO party ID:
+
+```scala
+import com.digitalasset.canton.config.RequireTypes.PositiveInt
+import java.nio.file.{Files, Paths}
+
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+val offset = participant.ledger_api.state.end()
+
+val mappings = (participant.topology.party_to_participant_mappings
+  .list(syncId, filterParticipant = participant.id.filterString)
+  .map(_.item))
+
+val keyMapped = participant.topology.party_to_key_mappings.list(syncId).map(_.item.party).toSet
+def isExternal(m: PartyToParticipant) = m.partySigningKeysWithThreshold.isDefined || keyMapped(m.partyId)
+def isOwn(m: PartyToParticipant) = m.partyId.uid.namespace == participant.id.uid.namespace
+def isMultiHosted(m: PartyToParticipant) = m.participants.sizeIs > 1
+
+val internal = mappings.filter(m => isOwn(m) && !isExternal(m)).map(_.partyId)
+val external = mappings.filter(m => !isMultiHosted(m) && !internal.contains(m.partyId)).map(_.partyId)
+val multiHosted = mappings.filter(m => isMultiHosted(m) && !internal.contains(m.partyId)).map(_.partyId)
+val multiHostedOwn = mappings.filter(m => isMultiHosted(m) && internal.contains(m.partyId)).map(_.partyId)
+
+Files.writeString(Paths.get("internal-parties.txt"), internal.map(_.toProtoPrimitive).mkString("\n"))
+Files.writeString(Paths.get("external-parties.txt"), external.map(_.toProtoPrimitive).mkString("\n"))
+Files.writeString(Paths.get("multi-hosted-parties.txt"), multiHosted.map(_.toProtoPrimitive).mkString("\n"))
+
+println(s"Internal parties (steps 8 and 10): ${internal.map(_.toProtoPrimitive).mkString(", ")}")
+println(s"  of which multi-hosted, owned by this node: ${multiHostedOwn.map(_.toProtoPrimitive).mkString(", ")}")
+println(s"External parties (steps 5 and 11): ${external.map(_.toProtoPrimitive).mkString(", ")}")
+println(s"Multi-hosted parties of other namespaces (step 12): ${multiHosted.map(_.toProtoPrimitive).mkString(", ")}")
+
+// An empty party set would export the contracts of all hosted parties
+require(internal.nonEmpty, "No internal party found. Check the pre-flight output")
+participant.repair.export_acs(
+  parties = internal.toSet,
+  ledgerOffset = offset,
+  exportFilePath = "acs-internal.gz",
+  excludedStakeholders = Set.empty,
+  synchronizerId = Some(syncId),
+)
+
+// Contracts per party and template, without those shared with the DSO party (step 8 restores those from Scan)
+val dso = "<DSO party ID>"
+val counted = for {
+  party <- internal
+  c <- participant.ledger_api.state.acs.of_party(party, limit = PositiveInt.tryCreate(1000000))
+  if !(c.event.signatories ++ c.event.observers).contains(dso)
+} yield s"${party.toProtoPrimitive} ${c.templateId.moduleName}:${c.templateId.entityName}"
+val inventory = counted.groupBy(identity).map { case (key, entries) => s"$key ${entries.size}" }
+Files.writeString(Paths.get("inventory.txt"), inventory.toSeq.sorted.mkString("\n"))
+println(s"${counted.size} contracts counted in inventory.txt")
+```
+
+### Step 5. Export the ACS of each external party
+
+In the same console session as step 4, create one ACS export per external party:
+
+```scala
+external.zipWithIndex.foreach { case (party, i) =>
+  participant.repair.export_acs(
+    parties = Set(party),
+    ledgerOffset = offset,
+    exportFilePath = s"acs-external-$i.gz",
+    excludedStakeholders = Set.empty,
+    synchronizerId = Some(syncId),
+  )
+}
+```
+
+Contracts with multiple stakeholders hosted on the participant will appear in several ACS exports. They will however be correctly deduplicated at import time.
+
+### Step 6. Download all DARs
+
+```scala
+// Writes every DAR to the "dars" directory on the machine running the console, which must exist first
+new java.io.File("dars").mkdirs()
+participant.dars.list().foreach(d => participant.dars.download(d.mainPackageId, "dars"))
+```
+
+### Step 7. Export the user management data
+
+Optionally, read the user management and identity provider configuration of your old participant with `UserManagementService.ListUsers`, `UserManagementService.ListUserRights` and `IdentityProviderConfigService.ListIdentityProviderConfigs` on the Ledger API, and save the data. Step 17 restores it.
+
+## Phase C. Deploy the new node
+
+### Step 8. Deploy a new validator from the identities backup
+
+This step follows [Recovery from an identities backup](/global-synchronizer/production-operations/validator-disaster-recovery#recovery-from-an-identities-backup-re-onboard-a-validator-and-recover-balances-of-all-users-it-hosts). The validator app initializes the new participant from the identities backup, moves your internal parties to it and imports their DSO-shared contracts (CC among them) from Scan.
+
+#### Set up the new node
+
+* **Deployment files.** Start from the Docker Compose files or Helm charts of the Splice version that the network runs now, and carry your customizations over as for an upgrade (for example KMS settings, an external database, a proxy or extra services). Keep a copy of the old compose directory or Helm values, in case you need to start the old node again to export from it.
+* **Settings.** Compare the old and the new settings line by line (`.env` and `compose.yaml`, or the Helm values). Every setting that isn't a database name, an identity or an image version must be in the new files too (except `ADDITIONAL_CONFIG_DO_NOT_START` from step 2 and `ADDITIONAL_CONFIG_NO_RECONNECT` from step 3), for example traffic top-up, authentication, wallet sweep or auto-accept settings.
+* **New databases** for the participant and the validator app. Keep the old databases until step 13 passes (CC-only path: until the check of [Choose your path](#choose-your-path) passes).
+* **Memory.** The new participant needs the most memory when it first downloads the synchronizer's topology state. Give the new node at least the memory of the old one, and see the [hardware requirements](/global-synchronizer/deployment/prerequisites).
+
+<Tabs>
+<Tab title="Docker Compose">
+
+* **No participant bootstrap script.** If the `participant` service mounts a script at `/app/bootstrap.sc`, remove that mount for good. A script that registers keys or initializes the node conflicts with the validator app, and the participant fails with `Existing public key for ... is different than inserted key`.
+* **New databases with your own Postgres server:** create two new databases. Set their names in `CANTON_PARTICIPANT_POSTGRES_DB` of the `participant` service and in `databaseName` of the validator app's storage configuration in `compose.yaml`.
+* **New databases with the `postgres-splice` container:** give its volume a new name in the top-level `volumes` section of `compose.yaml`, so the container starts empty. Don't change the compose project name, since other services would start empty too.
+
+  ```yaml
+  volumes:
+    postgres-splice:
+      name: splice-validator_postgres-splice-new
+  ```
+
+</Tab>
+<Tab title="Helm">
+
+* **New databases:** set new names in `persistence.databaseName` of the participant values and of the validator values. The validator chart creates its database. Create the new participant database yourself on the Postgres server first (`CREATE DATABASE <name>;`): the participant chart refuses to create one while the old participant database exists. If you can't, set `persistence.enableParticipantDbConflictCheck: false` in the participant values instead.
+
+</Tab>
+</Tabs>
+
+#### Start the new node
+
+First stop the old participant. It stays stopped from now on, since the new participant uses the same namespace key. You only start it again, still disconnected, to export from it. Then start the new node with the identities backup and the new participant identifier.
+
+<Tabs>
+<Tab title="Docker Compose">
+
+Run `./stop.sh` in the old node's compose directory. Both directories use the compose project name `splice-validator`, so they share container names. To start the old node again, run `./stop.sh` in the new node's directory first, then `./start.sh` with your old flags, without `-w`, in the old node's directory. The `ADDITIONAL_CONFIG_DO_NOT_START` entry from step 2 keeps its validator app from starting. Afterwards, run `./stop.sh` there and start the new node again with the same command. Until step 14, leave out `-w` when you start the new node (see the warning box below).
+
+To start the new node, use the flags you normally pass to `start.sh`, with the same `-p <party hint>` as before (the party IDs depend on it), plus `-i` and `-P`:
+
+```bash
+./start.sh <your usual flags> -i /absolute/path/to/identities-backup.json -P <new participant identifier>
+```
+
+`-i` needs an absolute path. Pass `-P` with the same identifier on every later start of the new node, or the validator app stops.
+
+</Tab>
+<Tab title="Helm">
+
+Run `helm uninstall` for the old validator and participant releases (`validator` and `participant` in the Splice docs). Their databases stay in Postgres. The new node reuses the same release names in the same namespace: the validator chart's resource names are fixed and the ingress routes to them, so a second validator release can't run next to the old one. To start the old participant again (for example to export from it), scale the new validator app to zero, uninstall the new participant release and install the old participant release with its old values. Never install the old validator release again.
+
+To start the new node, create a secret with the identities backup, then install the participant and validator releases with the same names as before:
+
+```bash
+kubectl create secret generic participant-bootstrap-dump --from-file=content=/absolute/path/to/identities-backup.json -n <namespace>
+```
+
+* Validator values: uncomment `participantIdentitiesDumpImport` (with `secretName: participant-bootstrap-dump` and `newParticipantIdentifier` set to the new participant identifier) and `migrateValidatorParty: true`, and set `nodeIdentifier` to the same identifier. Keep these values on every later `helm upgrade`.
+* Participant values: `enableRepairCommands: true`, and the database settings above.
+
+</Tab>
+</Tabs>
+
+While step 8 runs, these lines appear in this order:
+
+1. Validator app log: `Success: node is initialized with id PAR::<new participant identifier>::<your namespace>`. Get traffic now, see [Traffic for the new participant](#traffic-for-the-new-participant).
+2. Participant log: `Progressed topology download` lines, then `Successfully downloaded topology state`. This can take 20 minutes or more.
+3. Validator app log: `Vet packages`.
+4. Validator app log: `Migrating party data`, and at the end `ACS import complete`.
+
+Services that upload DARs when they start log `PACKAGE_SERVICE_CANNOT_AUTODETECT_SYNCHRONIZER` errors until the participant is connected. These errors are harmless.
+
+Don't stop or restart the new node while step 8 runs, especially after `Migrating party data`: an interrupted Scan import can mean setting up the new participant again from scratch.
+
+<Warning>
+Once the validator app log shows `ACS import complete`, stop the validator app again and the other services you stopped in step 2, and keep them stopped until step 14. The validator app connects the participant to the synchronizer whenever it starts.
+
+<Tabs>
+<Tab title="Docker Compose">
+
+Stop it as in step 2, including the `ADDITIONAL_CONFIG_DO_NOT_START` entry, this time in the new node's `compose.yaml`. Every `start.sh` of the new node creates the validator container again and starts it, and the entry stops the validator app at startup. Until step 14, start the new node without `-w`: otherwise `start.sh` waits 10 minutes for the validator app and then reports an error. Step 14 removes the entry.
+
+</Tab>
+<Tab title="Helm">
+
+Scale the validator app to zero as in step 2, but don't add the entry to the validator values. Step 14 scales it back.
+
+</Tab>
+</Tabs>
+
+Then prevent the new participant from reconnecting on restarts with the `ADDITIONAL_CONFIG_NO_RECONNECT` override of step 3, and/or:
+
+```scala
+participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = true))
+```
+</Warning>
+
+#### Traffic for the new participant
+
+As soon as the validator app logs `Success: node is initialized with id PAR::<new participant identifier>::<your namespace>`, get traffic for that ID while step 8 continues:
+
+* A traffic provider buys it for `PAR::<new participant identifier>::<your namespace>`.
+* Or any wallet with CC buys it with a [token standard transfer](/global-synchronizer/deployment/synchronizer-traffic#buying-traffic-with-a-token-standard-transfer), with the memo `splice/memo:member-id=PAR::<new participant identifier>::<your namespace>&synchronizer-id=<synchronizer ID>&migration-id=<migration ID>` (the linked section shows how to look up the last two). The CC is burnt even if the member ID or the migration ID is wrong, so check both and start with a small purchase.
+
+Without bought traffic, steps 8 and 9 still work, but slowly.
+
+Once the validator app runs for good (after step 8 on the CC-only path, from step 14 otherwise), it buys traffic from the validator party's CC, but only if that CC covers one full top-up at your configured target throughput. Otherwise it logs `Insufficient funds to buy configured traffic amount` and buys nothing. Check the validator party's balance before then, and send it more CC or lower the target throughput.
+
+#### Check the new node
+
+On the CC-only path, step 4 doesn't run. Wherever this section names `internal-parties.txt`, use the `Party:` lines of the pre-flight output instead, and expect no `Ignoring parties` warning.
+
+The validator app does not migrate external parties and multi-hosted parties, and it may unhost them from the stuck participant (see [Parties not migrated automatically](/global-synchronizer/production-operations/validator-disaster-recovery#parties-not-migrated-automatically)). They are handled in steps 11 and 12.
+
+In the validator app log, two warnings are expected, but only for parties in `external-parties.txt` or `multi-hosted-parties.txt`:
+
+* `Ignoring parties that we will likely not be able to migrate due to an unsupported namespace`
+* `Ignoring parties that we will not be able to migrate because they are multi-hosted`
+
+If either warning names a party from `internal-parties.txt`, stop and contact DA support.
+
+In the console of the new participant:
+
+```scala
+participant.id
+// PAR::<new participant identifier>::<your namespace>, with the same namespace as the old participant ID
+participant.keys.secret.list().map(k => (k.name.map(_.unwrap), k.kmsKeyId.map(_.unwrap)))
+// the keys of the identities backup (with KMS: the same KMS key IDs)
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+participant.topology.party_to_participant_mappings.list(syncId, filterParticipant = participant.id.filterString).map(_.item.partyId)
+// the parties of internal-parties.txt
+```
+
+If a party from `internal-parties.txt` is missing, stop and contact DA support.
+
+The new participant is still connected at this point. That's expected; step 9 disconnects it.
+
+#### If step 8 fails or is interrupted
+
+Save the logs before you stop anything (**Docker Compose:** `docker logs` of the participant and validator containers, since `./stop.sh` removes them; **Helm:** `kubectl logs` of both pods).
+
+* **Before** the validator app logged `Success: node is initialized with id ...`: stop the new node and contact DA support. A retry needs new databases and a new participant identifier.
+* **After** that line (for example after a host restart): start the new node again with the same command or values on the same databases. The validator app continues where it stopped. Only the old node must stay stopped.
+
+After this step, you have recovered the CC holdings of your internal parties.
+
+## Phase D. Restore the contracts
+
+If an import in this phase or in G6 fails, look up the error in the [error reference](#error-reference) before you run anything else. Don't reconnect unless it says so.
+
+### Step 9. Upload the exported DARs
+
+```scala
+// Vetting goes through the synchronizer
+participant.synchronizers.reconnect_all()
+// Uploads every DAR downloaded in step 6. From step 14, the validator app vets the Splice versions that the network requires
+new java.io.File("dars").listFiles().filter(_.getName.endsWith(".dar")).foreach(f => participant.dars.upload(f.getPath, vetAllPackages = !f.getName.startsWith("splice-")))
+```
+
+The upload vets every DAR except the Splice DARs (names starting with `splice-`), so the old Splice versions stay unvetted. If you haven't bought traffic, each DAR can take a minute or more (see `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` in the [error reference](#error-reference)). If the snippet fails or you interrupt it, run it again.
+
+Vetting the other DARs can also bring back versions that you unvetted on the old node, for example because they have bugs. Unvet again any DAR that you know should stay unvetted, by its main package ID (`participant.dars.list()` shows them):
+
+```scala
+participant.dars.vetting.disable("<main package ID>")
+```
+
+Then disconnect:
+
+```scala
+participant.synchronizers.disconnect_all()
+```
+
+### Step 10. Import the ACS of the internal parties
+
+This step requires step 8 to be complete (the parties are hosted on the new node and their CC contracts imported) and the validator app to be stopped.
+
+The import leaves out the contracts shared with the DSO party, since step 8 imported their current state from Scan, and the export of step 4 only has their state at the LSU upgrade time. The snippet also removes the old participant's traffic top-up record, so that the validator app doesn't keep buying traffic for the old participant ID. Replace the two placeholders. The validator party ID is the line of `internal-parties.txt` that starts with `<your party hint>::`:
+
+```scala
+import com.digitalasset.canton.config.RequireTypes.PositiveInt
+import com.digitalasset.canton.protocol.LfContractId
+import java.nio.file.{Files, Paths}
+
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+val dso = PartyId.tryFromProtoPrimitive("<DSO party ID>")
+val validatorParty = PartyId.tryFromProtoPrimitive("<validator party ID>")
+val internal = Files.readString(Paths.get("internal-parties.txt")).linesIterator.map(PartyId.tryFromProtoPrimitive).toSet
+val hostedHere = participant.topology.party_to_participant_mappings.list(syncId, filterParticipant = participant.id.filterString).map(_.item.partyId).toSet
+
+val exportedInternalNotYetHosted = internal -- hostedHere
+require(exportedInternalNotYetHosted.isEmpty, s"Internal party migration failed. Missing $exportedInternalNotYetHosted. See the checks of step 8")
+
+participant.synchronizers.disconnect_all()
+// Large imports take longer than the console's default timeout of 1 minute
+console.set_command_timeout(60.minutes)
+participant.repair.import_acs(syncId, "acs-internal.gz", workflowIdPrefix = "recovery-internal", excludedStakeholders = Set(dso))
+
+// Remove the old participant's traffic top-up record that the import brought back
+val oldTopUpStates = participant.ledger_api.state.acs.of_party(validatorParty, limit = PositiveInt.tryCreate(100000)).filter(c => c.templateId.entityName == "ValidatorTopUpState" && c.arguments.get("memberId").exists(_ != participant.id.toProtoPrimitive))
+oldTopUpStates.foreach(c => println(s"${c.contractId} ${c.arguments("memberId")}"))
+if (oldTopUpStates.nonEmpty) participant.repair.purge(SynchronizerAlias.tryCreate("global"), oldTopUpStates.map(c => LfContractId.assertFromString(c.contractId)))
+
+participant.synchronizers.reconnect_all()
+```
+
+If the check reports a party that you allocated on the stuck node after the LSU announcement, that party is not known to the synchronizer and was not migrated. Contact DA support in that case.
+
+Only your validator party is a stakeholder of this record, so purging it doesn't affect anyone else. The `println` shows one line with the old participant ID if a top-up record was removed, or nothing. Running the `val oldTopUpStates = ...` line again should return `List()`.
+
+The participant log has a summary of the import: `Contract import pipeline ... finished. Persisted: <N> new active contracts written. Skipped: ... Dropped: <M> foreign payloads ignored (synchronizer mismatch)`. `Dropped` should be 0. "Synchronizer mismatch" here isn't an ACS commitment mismatch.
+
+Then, in the same console session, compare the contracts with the count of step 4:
+
+```scala
+// Differences from inventory.txt of step 4, per party and template
+val before = Files.readString(Paths.get("inventory.txt")).linesIterator.map(_.split(" ")).map(f => (f(0), f(1)) -> f(2).toInt).toMap
+val now = (for {
+  party <- internal.toSeq
+  c <- participant.ledger_api.state.acs.of_party(party, limit = PositiveInt.tryCreate(1000000))
+  if !(c.event.signatories ++ c.event.observers).contains(dso.toProtoPrimitive)
+} yield (party.toProtoPrimitive, s"${c.templateId.moduleName}:${c.templateId.entityName}")).groupBy(identity).map { case (key, entries) => key -> entries.size }
+(before.keySet ++ now.keySet).toSeq.sorted.foreach { case key @ (party, template) =>
+  val (b, n) = (before.getOrElse(key, 0), now.getOrElse(key, 0))
+  if (b != n) println(s"$template for $party: $b in step 4, $n now")
+}
+```
+
+Expected differences, all for your validator party, created or removed by the validator app and the purge:
+
+* `Splice.Wallet.TopUpState:ValidatorTopUpState`: one fewer.
+* `Splice.Wallet.Install:WalletAppInstall` and `Splice.Amulet:ValidatorRight`: one more each. The duplicates are harmless.
+* More contracts of other `Splice.` templates.
+
+Stop and contact DA support if any other count is lower than in step 4, or if a template outside `Splice.` differs.
+
+After this step, you have recovered the other assets of your internal parties, including the multi-hosted parties that this node owns.
+
+### Step 11. Import the ACS of each external party
+
+Skip this step if `external-parties.txt` is empty.
+
+An external party can only be hosted on the new node with a hosting signed by its own key, so its owner has to sign first. Run this step once for each party in `external-parties.txt`, with that party's owner. Keep the validator app stopped, and run the three console snippets in the same console session: later snippets use values that earlier ones define.
+
+<Warning>
+Onboard external parties right after step 10. Until then, don't use contracts shared between your internal and external parties (see [Contracts that changed after the LSU without your node](#contracts-that-changed-after-the-lsu-without-your-node)). If an owner can't sign before you want to go live in step 14, contact DA support.
+</Warning>
+
+The snippets follow [Recover the Coin balance of an external party](/global-synchronizer/production-operations/validator-disaster-recovery#recover-the-coin-balance-of-an-external-party), with two differences. They keep the party's signing keys in its new hosting: without them, Canton rejects the hosting even with the owner's signature. And they disconnect the node before the party's contracts are imported (see [Why does step 11 disconnect right after loading the hosting?](#why-does-step-11-disconnect-right-after-loading-the-hosting)). Skip the setup-proposal flow at the end of that section, since the imports restore the party's transfer preapproval and validator right.
+
+First, in the console of the new node, prepare the new hosting. Replace the placeholder with the party ID:
+
+```scala
+import com.digitalasset.canton.admin.api.client.commands.TopologyAdminCommands.Write.GenerateTransactions
+import com.digitalasset.canton.config.RequireTypes.PositiveInt
+
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+val partyId = PartyId.tryFromProtoPrimitive("<party ID>")
+
+// The party's current hosting. Step 8 usually left it with no host
+val current = participant.topology.party_to_participant_mappings
+  .list(syncId, filterParty = partyId.filterString)
+  .find(_.item.partyId == partyId)
+  .getOrElse(sys.error(s"No hosting found for $partyId. Check the party ID"))
+require(current.item.partySigningKeys.exists(_.fingerprint == partyId.namespace.fingerprint), "The party's own key isn't among its signing keys, which step 11 doesn't cover")
+
+// Hosted on this node only, with the same signing keys, as the next change of the party's hosting
+val hosting = PartyToParticipant.tryCreate(
+  partyId = partyId,
+  threshold = PositiveInt.one,
+  participants = Seq(HostingParticipant(participant.id, ParticipantPermission.Confirmation)),
+  partySigningKeysWithThreshold = current.item.partySigningKeysWithThreshold,
+)
+val hostingTransaction = participant.topology.transactions.generate(Seq(
+  GenerateTransactions.Proposal(hosting, syncId, serial = Some(PositiveInt.tryCreate(current.context.serial.value + 1)))
+)).head
+
+// The hash for the owner to sign
+println(hostingTransaction.hash.hash.toHexString)
+```
+
+The owner signs the bytes that the hash stands for, not the hex string, as in [external signing](/appdev/deep-dives/external-signing-onboarding). The signature covers this exact transaction, including the next serial of the party's hosting. It doesn't expire, but if the hosting changes before you load it, loading fails with `TOPOLOGY_SERIAL_MISMATCH` and the owner has to sign a new hash. If you lose the console session before loading, run the snippet again: while the hosting doesn't change, it prints the same hash.
+
+The snippet below assumes the owner signs with an Ed25519 key, as for every external party onboarded through Splice. If the party's key is an ECDSA key (possible for parties onboarded with other tools), contact DA support: loading the hosting would fail.
+
+Once the owner has signed, load the new hosting with both signatures. Replace the placeholder with the owner's signature in hex, and paste the snippet as a whole:
+
+```scala
+import com.digitalasset.canton.util.HexString
+
+val ownerSignature = Signature.fromExternalSigning(
+  SignatureFormat.Raw,
+  HexString.parseToByteString("<signature>").getOrElse(sys.error("The signature isn't in hex")),
+  partyId.namespace.fingerprint,
+  SigningAlgorithmSpec.Ed25519,
+)
+val protocolVersion = participant.synchronizers.physical_id_of(SynchronizerAlias.tryCreate("global")).protocolVersion
+val signedByOwner = SignedTopologyTransaction.create(
+  hostingTransaction,
+  NonEmpty(Set, SingleTransactionSignature(hostingTransaction.hash, ownerSignature): TopologyTransactionSignature),
+  isProposal = false,
+  protocolVersion,
+).fold(err => sys.error(err), identity)
+val signedByBoth = participant.topology.transactions.sign(Seq(signedByOwner), syncId, signedBy = Seq(participant.id.namespace.fingerprint))
+
+// Disconnect right after the hosting takes effect, before the node processes any transaction of the party
+participant.topology.transactions.load(signedByBoth, syncId)
+participant.synchronizers.disconnect_all()
+
+// Must show only this participant as host, and the same signing keys as before
+participant.topology.party_to_participant_mappings
+  .list(syncId, filterParty = partyId.filterString)
+  .foreach(r => println(s"validFrom ${r.context.validFrom} serial ${r.context.serial} hosts ${r.item.participants.map(_.participantId)} keys ${r.item.partySigningKeysWithThreshold}"))
+```
+
+If it doesn't show this participant as the only host, stop and contact DA support.
+
+On the machine where the console runs, download the party's contracts that are shared with the DSO party from Scan, as of the `validFrom` time that the snippet printed:
+
+```bash
+curl -sSL --fail-with-body '<scan-url>/api/scan/v0/acs/<party ID>?record_time=<validFrom>' | jq -r .acs_snapshot | base64 -d > acs_snapshot
+```
+
+Then import them, and the party's other contracts from the step 5 export. Like step 10, the second import leaves out the contracts shared with the DSO party, since Scan has their current state. This also covers contracts the party only observes, such as app reward coupons, which the DSO can archive without the party's node.
+
+```scala
+import java.nio.file.{Files, Paths}
+
+val dso = PartyId.tryFromProtoPrimitive("<DSO party ID>")
+val i = Files.readString(Paths.get("external-parties.txt")).linesIterator.indexOf(partyId.toProtoPrimitive)
+require(i >= 0, s"$partyId isn't in external-parties.txt")
+
+// Large imports take longer than the console's default timeout of 1 minute
+console.set_command_timeout(60.minutes)
+participant.repair.import_acs(syncId, "acs_snapshot", workflowIdPrefix = s"recovery-external-scan-$i")
+participant.repair.import_acs(syncId, s"acs-external-$i.gz", workflowIdPrefix = s"recovery-external-$i", excludedStakeholders = Set(dso))
+participant.synchronizers.reconnect_all()
+```
+
+After this step, you have recovered the assets of your external parties.
+
+### Step 12. Multi-hosted parties of other namespaces
+
+Skip this step if `multi-hosted-parties.txt` is empty. Otherwise finish steps 13 to 17, then add the parties back with [phase G](#phase-g-add-a-recovered-node-as-a-host-of-a-multi-hosted-party) once their owning node has finished steps 1 to 17 (see [Before you start phase G](#before-you-start-phase-g)).
+
+## Phase E. Check the ACS commitments
+
+### Step 13. ACS checks
+
+After the imports, check the ACS commitments of the new participant in its log. Wait until it has logged the matches for at least two 30-minute commitment periods that ended after the last reconnect in step 10 or 11 (see [How long does step 13 take?](#how-long-does-step-13-take)).
+
+First check that commitments are being exchanged:
+
+<Tabs>
+<Tab title="Docker Compose">
+
+```bash
+docker logs splice-validator-participant-1 2>&1 | grep -F -e 'Commitment correct for sender' -e 'All commitments up to' -e 'ACS_COMMITMENT_MISMATCH' | tail -20
+```
+
+</Tab>
+<Tab title="Helm">
+
+```bash
+kubectl logs <participant pod> -n <namespace> | grep -F -e 'Commitment correct for sender' -e 'All commitments up to' -e 'ACS_COMMITMENT_MISMATCH' | tail -20
+```
+
+</Tab>
+</Tabs>
+
+You should see `Commitment correct for sender ...` lines from the super validators' participants and `All commitments up to ... have been sent successfully` lines.
+
+Then search the whole log for mismatches:
+
+<Tabs>
+<Tab title="Docker Compose">
+
+```bash
+docker logs splice-validator-participant-1 2>&1 | grep -F -A5 'ACS_COMMITMENT_MISMATCH'
+```
+
+</Tab>
+<Tab title="Helm">
+
+```bash
+kubectl logs <participant pod> -n <namespace> | grep -F -A5 'ACS_COMMITMENT_MISMATCH'
+```
+
+</Tab>
+</Tabs>
+
+Judge each mismatch by the end of its period (`toInclusive = ...` in `period = CommitmentPeriod(...)`), not by the time of the log line. Mismatches for periods that end before the disconnect before the last import are expected (see [Which ACS commitment mismatches are expected?](#which-acs-commitment-mismatches-are-expected)). That disconnect is the one at the end of step 9 if step 10 was your last import, or the one right after `load` in step 11.
+
+Step 13 has passed when the first check shows the expected lines and no mismatch has a period that ends after that disconnect.
+
+Look up the other warnings and errors of the participant log in the [error reference](#error-reference). If one isn't there and names one of your parties or contracts, stop and contact DA support.
+
+With a multi-hosted party, the other host, if already recovered, logs mismatches with the owning node while the owning node is between its steps 8 and 10. They must stop once the owning node has passed its step 13.
+
+If any other mismatch has a period that ends after the disconnect before the last import, stop and contact DA support. Send:
+
+* the mismatch log lines, with the sending participant and the period of each
+* the import summaries of steps 10 and 11 from the participant log
+* the output of the comparison in step 10
+
+<Warning>
+DO NOT submit commands until step 13 has passed and you've checked every warning and error in the participant's logs as described above.
+</Warning>
+
+## Phase F. Go live
+
+### Step 14. Re-enable auto-connect and start the validator app
+
+Remove the `ADDITIONAL_CONFIG_NO_RECONNECT` override of step 3 from the new node, and run:
+
+```scala
+participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = false))
+```
+
+Then start the validator app and the other services you stopped:
+
+<Tabs>
+<Tab title="Docker Compose">
+
+Remove the `ADDITIONAL_CONFIG_DO_NOT_START` entry of step 8 from the `validator` service in the new node's `compose.yaml`. Then start the node with the same `start.sh` command as in step 8, including `-P` (`-i` can be left out. Before Splice 0.10, keep it if this node takes part in phase G: on those versions `-i` is what turns on the repair commands that phase G uses). Then turn the validator app's restart policy back on, since `start.sh` doesn't:
+
+```bash
+docker update --restart=always splice-validator-validator-1
+```
+
+</Tab>
+<Tab title="Helm">
+
+Remove the override from the participant values and run `helm upgrade` for the participant release, then scale the validator app back to one replica.
+
+</Tab>
+</Tabs>
+
+Within about an hour, check that the node behaves as before: balances, transfer preapprovals and delegations in the wallet, traffic for the new participant, and rewards.
+
+### Step 15. Rebuild the Ledger API app data
+
+The Ledger API state on the new validator starts fresh at the point where the ACSes are imported and the node is connected to the new synchronizer. Offsets are also re-initialized, so Ledger API clients must rebuild their state from the new participant, starting with an ACS snapshot. They need their Ledger API users on the new node first: do the first paragraph of step 17 before you restart them.
+
+If your application is built on top of [PQS](/sdks-tools/development-tools/pqs), drop its database and restart it against the new participant.
+
+### Step 16. Checks and troubleshooting
+
+See the [error reference](#error-reference) below and the [troubleshooting guide](/global-synchronizer/production-operations/validator-disaster-recovery#limitations-and-troubleshooting) for recovering a node from its keys.
+
+### Step 17. Import the Ledger API users and back up the new node
+
+Set up Ledger API identity providers and user management with the Ledger API `UserManagementService` and `IdentityProviderConfigService`, using the data from step 7. The validator app grants its own ledger user the rights on the hosted parties when it starts in step 14, so you only need to recreate the users of your own applications. Wallet users are such users too: until you recreate them, they can log in to the wallet, but every action fails with `User not found`.
+
+Then fetch a new identities backup of the new node from its validator app, as described in [Backup of Node Identities](/global-synchronizer/production-operations/validator-backups#backup-of-node-identities) (with local keys, enable key downloads first, as that section describes), and take a database backup of the new node, as in step 1. The step 1 backups describe the old participant, so they can't restore the new node.
+
+Once the new node runs as before, you can delete the old node and its databases. Keep the step 1 backup if you need the old history.
+
+## Phase G. Add a recovered node as a host of a multi-hosted party
+
+This phase applies to each party listed in `multi-hosted-parties.txt` in step 4: a party that this node hosted, but whose namespace belongs to another node (the owning node). See [Multi-hosted parties](#multi-hosted-parties) for the scope and the order of the nodes.
+
+This node can't host such a party again on its own: the party's hosting is signed with the owning node's namespace key. So both nodes sign the new hosting. Then the owning node exports the party's contracts and this node imports them, with the same repair commands as in steps 4 and 10.
+
+This node disconnects before the new hosting takes effect, and the owning node exports the party's contracts as of the moment it does. When this node reconnects, it receives everything that happened to the party after that moment. So the party can stay in use during this phase.
+
+### Before you start phase G
+
+* This node (the target) has finished steps 1 to 17 without the party.
+* The owning node has finished steps 1 to 17 and passed its step 13.
+* Both nodes have the repair commands turned on. Splice 0.10 images have them on by default. Before Splice 0.10: on Docker Compose, the last `start.sh` included `-i` (see step 14); on Helm, `enableRepairCommands: true`.
+
+Check in the console of the owning node that the party is hosted on the new owning node only:
+
+```scala
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+val party = PartyId.tryFromProtoPrimitive("<party ID>")
+val hosts = participant.topology.party_to_participant_mappings.list(syncId, filterParty = party.filterString).flatMap(_.item.participants.map(_.participantId))
+require(hosts == Seq(participant.id), s"Expected only this node as host, found $hosts")
+```
+
+The placeholders below are:
+
+* `<party ID>`: the party from `multi-hosted-parties.txt`.
+* `<target participant ID>`: the new participant ID of this node, as `participant.id` prints it in its console (`PAR::...`).
+
+### G1. Target: stop the validator app and upload the DARs
+
+Stop the validator app and the other services you stopped in step 2, as in the warning box of step 8. G7 starts them again as in step 14. Keep them stopped until G7, since the validator app connects the participant to the synchronizer whenever it starts.
+
+Copy the `dars` directory that the owning node downloaded in its step 6 to this node, and upload the DARs as in step 9. The participant is connected and must stay connected for G2, so run only the upload line:
+
+```scala
+new java.io.File("dars").listFiles().filter(_.getName.endsWith(".dar")).foreach(f => participant.dars.upload(f.getPath, vetAllPackages = !f.getName.startsWith("splice-")))
+```
+
+### G2. Target: propose to host the party, then disconnect
+
+While connected:
+
+```scala
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+val party = PartyId.tryFromProtoPrimitive("<party ID>")
+// Use the permission this node had for the party before (Submission, Confirmation or Observation)
+participant.topology.party_to_participant_mappings.propose_delta(party, adds = Seq((participant.id, ParticipantPermission.Submission)), store = syncId)
+participant.topology.party_to_participant_mappings.list(syncId, proposals = true, filterParty = party.filterString)
+// must show the proposal that adds this participant for the party. If it's empty, wait a few seconds and list again. Only then continue
+participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = true))
+participant.synchronizers.disconnect_all()
+```
+
+Keep the target disconnected until G6.
+
+### G3. Owning node: sign the new hosting
+
+Run the first line once, before the first attempt:
+
+```scala
+val beforeG3 = participant.ledger_api.state.end()
+val syncId = participant.synchronizers.id_of(SynchronizerAlias.tryCreate("global"))
+val party = PartyId.tryFromProtoPrimitive("<party ID>")
+val target = ParticipantId.tryFromProtoPrimitive("<target participant ID>")
+participant.topology.party_to_participant_mappings.propose_delta(party, adds = Seq((target, ParticipantPermission.Submission)), store = syncId, mustFullyAuthorize = true)
+```
+
+With `mustFullyAuthorize = true`, the command fails if the owning node hasn't received the target's proposal yet. In that case wait a minute and run the last line again. If it keeps failing, stop and send DA support the error. Use the same permission as in G2.
+
+### G4. Owning node: wait for the new hosting and find its offset
+
+```scala
+participant.topology.party_to_participant_mappings.list(syncId, filterParty = party.filterString).map(_.item.participants.map(_.participantId))
+// must list this participant and the target. If not, wait a few seconds and list again. Only then continue
+import com.digitalasset.canton.config.RequireTypes.PositiveInt
+val activationOffset = participant.parties.find_party_max_activation_offset(party, target, syncId, onboarding = false, beginOffsetExclusive = beforeG3, completeAfter = PositiveInt.one)
+```
+
+### G5. Owning node: export the party's contracts at that offset
+
+```scala
+participant.repair.export_acs(
+  parties = Set(party),
+  ledgerOffset = activationOffset,
+  exportFilePath = "party-acs.gz",
+  excludedStakeholders = Set.empty,
+  synchronizerId = Some(syncId),
+)
+```
+
+### G6. Target: import the contracts and reconnect
+
+Copy `party-acs.gz` over, back up the participant database, then:
+
+```scala
+// Large imports take longer than the console's default timeout of 1 minute
+console.set_command_timeout(60.minutes)
+participant.repair.import_acs(syncId, "party-acs.gz", workflowIdPrefix = "recovery-multi-hosted")
+participant.synchronizers.modify(SynchronizerAlias.tryCreate("global"), _.copy(manualConnect = false))
+participant.synchronizers.reconnect_all()
+```
+
+### G7. Check
+
+On either node, the mapping lists both new participants:
+
+```scala
+participant.topology.party_to_participant_mappings.list(syncId, filterParty = party.filterString).map(_.item.participants)
+```
+
+Right after G6, the target may still list only the owning node: it's catching up on what happened while it was disconnected. Wait a minute and list again.
+
+Count the party's contracts on both nodes. The numbers must be the same. If they differ, wait a minute and count again on both, since the target may still be catching up. If they still differ, stop and contact DA support.
+
+```scala
+import com.digitalasset.canton.config.RequireTypes.PositiveInt
+participant.ledger_api.state.acs.of_party(party, limit = PositiveInt.tryCreate(1000000)).size
+```
+
+Then start the target's validator app and the other services of G1 again as in step 14.
+
+Then repeat both checks of step 13 on the target, and the mismatch search on the owning node. Mismatches for periods that end between G3 and G6 can occur. As in step 13, judge each mismatch by the end of its period, not by the time of the log line: no period that ends after G6 may mismatch. Wait for two periods that end after the reconnect, as in step 13.
+
+## Error reference
+
+| Message | Where | What it means | What to do |
+|---|---|---|---|
+| `not found: value participant` | console | your console names the participant differently | start the session with `val participant = <your name>` |
+| `Existing public key for ... is different than inserted key` | step 8, participant log | a participant bootstrap script registers keys that the validator app already registered | remove the `/app/bootstrap.sc` mount, then follow [If step 8 fails or is interrupted](#if-step-8-fails-or-is-interrupted) |
+| `Node has ID ... instead of expected ID` | step 8, validator app log | the new node uses the old node's databases | use new databases and a new participant identifier |
+| `Refusing to create participant database` | step 8, Helm participant pod | the old participant database still exists | create the new participant database yourself, or set `persistence.enableParticipantDbConflictCheck: false` in the participant values |
+| `Node has identity <new identifier>::..., but identifier <old identifier> was expected` | after step 8, validator app log | the validator app was started without the new participant identifier | **Docker Compose:** pass `-P` again; **Helm:** put `nodeIdentifier` and the dump import values of step 8 back |
+| `PACKAGE_SERVICE_CANNOT_AUTODETECT_SYNCHRONIZER` | step 8 | a service uploads DARs before the participant is connected | nothing, harmless |
+| `Ignoring parties that we will ...` | step 8, validator app log | the validator app doesn't move external or multi-hosted parties | nothing, unless it names a party from `internal-parties.txt` |
+| `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT`, `extraTrafficLimit = 0`, `Requeuing and backing off` | steps 8 and 9 | the new participant has no bought traffic yet | wait, or buy traffic as in step 8 |
+| `Internal party migration failed. Missing ...` | step 10 | step 8 didn't move all internal parties | see [Check the new node](#check-the-new-node) in step 8 |
+| `Cannot apply a repair command as the last event is a topology offset` | steps 10, 11, G6 | a check on Canton 3.7 | step 10: reconnect, wait a minute, disconnect, import again. Step 11: don't reconnect; run the failed import again with `forceRepairWhenTopologyTransactionAtLedgerEnd = true`, then the lines after it. G6: don't reconnect; stop and contact DA support. See [Why do steps 10, 11 and G6 handle the topology offset error differently?](#why-do-steps-10-11-and-g6-handle-the-topology-offset-error-differently) |
+| `TOPOLOGY_SERIAL_MISMATCH` | step 11 | the party's hosting changed after the owner signed | run the first snippet of step 11 again, and have the owner sign the new hash |
+| `Cannot add previously archived contract` | steps 10, 11, G6 | the export has a contract that the new node has already seen archived | stop and contact DA support |
+| `DEADLINE_EXCEEDED` in the console, then `PROTO_DESERIALIZATION_FAILURE` and `Repair operation failed with exception` in the participant log | steps 10, 11, G6 | the console's default timeout of 1 minute cut off the import | don't reconnect. In the same console session, run `console.set_command_timeout(60.minutes)`, then the failed import again and the lines after it. The participant first removes what the failed import wrote |
+| `Insufficient funds to buy configured traffic amount` | whenever the validator app runs after step 8, validator app log | the validator party's CC doesn't cover one top-up | send CC to the validator party or lower the target throughput |
+| `No computations done` | `lookup_received_acs_commitments` | the command doesn't work on protocol version 36 and later | use the log checks of step 13 |
+| `ACS_COMMITMENT_MISMATCH` | step 13 | the new node and a counter-participant disagree on shared contracts | if its period ends before the disconnect that preceded your last import (see step 13), nothing. Otherwise see step 13 |
+| `Failed to read config at startup` | validator app log, Docker Compose | the `ADDITIONAL_CONFIG_DO_NOT_START` entry of step 2 or step 8 stops the validator app, as intended | nothing. Step 14 removes the entry from the new node |
+| `RST_STREAM closed stream` | any step, INFO | a sequencer connection restarted | nothing, the participant uses its other connections |
+
+## FAQ
+
+### Why does step 11 disconnect right after loading the hosting?
+
+The node stays disconnected until the party's contracts are imported. If a contract of the party changes meanwhile, the node processes the change when it reconnects, after the import. If the node were still connected when such a change happens, the import would fail with `Cannot add previously archived contract`. That's why the snippet disconnects straight after `load`, which returns once the hosting has taken effect. A change in the few milliseconds between the two lines would have the same effect.
+
+### Why do steps 10, 11 and G6 handle the topology offset error differently?
+
+Canton 3.7 refuses a repair import while the node's last event is a topology change, and fails with `Cannot apply a repair command as the last event is a topology offset`. In step 10, reconnecting for a minute lets the node process newer events. In step 11 and G6, the last event is the party's new hosting, which is rare. Reconnecting would make the node process the party's transactions before it has the party's contracts. So step 11 runs the import again with `forceRepairWhenTopologyTransactionAtLedgerEnd = true`, the same flag that the validator app sets for its import from Scan in step 8.
+
+### How long does step 13 take?
+
+The participant logs the matches for a 30-minute commitment period within about half an hour after the period ends (3 to 25 minutes on TestNet in November 2026). For example, if step 10 reconnected at 08:05 UTC, the two periods are 08:00 to 08:30 and 08:30 to 09:00 UTC, and you can check after about 09:25 UTC.
+
+### Which ACS commitment mismatches are expected?
+
+Until the import, the new node doesn't have the contracts that your parties share outside the DSO party, so its commitments for the periods before the import don't match. That's why only periods that end after the disconnect before the last import count. Some of these mismatches are only logged after the reconnect, because the node receives the other participant's commitment for the last of these periods only then.

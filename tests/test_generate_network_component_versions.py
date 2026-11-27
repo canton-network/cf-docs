@@ -178,59 +178,7 @@ def test_choose_observed_release_accepts_current_synchronizer_payload() -> None:
     ) == "0.6.7"
 
 
-def test_choose_observed_release_prefers_sv_version_matching_index() -> None:
-    module = load_script_module()
-
-    assert module.choose_observed_release(
-        {
-            "sv": {"migration_id": 1, "version": "0.7.0"},
-            "synchronizer": {
-                "current": {
-                    "version": "0.6.14",
-                }
-            },
-        },
-        "https://example.com/info",
-        index_version="0.7.0",
-    ) == "0.7.0"
-
-
-def test_choose_observed_release_prefers_sync_version_matching_index() -> None:
-    module = load_script_module()
-
-    assert module.choose_observed_release(
-        {
-            "sv": {"migration_id": 1, "version": "0.7.0"},
-            "synchronizer": {
-                "current": {
-                    "version": "0.6.14",
-                }
-            },
-        },
-        "https://example.com/info",
-        index_version="0.6.14",
-    ) == "0.6.14"
-
-
-def test_choose_observed_release_rejects_mismatch_when_neither_matches_index() -> None:
-    module = load_script_module()
-
-    with pytest.raises(RuntimeError, match="neither matches docs index version"):
-        module.choose_observed_release(
-            {
-                "sv": {"migration_id": 1, "version": "0.7.0"},
-                "synchronizer": {
-                    "current": {
-                        "version": "0.6.14",
-                    }
-                },
-            },
-            "https://example.com/info",
-            index_version="0.6.13",
-        )
-
-
-def test_choose_observed_release_rejects_mismatch_without_index_version() -> None:
+def test_choose_observed_release_rejects_version_mismatch() -> None:
     module = load_script_module()
 
     with pytest.raises(RuntimeError, match="Version mismatch"):
@@ -254,7 +202,6 @@ def test_network_snapshot_from_existing_rebuilds_required_fields() -> None:
             "networkSources": {
                 "devnet": {
                     "infoUrl": "https://docs.dev.example/info",
-                    "indexUrl": "https://docs.dev.example/index.html",
                     "cantonSourcesUrl": "https://github.com/example/canton-sources",
                 }
             }
@@ -289,7 +236,6 @@ def test_network_snapshot_from_existing_rebuilds_required_fields() -> None:
     assert snapshot["spliceVersion"] == "0.6.14"
     assert snapshot["cantonVersion"] == "3.5.10"
     assert snapshot["cantonReleaseLineBranch"] == "release-line-0.6.14"
-    assert "chainIdSuffix" not in snapshot
     assert snapshot["preservedFromPrevious"] is True
     assert snapshot["sources"]["preservedFromPrevious"] is True
 
@@ -354,16 +300,7 @@ def test_collect_snapshot_preserves_previous_network_on_failure(monkeypatch) -> 
             "cantonReleaseLineBranch": "release-line-x",
             "sources": {
                 "infoUrl": f"https://docs.{network_key}.example/info",
-                "indexUrl": f"https://docs.{network_key}.example/index.html",
                 "cantonSourcesUrl": "",
-            },
-            "checks": {
-                "dockerImageTag": existing_config["versions"][network_key]["substitutions"][
-                    "version"
-                ],
-                "helmChartVersion": existing_config["versions"][network_key]["substitutions"][
-                    "version"
-                ],
             },
         }
 

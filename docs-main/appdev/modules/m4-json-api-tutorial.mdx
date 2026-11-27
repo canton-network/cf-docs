@@ -78,6 +78,8 @@ dpm sandbox --json-api-port 7575 --dar <path_to_json_tests_project>/.daml/dist/j
 To simplify this tutorial, no security-related configuration is used. You will be able to send commands as any user.
 </Note>
 
+To run the same calls against LocalNet or a Canton Network validator, which require authentication, see [Use the JSON Ledger API with authentication](#use-the-json-ledger-api-with-authentication).
+
 Open a new Bash terminal, but keep the Canton sandbox running.
 
 #### Verification - download OpenAPI
@@ -95,11 +97,13 @@ You should receive a long YAML document starting with:
 openapi: 3.0.3
 info:
   title: JSON Ledger API HTTP endpoints
-  version: 3.3.0
+  version: 3.5.1
 paths:
   /v2/commands/submit-and-wait:
     post:
 ```
+
+The `version` field shows the Canton version of the participant you're connected to.
 
 This `openapi.yaml` document provides an overview of the available endpoints and can be pasted into a tool like [https://editor-next.swagger.io](https://editor-next.swagger.io).
 
@@ -262,6 +266,49 @@ For more information about error codes returned by the JSON Ledger API, see [Err
 
 
 {/* COPIED_END */}
+
+## Use the JSON Ledger API with authentication
+
+The sandbox above runs without authentication, so any request can act as any party. LocalNet and Canton Network validators require a JWT on every request, and the user that the token identifies needs an explicit right for each party it submits or reads as. The calls themselves stay the same.
+
+### Send a token with every request
+
+Add an `Authorization` header to each call:
+
+```bash
+curl localhost:7575/v2/parties -H "Authorization: Bearer $TOKEN"
+```
+
+The token's `sub` claim is the user ID, and its `aud` claim must match the audience the participant is configured with. Use the same user ID in the `userId` field of your commands. For the token format, see [Audience-Based Tokens](/appdev/deep-dives/authorization#audience-based-tokens). For the values LocalNet uses, see [LocalNet](/sdks-tools/development-tools/localnet).
+
+### Give the user rights to each party
+
+Set `userId` when you allocate a party, and the participant grants that user `CanActAs` for the new party in the same call:
+
+```bash
+curl -X POST localhost:7575/v2/parties \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"partyIdHint": "Alice", "identityProviderId": "", "userId": "ledger-api-user"}'
+```
+
+The user must already exist. An unknown user ID returns `USER_NOT_FOUND`.
+
+For a party that already exists, grant the right through the user management endpoint, replacing `<partyId>` with the party ID:
+
+```bash
+curl -X POST localhost:7575/v2/users/ledger-api-user/rights \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"userId": "ledger-api-user", "identityProviderId": "", "rights": [{"kind": {"CanActAs": {"value": {"party": "<partyId>"}}}}]}'
+```
+
+Use `CanReadAs` instead of `CanActAs` for a party the user only reads as. Admin rights don't cover this. A user with `ParticipantAdmin` can allocate parties and manage users, but it can't submit commands as a party until it has `CanActAs` for that party. See [Access Tokens and Rights](/appdev/deep-dives/authorization#access-tokens-and-rights) for the rights each endpoint requires.
+
+### Tell the two authentication errors apart
+
+Both errors return the cause `A security-sensitive error has been received`. The HTTP status and `grpcCodeValue` show which one you have:
+
+- **HTTP 401, `"grpcCodeValue": 16`**: the participant rejected the token. Check the signature, the `aud` claim and the expiry. A common cause is an audience copied from an env file as an unresolved expression, such as `${AUTH_APP_PROVIDER_AUDIENCE:-https://canton.network.global}`. A participant configured with `max-token-lifetime` also rejects a token whose remaining lifetime is longer than that limit.
+- **HTTP 403, `"grpcCodeValue": 7`**: the token is valid, but the user lacks a right the request needs, usually `CanActAs` or `CanReadAs` for a party in `actAs` or `readAs`. Grant the right and resubmit.
 
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/sdk/tutorials/json-api/canton_and_the_json_ledger_api_ts.rst" hash="2126f8f4" */}

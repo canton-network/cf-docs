@@ -170,37 +170,10 @@ kubectl logs -n validator deployment/validator-app --tail=200
 
 ---
 
-## Runbook: CometBFT Consensus Stall
+## Runbook: Validator Stuck after the November 2026 LSU
 
-**Detection:** This applies to Super Validator (SV) operators running CometBFT nodes. Block height stops advancing, or the CometBFT status endpoint shows no new blocks.
+**Detection:** The validator ran Splice 0.8.2 or earlier when the MainNet logical synchronizer upgrade of 2026-11-07 was announced, and its participant stopped processing instead of moving to the successor synchronizer.
 
-**Assessment:**
+**Action:** Follow [Recovering Stuck Validators after the November 2026 LSU](/global-synchronizer/production-operations/validator-recovery-november-2026-lsu). Restore a backup taken before the freeze time if you have one; otherwise, migrate your parties to a new validator.
 
-```bash
-# Check CometBFT status
-curl -s http://localhost:26657/status | jq '.result.sync_info'
-```
-
-If `latest_block_height` has not changed in several minutes and `catching_up` is `false`, consensus has stalled.
-
-**Action:**
-
-1. Check the number of connected peers:
-   ```bash
-   curl -s http://localhost:26657/net_info | jq '.result.n_peers'
-   ```
-   If peers have dropped below the threshold for consensus (2/3 of validators), blocks cannot be produced.
-
-2. Check for validator signing issues:
-   ```bash
-   curl -s http://localhost:26657/dump_consensus_state | jq '.result.round_state.votes'
-   ```
-
-3. If your own CometBFT node is the one not signing, restart it:
-   ```bash
-   kubectl rollout restart deployment/cometbft -n validator
-   ```
-
-4. If the stall is network-wide (multiple SV nodes are not signing), coordinate with other SV operators through the `#validator-operations` Slack channel.
-
-**Verification:** Block height is advancing and the interval between blocks has returned to normal (typically a few seconds).
+**Verification:** No `ACS_COMMITMENT_MISMATCH` or `ACS_MISMATCH_NO_SHARED_CONTRACTS` errors appear in the participant logs after a few reconciliation intervals.
