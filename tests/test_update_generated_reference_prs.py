@@ -250,6 +250,98 @@ def test_unpinned_target_generates_even_when_no_source_file_changed(monkeypatch,
     ]
 
 
+def test_generation_failure_is_retried_from_a_clean_checkout(monkeypatch) -> None:
+    import subprocess
+
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+    generate = module.nix_develop_command("npm run generate:daml-script-reference")
+    calls: list[tuple[str, ...]] = []
+    failures = [subprocess.CalledProcessError(1, list(generate))]
+    sleeps: list[float] = []
+
+    def fake_run(command):
+        calls.append(tuple(command))
+        if failures:
+            raise failures.pop(0)
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(module, "summarize_history_report_changes", lambda target, base_sha: ["- changed"])
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr", kwargs["target"].key)))
+    monkeypatch.setattr(module.pr_utils, "run", fake_run)
+    monkeypatch.setattr(module.time, "sleep", sleeps.append)
+
+    module.process_target(
+        target=target, base_sha="base-sha", base_branch="main", repository="canton-network/cf-docs"
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        generate,
+        ("reset", "base-sha"),
+        generate,
+        ("pr", "daml-script"),
+    ]
+    assert sleeps == [module.GENERATION_RETRY_DELAY_SECONDS]
+
+
+def test_generation_failure_is_raised_after_the_second_attempt(monkeypatch) -> None:
+    import subprocess
+
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+    published: list[str] = []
+
+    def always_fails(command):
+        raise subprocess.CalledProcessError(1, list(command))
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: None)
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(module.pr_utils, "run", always_fails)
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: published.append("pr"))
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+
+    try:
+        module.process_target(
+            target=target, base_sha="base-sha", base_branch="main", repository="canton-network/cf-docs"
+        )
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        raise AssertionError("expected CalledProcessError")
+    assert published == []
+
+
+def test_publish_failures_are_not_regenerated(monkeypatch) -> None:
+    import subprocess
+
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+    generations: list[str] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: None)
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(module, "summarize_history_report_changes", lambda target, base_sha: ["- changed"])
+    monkeypatch.setattr(module.pr_utils, "run", lambda command: generations.append("run"))
+
+    def failing_publish(**_kwargs):
+        raise subprocess.CalledProcessError(1, ["gh", "pr", "create"])
+
+    monkeypatch.setattr(module, "create_or_update_pull_request", failing_publish)
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: (_ for _ in ()).throw(AssertionError("no sleep")))
+
+    try:
+        module.process_target(
+            target=target, base_sha="base-sha", base_branch="main", repository="canton-network/cf-docs"
+        )
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        raise AssertionError("expected CalledProcessError")
+    assert generations == ["run"]
+
+
 def test_pinned_target_skips_generation_when_source_is_unchanged(monkeypatch) -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "json-api-reference")
@@ -1078,6 +1170,63 @@ def test_wait_for_check_success_accepts_successful_check(monkeypatch) -> None:
         head_sha="abc123",
         check_name="mintlify validate",
     )
+
+
+def test_wait_for_check_success_survives_transient_poll_errors(monkeypatch) -> None:
+    load_script_module()
+    import subprocess
+
+    import generated_reference_pr_utils as pr_utils
+
+    outcomes: list[object] = [
+        subprocess.CalledProcessError(1, ["gh", "api"], stderr="HTTP 502"),
+        pr_utils.json.JSONDecodeError("unexpected end of JSON input", "", 0),
+        [{"name": "mintlify validate", "status": "completed", "conclusion": "success"}],
+    ]
+
+    def fake_check_runs(**_kwargs: object) -> object:
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(pr_utils, "check_runs_for_sha", fake_check_runs)
+    monkeypatch.setattr(pr_utils.time, "sleep", lambda _seconds: None)
+
+    pr_utils.wait_for_check_success(
+        repository="canton-network/cf-docs",
+        head_sha="abc123",
+        check_name="mintlify validate",
+    )
+    assert outcomes == []
+
+
+def test_wait_for_check_success_gives_up_on_persistent_poll_errors(monkeypatch) -> None:
+    load_script_module()
+    import subprocess
+
+    import generated_reference_pr_utils as pr_utils
+
+    calls: list[int] = []
+
+    def always_fails(**_kwargs: object) -> object:
+        calls.append(1)
+        raise subprocess.CalledProcessError(1, ["gh", "api"], stderr="HTTP 502")
+
+    monkeypatch.setattr(pr_utils, "check_runs_for_sha", always_fails)
+    monkeypatch.setattr(pr_utils.time, "sleep", lambda _seconds: None)
+
+    try:
+        pr_utils.wait_for_check_success(
+            repository="canton-network/cf-docs",
+            head_sha="abc123",
+            check_name="mintlify validate",
+        )
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        raise AssertionError("expected CalledProcessError")
+    assert len(calls) == pr_utils.MAX_CONSECUTIVE_POLL_ERRORS
 
 
 def test_wait_for_check_success_rejects_failed_check(monkeypatch) -> None:

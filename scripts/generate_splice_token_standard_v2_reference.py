@@ -7,10 +7,8 @@ import json
 import os
 import re
 import shutil
-import ssl
 import subprocess
 import sys
-import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -22,6 +20,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import network_retry  # noqa: E402
 from docs_env import ensure_repo_direnv, repo_direnv_command  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -75,9 +74,6 @@ TOKEN_STANDARD_VERSION_GROUPS = (
     ("v1", "Token Standard v1"),
     ("v2", "Token Standard v2"),
 )
-DOWNLOAD_ATTEMPTS = 3
-DOWNLOAD_RETRY_DELAY_SECONDS = 5.0
-RETRYABLE_HTTP_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 
 
 @dataclass(frozen=True)
@@ -193,8 +189,7 @@ def request_headers(url: str) -> dict[str, str]:
 
 def github_json(url: str) -> Any:
     request = urllib.request.Request(url, headers=request_headers(url))
-    with urllib.request.urlopen(request, timeout=180) as response:
-        return json.loads(response.read().decode("utf-8"))
+    return json.loads(network_retry.read_url(request, timeout=180).decode("utf-8"))
 
 
 def selected_releases(
@@ -368,33 +363,7 @@ def ensure_dar(
     request = urllib.request.Request(
         url, headers={"User-Agent": "cf-docs-token-standard-v2-generator"}
     )
-    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                payload = response.read()
-            break
-        except urllib.error.HTTPError as error:
-            if error.code not in RETRYABLE_HTTP_STATUS_CODES or attempt == DOWNLOAD_ATTEMPTS:
-                raise
-            delay = DOWNLOAD_RETRY_DELAY_SECONDS * attempt
-            print(
-                f"DAR download attempt {attempt}/{DOWNLOAD_ATTEMPTS} failed for {url}: "
-                f"HTTP {error.code}; retrying in {delay:g}s",
-                file=sys.stderr,
-            )
-            time.sleep(delay)
-        except (urllib.error.URLError, TimeoutError, ssl.SSLError) as error:
-            if attempt == DOWNLOAD_ATTEMPTS:
-                raise
-            delay = DOWNLOAD_RETRY_DELAY_SECONDS * attempt
-            print(
-                f"DAR download attempt {attempt}/{DOWNLOAD_ATTEMPTS} failed for {url}: "
-                f"{error}; retrying in {delay:g}s",
-                file=sys.stderr,
-            )
-            time.sleep(delay)
-    else:
-        raise AssertionError("unreachable")
+    payload = network_retry.read_url(request, timeout=60, operation=f"DAR download {url}")
     if not payload.startswith(b"PK"):
         raise ValueError(f"Downloaded DAR is not a zip archive: {url}")
     output_path.write_bytes(payload)

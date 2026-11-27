@@ -9,10 +9,13 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tarfile
 from typing import Any, Mapping
 import urllib.parse
 import urllib.request
+
+import network_retry
 
 
 DEFAULT_RELEASE_REPO = "digital-asset/canton"
@@ -42,8 +45,7 @@ def github_api_json(path: str) -> Any:
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token:
         request.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(request, timeout=180) as response:
-        return json.loads(response.read().decode("utf-8"))
+    return json.loads(network_retry.read_url(request, timeout=180).decode("utf-8"))
 
 
 def resolve_release_asset(
@@ -148,7 +150,7 @@ def sha256(path: Path) -> str:
 
 def verify_archive(path: Path, asset: ReleaseAsset) -> None:
     if path.stat().st_size != asset.size:
-        raise ValueError(f"Release archive size mismatch for {path}")
+        raise network_retry.IncompleteDownload(f"Release archive size mismatch for {path}")
     expected_digest = asset.digest.removeprefix("sha256:")
     actual_digest = sha256(path)
     if actual_digest != expected_digest:
@@ -162,22 +164,24 @@ def ensure_release_archive(
 ) -> Path:
     archive_path = cache_dir / "release-assets" / asset.tag / asset.name
     if archive_path.exists() and not force_refresh:
-        verify_archive(archive_path, asset)
-        return archive_path
+        try:
+            verify_archive(archive_path, asset)
+        except ValueError as error:
+            # A cached archive that no longer matches the release (for example a partial copy
+            # restored from a cache) is replaced instead of failing the run.
+            print(f"Discarding cached release archive {archive_path}: {error}", file=sys.stderr)
+            archive_path.unlink()
+        else:
+            return archive_path
 
     archive_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = archive_path.with_name(f"{archive_path.name}.{os.getpid()}.tmp")
     request = urllib.request.Request(asset.url, headers={"User-Agent": USER_AGENT})
-    try:
-        with (
-            urllib.request.urlopen(request, timeout=300) as response,
-            temporary_path.open("wb") as handle,
-        ):
-            shutil.copyfileobj(response, handle)
-        verify_archive(temporary_path, asset)
-        temporary_path.replace(archive_path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+    network_retry.download_url(
+        request,
+        archive_path,
+        timeout=300,
+        verify=lambda path: verify_archive(path, asset),
+    )
     return archive_path
 
 

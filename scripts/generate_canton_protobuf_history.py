@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import generated_reference_nav
+import network_retry
 import reference_nav
 from docs_env import ensure_repo_direnv, repo_direnv_command
 
@@ -306,11 +307,8 @@ def ensure_bundle_archive(
     if output_path.exists() and not force_refresh:
         return output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
     request = urllib.request.Request(bundle_url(source_config, version=version), headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=180) as response, temp_path.open("wb") as handle:
-        shutil.copyfileobj(response, handle)
-    temp_path.replace(output_path)
+    network_retry.download_url(request, output_path, timeout=180)
     return output_path
 
 

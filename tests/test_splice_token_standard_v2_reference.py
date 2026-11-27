@@ -119,6 +119,9 @@ def test_dar_family_requires_the_configured_package_version() -> None:
 
 
 class FakeDarResponse:
+    def __init__(self, *, reset_while_reading: bool = False) -> None:
+        self.reset_while_reading = reset_while_reading
+
     def __enter__(self) -> Self:
         return self
 
@@ -126,6 +129,8 @@ class FakeDarResponse:
         return None
 
     def read(self) -> bytes:
+        if self.reset_while_reading:
+            raise ConnectionResetError(104, "Connection reset by peer")
         return b"PK-test-dar"
 
 
@@ -141,6 +146,7 @@ def test_ensure_dar_retries_transient_download_failures(
             {},
             io.BytesIO(),
         ),
+        FakeDarResponse(reset_while_reading=True),
         FakeDarResponse(),
     ]
     sleeps: list[float] = []
@@ -154,8 +160,7 @@ def test_ensure_dar_retries_transient_download_failures(
         return outcome
 
     monkeypatch.setattr(token_v2_reference.urllib.request, "urlopen", fake_urlopen)
-    monkeypatch.setattr(token_v2_reference.time, "sleep", sleeps.append)
-    monkeypatch.setattr(token_v2_reference, "DOWNLOAD_RETRY_DELAY_SECONDS", 2)
+    monkeypatch.setattr(token_v2_reference.network_retry.time, "sleep", sleeps.append)
 
     output = token_v2_reference.ensure_dar(
         repository="canton-network/splice",
@@ -166,7 +171,8 @@ def test_ensure_dar_retries_transient_download_failures(
     )
 
     assert output.read_bytes() == b"PK-test-dar"
-    assert sleeps == [2, 4]
+    # three transient failures (URLError, HTTP 503, reset while reading the body) then success
+    assert len(sleeps) == 3
     assert outcomes == []
 
 

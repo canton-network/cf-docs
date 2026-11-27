@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
-import shutil
 import tarfile
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+import network_retry
 
 
 USER_AGENT = "digital-asset-docs-x2mdx/1.0"
@@ -82,11 +82,8 @@ def ensure_bundle_archive(
 
     url = bundle_url(source_config, version_entry)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=180) as response, temp_path.open("wb") as handle:
-        shutil.copyfileobj(response, handle)
-    temp_path.replace(output_path)
+    network_retry.download_url(request, output_path, timeout=180)
     return output_path
 
 

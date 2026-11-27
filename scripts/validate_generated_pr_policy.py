@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+import network_retry
 import update_generated_reference_prs
 
 
@@ -28,25 +28,12 @@ class PolicyInput:
 
 
 def run_gh_json(args: Sequence[str]) -> dict[str, Any]:
-    completed = subprocess.run(
-        ("gh", *args),
-        cwd=REPO_ROOT,
-        check=True,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    return json.loads(completed.stdout)
+    return json.loads(network_retry.run_gh(args, capture=True, cwd=REPO_ROOT))
 
 
 def run_gh_lines(args: Sequence[str]) -> list[str]:
-    completed = subprocess.run(
-        ("gh", *args),
-        cwd=REPO_ROOT,
-        check=True,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    return [line for line in completed.stdout.splitlines() if line]
+    output = network_retry.run_gh(args, capture=True, cwd=REPO_ROOT)
+    return [line for line in output.splitlines() if line]
 
 
 def target_paths_by_branch() -> dict[str, tuple[str, ...]]:

@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -741,7 +743,18 @@ def create_or_update_pull_request(
     )
 
 
-def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, repository: str) -> None:
+GENERATION_ATTEMPTS = 2
+GENERATION_RETRY_DELAY_SECONDS = 90.0
+
+
+def prepare_target(
+    *, target: UpdateTarget, base_sha: str, base_branch: str, repository: str
+) -> list[str] | None:
+    """Reset to the base commit and generate the target's output.
+
+    Returns the change summary, or None when there is nothing to publish. Re-entrant: it starts
+    from a clean checkout of `base_sha`, so a failed attempt can simply be run again.
+    """
     reset_to_base(base_sha)
     before_path = pr_utils.write_base_file(base_sha, target.summary_path) if target.summary_path is not None else None
 
@@ -756,7 +769,7 @@ def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, rep
             base_branch=base_branch,
             repository=repository,
         )
-        return
+        return None
 
     changes: list[str] | None = None
     if target.require_summary_changes:
@@ -771,7 +784,7 @@ def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, rep
                 base_branch=base_branch,
                 repository=repository,
             )
-            return
+            return None
 
     for command in target.generate_commands:
         pr_utils.run(command)
@@ -781,6 +794,42 @@ def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, rep
             changes = summarize_history_report_changes(target, base_sha)
         else:
             changes = summarize_target_changes(target, before_path) if before_path is not None else []
+    return changes
+
+
+def prepare_target_with_retry(
+    *, target: UpdateTarget, base_sha: str, base_branch: str, repository: str
+) -> list[str] | None:
+    """Run `prepare_target`, repeating it once after a cooldown if a command fails.
+
+    Generators fetch release archives, API pages and git history. Most scheduled-run failures
+    were upstream blips that outlast in-process retries by a few minutes, and a deterministic
+    failure costs one extra attempt. Publishing is not repeated here: it has its own retries and
+    a failed required check must not be regenerated into another long wait.
+    """
+    for attempt in range(1, GENERATION_ATTEMPTS + 1):
+        try:
+            return prepare_target(
+                target=target, base_sha=base_sha, base_branch=base_branch, repository=repository
+            )
+        except subprocess.CalledProcessError as error:
+            if attempt == GENERATION_ATTEMPTS:
+                raise
+            print(
+                f"Generation for {target.key} failed (attempt {attempt}/{GENERATION_ATTEMPTS}): "
+                f"{error}; retrying from a clean checkout in {GENERATION_RETRY_DELAY_SECONDS:g}s",
+                file=sys.stderr,
+            )
+            time.sleep(GENERATION_RETRY_DELAY_SECONDS)
+    raise AssertionError("unreachable")
+
+
+def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, repository: str) -> None:
+    changes = prepare_target_with_retry(
+        target=target, base_sha=base_sha, base_branch=base_branch, repository=repository
+    )
+    if changes is None:
+        return
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as body_file:
         body_path = Path(body_file.name)
     body_path.write_text(body_markdown(target=target, changes=changes), encoding="utf-8")

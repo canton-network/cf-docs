@@ -11,7 +11,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request
+
+import network_retry
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -151,22 +153,16 @@ def request_headers(url: str) -> dict[str, str]:
     return headers
 
 
-def request_url(url: str, timeout: float):
-    request = Request(url, headers=request_headers(url))
-    return urlopen(request, timeout=timeout)
-
-
 def fetch_json(url: str, timeout: float) -> dict:
-    with request_url(url, timeout) as response:
-        return json.load(response)
+    request = Request(url, headers=request_headers(url))
+    return json.loads(network_retry.read_url(request, timeout=timeout))
 
 
 def fetch_manifest_json(url: str, timeout: float) -> dict:
     headers = request_headers(url)
     headers["Accept"] = OCI_MANIFEST_ACCEPT
     request = Request(url, headers=headers)
-    with urlopen(request, timeout=timeout) as response:
-        return json.load(response)
+    return json.loads(network_retry.read_url(request, timeout=timeout))
 
 
 def fetch_npm_latest(package_name: str, timeout: float) -> str:

@@ -9,9 +9,12 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
+import network_retry
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PUBLISH_ATTEMPTS = 3
 PUBLISH_RETRY_DELAY_SECONDS = 5.0
+MAX_CONSECUTIVE_POLL_ERRORS = 5
 
 
 def run(
@@ -35,12 +38,23 @@ def run(
     return completed.stdout.strip() if capture else ""
 
 
+NETWORK_GIT_COMMANDS = frozenset({"ls-remote", "fetch"})
+
+
 def git(*args: str, capture: bool = False) -> str:
+    if args and args[0] in NETWORK_GIT_COMMANDS:
+        return network_retry.run_command(
+            ("git", *args),
+            capture=capture,
+            cwd=REPO_ROOT,
+            operation=f"git {args[0]}",
+            retry=True,
+        )
     return run(("git", *args), capture=capture)
 
 
 def gh(*args: str, capture: bool = False) -> str:
-    return run(("gh", *args), capture=capture)
+    return network_retry.run_gh(args, capture=capture, cwd=REPO_ROOT)
 
 
 def retry_publish(operation: str, action: Callable[[], str]) -> str:
@@ -232,12 +246,25 @@ def wait_for_check_success(
     deadline = time.monotonic() + timeout_seconds
     failed_conclusions = {"action_required", "cancelled", "failure", "skipped", "timed_out"}
 
+    consecutive_poll_errors = 0
     while True:
-        matching_runs = [
-            check_run
-            for check_run in check_runs_for_sha(repository=repository, head_sha=head_sha)
-            if check_run.get("name") == check_name
-        ]
+        try:
+            check_runs = check_runs_for_sha(repository=repository, head_sha=head_sha)
+        except (subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            # One failed poll must not abort a job whose PR already exists; keep polling until
+            # the errors persist or the deadline passes.
+            consecutive_poll_errors += 1
+            if consecutive_poll_errors >= MAX_CONSECUTIVE_POLL_ERRORS or time.monotonic() >= deadline:
+                raise
+            print(
+                f"Polling checks for {head_sha} failed ({consecutive_poll_errors}/"
+                f"{MAX_CONSECUTIVE_POLL_ERRORS}): {error}; will poll again",
+                file=sys.stderr,
+            )
+            time.sleep(poll_seconds)
+            continue
+        consecutive_poll_errors = 0
+        matching_runs = [check_run for check_run in check_runs if check_run.get("name") == check_name]
         if any(check_run.get("conclusion") == "success" for check_run in matching_runs):
             print(f"Required check {check_name!r} succeeded for {head_sha}")
             return

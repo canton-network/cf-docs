@@ -11,6 +11,8 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
+import network_retry
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_PATH = (
@@ -42,8 +44,7 @@ def request_headers(url: str) -> dict[str, str]:
 
 def fetch_json(url: str, timeout: float) -> object:
     request = urllib.request.Request(url, headers=request_headers(url))
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.load(response)
+    return json.loads(network_retry.read_url(request, timeout=timeout))
 
 
 def parse_canton_version(tag_or_version: str) -> str:
@@ -90,12 +91,15 @@ def topology_proto_raw_url(release_line: str) -> str:
 
 def assert_url_exists(url: str, timeout: float) -> None:
     request = urllib.request.Request(url, method="HEAD", headers=request_headers(url))
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+    def probe(candidate: urllib.request.Request) -> None:
+        with urllib.request.urlopen(candidate, timeout=timeout) as response:
             status = getattr(response, "status", None) or response.getcode()
             if status >= 400:
                 raise RuntimeError(f"Unexpected HTTP status {status} for {url}")
-            return
+
+    try:
+        network_retry.retry_call(f"HEAD {url}", lambda: probe(request))
+        return
     except urllib.error.HTTPError as error:
         if error.code in {403, 405}:
             fallback = urllib.request.Request(
@@ -103,8 +107,8 @@ def assert_url_exists(url: str, timeout: float) -> None:
                 headers={**request_headers(url), "Range": "bytes=0-0"},
             )
             try:
-                with urllib.request.urlopen(fallback, timeout=timeout):
-                    return
+                network_retry.retry_call(f"GET {url}", lambda: probe(fallback))
+                return
             except urllib.error.HTTPError as fallback_error:
                 if fallback_error.code == 404:
                     raise RuntimeError(
