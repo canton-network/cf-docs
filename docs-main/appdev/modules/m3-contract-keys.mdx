@@ -12,7 +12,7 @@ Contract keys are an optional addition to templates. They let you specify a way 
 
 Contract keys do not change and can be used to refer to a contract even when the contract ID changes. As a contract is updated via archive and create operations, the currently active contract(s) can easily be referenced via the contract key.
 
-Use a contract key when your application needs to look up the current state for something it already identifies by an external value — an account number, an order ID, a user ID — rather than tracking that contract's ID yourself and updating it every time the contract is archived and recreated. This is particularly useful for building idempotent or upsert-style workflows, where your code asks "what is the current state for X?" instead of threading a contract ID through every step.
+Use a contract key when your application needs to look up the current state for something it already identifies by an external value — an account number, an order ID, a user ID — rather than tracking that contract's ID yourself and updating it every time the contract is archived and recreated. This is particularly useful for building workflows where your code accesses reference data by name instead of threading a contract ID through every step.
 
 ## Enabling Contract Keys
 
@@ -35,7 +35,9 @@ After changing this setting, recompile your source code. This changes the packag
 <Note>
 In Canton 3.x, it is possible for multiple active contracts of the same template to share the same key. 
 
-The general usage is that key uniqueness is guaranteed outside of the Daml engine — for example, in the Daml business logic or at the backend client level (e.g., a unique account number or invoice number). Because of this, the primary key-based API (`lookupByKey`, `fetchByKey`, `exerciseByKey`) are optimized for the common case where a key references at most one contract.
+The general usage is that key uniqueness is guaranteed outside of the Daml engine, at the backend client level (e.g., a unique account number or invoice number). Because of this, the primary key-based API (`lookupByKey`, `fetchByKey`, `exerciseByKey`) are optimized for the common case where a key references at most one contract.
+
+Note that due to possible race conditions during submission and because of multi-hosted parties, the create-if-absent pattern cannot guarantee the uniqueness of keys. Uniqueness has to be enforced outside of the participant by the client.
 </Note>
 
 Here's an example of setting up a contract key for a bank account, to act as a bank account ID:
