@@ -3,7 +3,9 @@ title: "SV Bulk Storage"
 description: "Export Scan's update history and ACS snapshots to S3-compatible object storage"
 ---
 
-Scan export its earlier update history and ACS snapshots to S3-compatible object storage. The exported files let anyone
+import ExternalSpliceMainSpliceLiteralMarkerAppsAppSrcPackExamplesSvHelmScanValuesBulkStorageStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-scan-values-bulk-storage-start.mdx';
+
+Scan exports its earlier update history and ACS snapshots to S3-compatible object storage. The exported files let anyone
 read the full history of the network without paging through the Scan API. Each SV writes its own copy. A file is published only after other SVs produced the same
 content, so the published files carry the same BFT guarantees as Scan's API.
 
@@ -35,12 +37,15 @@ Create the two buckets in an S3-compatible object store reachable from the Scan 
 endpoint `https://storage.googleapis.com` with HMAC keys.
 On AWS S3, use the Region-specific endpoint `https://s3.<region>.amazonaws.com` with the bucket's region.
 
-Create a service account (or one per bucket) with:
+Scan accesses each bucket with the credentials configured for it. You can use one service account for both buckets,
+or one per bucket. Grant:
 
-| Bucket | Permissions |
+| Credentials used for | Permissions |
 |---|---|
-| Staging | create, read, overwrite and delete objects |
-| Committed | create and read objects; read objects in the staging bucket (Scan copies server-side from staging to committed) |
+| Staging | create, read, overwrite and delete objects in the staging bucket |
+| Committed | create and read objects in the committed bucket, and read objects in the staging bucket (Scan copies files server-side from staging to committed) |
+
+With a single service account for both buckets, grant it both rows.
 
 Giving the committed credentials no delete or overwrite permission protects the published files against mistakes.
 On AWS S3, permissions cannot separate creating from overwriting an object. Enable versioning on the committed bucket
@@ -62,21 +67,10 @@ kubectl create secret --namespace sv generic splice-app-bulk-storage-committed-c
 
 ## Configuration
 
-Add `bulkStorage` to the values of the `splice-scan` Helm chart (`scan-values.yaml`) and upgrade the release:
+Uncomment the `bulkStorage` section in the values of the `splice-scan` Helm chart (`scan-values.yaml`), fill in the
+buckets, and upgrade the release:
 
-```yaml
-bulkStorage:
-  staging:
-    endpoint: STAGING_ENDPOINT
-    region: STAGING_REGION
-    bucketName: STAGING_BUCKET_NAME
-    secretName: splice-app-bulk-storage-staging-credentials
-  committed:
-    endpoint: COMMITTED_ENDPOINT
-    region: COMMITTED_REGION
-    bucketName: COMMITTED_BUCKET_NAME
-    secretName: splice-app-bulk-storage-committed-credentials
-```
+<ExternalSpliceMainSpliceLiteralMarkerAppsAppSrcPackExamplesSvHelmScanValuesBulkStorageStart />
 
 Bulk storage is enabled when both `staging` and `committed` are set.
 
@@ -97,8 +91,4 @@ Errors that need attention: `Checksums do not match for objects ...` and `Could 
 
 ## Operating it
 
-- Scan keeps its progress in its database. After a restart, or after disabling and enabling bulk storage again, it
-  continues where it stopped.
-- Leave the contents of both buckets to Scan. Removing objects from the staging bucket by hand leaves those days
-  missing from the committed bucket.
-- To turn it off, remove `bulkStorage` from the values and upgrade the release. The buckets keep their contents.
+Treat bulk storage as an internal database of Scan, and never modify it by hand in any way.
