@@ -159,6 +159,7 @@ You can configure audiences of your choice for the participant ledger API, the v
 | Name                               | Value                                                                                |
 |------------------------------------|--------------------------------------------------------------------------------------|
 | OIDC_AUTHORITY_LEDGER_API_AUDIENCE | The audience for the participant ledger API. e.g. `https://ledger_api.example.com`   |
+| OIDC_AUTHORITY_PARTICIPANT_ADMIN_API_AUDIENCE | The audience for the participant admin API. Optional if participant admin API auth is disabled. e.g. `https://participant_admin_api.example.com` |
 | OIDC_AUTHORITY_VALIDATOR_AUDIENCE  | The audience for the validator backend API. e.g. `https://validator.example.com/api` |
 | OIDC_AUTHORITY_SV_AUDIENCE         | The audience for the SV backend API. e.g. `https://sv.example.com/api`               |
 
@@ -218,6 +219,8 @@ To configure [Auth0](https://auth0.com) as your SV's OIDC provider, perform the 
     1.  Navigate to Applications \> APIs and click "Create API". Set name to `SV App API`, set identifier for the SV backend app API e.g. `https://sv.example.com/api`.
     2.  Create another API by setting name to `Validator App API`, set identifier for the Validator backend app e.g. `https://validator.example.com/api`.
 
+    3.  If you want to enable participant admin API auth, create another API called `Participant Admin API` and set the identifier to e.g. `https://participant_admin_api.example.com`. Both `Validator app backend` and `SV app backend` need access to this API. To grant it navigate to their respective pages and grant `Client Access` with `Always grant all permissions` under the `API Access` tab.
+
 Please refer to Auth0's [own documentation on user management](https://auth0.com/docs/manage-users) for pointers on how to set up end-user accounts for the two web UI applications you created. Note that you will need to create at least one such user account for completing the steps in `helm-sv-install` - for being able to log in as your SV node's administrator. You will be asked to obtain the user identifier for this user account. It can be found in the Auth0 interface under User Management -\> Users -\> your user's name -\> user_id (a field right under the user's name at the top).
 
 We will use the environment variables listed in the table below to refer to aspects of your Auth0 configuration:
@@ -251,6 +254,21 @@ The validator app backend requires the following secret (omit the scope if it is
 To setup the wallet, CNS and SV UI, create the following two secrets.
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash326 />
+
+If you want to enable auth on the participant admin API two more secrets will be required for the SV app, Scan app and validator app backend.
+
+```bash
+kubectl create --namespace sv secret generic splice-app-sv-participant-admin-api-auth \
+    "--from-literal=url=${OIDC_AUTHORITY_URL}/.well-known/openid-configuration" \
+    "--from-literal=client-id=${SV_CLIENT_ID}" \
+    "--from-literal=client-secret=${SV_CLIENT_SECRET}" \
+    "--from-literal=audience=${OIDC_AUTHORITY_PARTICIPANT_ADMIN_API_AUDIENCE}"
+kubectl create --namespace sv secret generic splice-app-validator-participant-admin-api-auth \
+    "--from-literal=url=${OIDC_AUTHORITY_URL}/.well-known/openid-configuration" \
+    "--from-literal=client-id=${VALIDATOR_CLIENT_ID}" \
+    "--from-literal=client-secret=${VALIDATOR_CLIENT_SECRET}" \
+    "--from-literal=audience=${OIDC_AUTHORITY_PARTICIPANT_ADMIN_API_AUDIENCE}"
+```
 
 ## Configuring BFT Sequencer Connections
 
@@ -351,6 +369,12 @@ Please modify the file `splice-node/examples/sv-helm/participant-values.yaml` as
 - Replace `YOUR_NODE_IDENTIFIER` with the name you chose when creating the SV identity (required starting Splice `0.11.0`). It must be the same value as `nodeIdentifier` in `sv-values.yaml` and `sv-validator-values.yaml`. Starting with Splice `0.11.0`, Canton creates the participant identity and the SV app only checks it, so the app does not start if the names differ. Before `0.11.0`, the SV app created the identity and this value did not exist.
 - Ensure that you set `enableRepairCommands: true`. Scan serves the ACS snapshots that validators use to [recover from identities backups](/global-synchronizer/production-operations/validator-disaster-recovery) through the participant's repair service.
 - If your participant does not use an external KMS, add `enableKeyDownload: true`, as [identities backups](/global-synchronizer/production-operations/sv-backup) include the participant's private keys.
+- If you want to enable participant admin API auth (available starting from 0.10.3) do the following:
+    > - Replace `OIDC_AUTHORITY_PARTICIPANT_ADMIN_API_AUDIENCE` in the `adminApi.auth.targetAudience` entry with audience for the participant admin API. e.g. `https://participant_admin_api.example.com`.
+    > - Replace VALIDATOR_CLIENT_ID in `adminApi.auth.user` entry with the client ID of the Auth0 app for the validator app backend. In 0.10.3 the `adminApi.auth.user: "VALIDATOR_CLIENT_ID@clients"` entry is missing and needs to be added.
+    > - Add an `adminApi.auth.additionalUsers: ["SV_CLIENT_ID@clients"]` entry and replace SV_CLIENT_ID with the client ID of the Auth0 app for the SV app.
+    > - Update the `adminApi.auth.jwksUrl` entry to point to your auth provider's JWK set document by replacing `OIDC_AUTHORITY_URL` with your auth provider's OIDC URL, as explained above.
+    > - Under the `adminApi` section add a new line with `disableAuth: false`. This will become the default from splice 0.11.0.
 
 Please modify the file `splice-node/examples/sv-helm/global-domain-values.yaml` as follows:
 
@@ -373,6 +397,7 @@ Please modify the file `splice-node/examples/sv-helm/scan-values.yaml` as follow
 - No longer needed since splice `0.6.8`: Replace all instances of `MIGRATION_ID` with the migration ID of the global synchronizer on your target cluster.
 - Replace all instances of `SERIAL_ID` with the serial ID of the global synchronizer on your target cluster.
 - Set `synchronizers.(current|legacy|successor).cantonBft.p2pUrl: https://sequencer-p2p-SERIAL_ID.sv.YOUR_HOSTNAME`
+- If you want to enable participant admin API auth (available starting from 0.10.3) add a new line with `participantClient.adminApi.disableAuth: false`. This will become the default from splice 0.11.0.
 
 An SV node includes a validator app so you also need to configure that. Please modify the file `splice-node/examples/sv-helm/validator-values.yaml` as follows:
 
@@ -383,6 +408,7 @@ An SV node includes a validator app so you also need to configure that. Please m
 - Replace `YOUR_CONTACT_POINT` by the same contact point that you used in `sv-values.yaml`. this, set it to an empty string.
 - Update the `auth.jwksUrl` entry to point to your auth provider's JWK set document by replacing `OIDC_AUTHORITY_URL` with your auth provider's OIDC URL, as explained above.
 - If your validator is not supposed to hold any CC, you should disable the wallet by setting `enableWallet` to `false`. Note that if the wallet is disabled, you shouldn't install the wallet or CNS UIs, as they won't work.
+- If you want to enable participant admin API auth (available starting from 0.10.3) add a new line with `participantClient.adminApi.disableAuth: false`. This will become the default from splice 0.11.0.
 
 Additionally, please modify the file `splice-node/examples/sv-helm/sv-validator-values.yaml` as follows:
 
@@ -408,6 +434,7 @@ For configuring your sv app, please modify the file `splice-node/examples/sv-hel
 - Replace `YOUR_CONTACT_POINT` by a slack user name or email address that can be used by node operators to contact you in case there are issues with your node. If you do not want to share this, set it to an empty string.
 - If you would like to redistribute all or part of the SV rewards with other parties, you can fill up the `extraBeneficiaries` section with the desired parties and the percentage of the reward that corresponds to them. Note that the party you register must be known on the network for the reward coupon issuance to succeed. Furthermore, that party must be hosted on a validator node for its wallet to collect the SV reward coupons. That collection will happen automatically if the wallet is running. If it is not running during the time that the reward coupon can be collected, the corresponding reward is marked as unclaimed, and stored in an DSO-wide unclaimed reward pool. The `extraBeneficiaries` can be changed with just a restart of the SV app.
 - Optionally, uncomment the line for `initialAmuletPrice` and set it to your desired amulet price. This will create an amulet price vote from your SV with the configured price when onboarded. If not set, no vote will be cast. This can always be done later manually from the SV app UI.
+- If you want to enable participant admin API auth (available starting from 0.10.3) add a new line with `participantClient.adminApi.disableAuth: false`. This will become the default from splice 0.11.0.
 
 Please modify the file `splice-node/examples/sv-helm/info-values.yaml` as follows:
 
