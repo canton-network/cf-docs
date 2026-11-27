@@ -89,6 +89,24 @@ These metrics show how far it got, as timestamps: `splice_history_bulk_storage_l
 
 Errors that need attention: `Checksums do not match for objects ...` and `Could not reach consensus on checksums ...`.
 
+## Monitoring
+
+The SV Grafana dashboards in the release bundle (`sv-grafana-dashboards/`) include a **Bulk Storage** dashboard
+(`splice-stores/bulk-storage.json`). Per Scan it shows:
+
+- **Last record time stored:** how far staging and committed got, for update history and ACS snapshots.
+- **Num S3 objects stored**, processed updates and contracts, and their rates.
+- **Catchup rate:** how fast staging and committed move forward.
+
+What to look for:
+
+- While Scan catches up after you enable bulk storage, staging moves forward from genesis towards now. Committed follows
+  once enough SVs have written the same days, so committed can stay behind staging until other SVs catch up.
+- Once Scan has caught up, staging and committed stay about a day behind now, as files are written per UTC day.
+- Committed falling behind staging for a long time means not enough SVs agree on those days yet.
+
+Recommendations for alerting on bulk storage will follow.
+
 ## Operating it
 
 Treat bulk storage as an internal database of Scan, and never modify it by hand in any way.
