@@ -45,9 +45,93 @@ helm install topology-key-monitor oci://ghcr.io/digital-asset/decentralized-cant
 | `expectedSynchronizerAliases` | `[global]` | Aliases of the synchronizers to monitor. |
 | `participant.address` | `participant` | Address of the participant. The default matches the `participant` release installed by the SV and validator Helm deployments. |
 | `participant.adminApiPort` | `5002` | Admin API port of the participant. |
+| `participant.disableAdminApiAuth` | `true` | Set to `false` if authentication is enabled on the admin API of the participant. The monitor then authenticates with the token in the `topology-key-monitor-admin-api-token` secret. See [Participant admin API authentication](#participant-admin-api-authentication). |
 | `pollIntervalSeconds` | `60` | Time between two polls. |
 | `slowQueryThresholdSeconds` | `5` | A topology query that takes longer than this is logged as a warning. |
 | `missingSynchronizerGracePeriodSeconds` | `600` | How long an expected synchronizer can be missing before this is logged as a warning. |
+
+## Participant admin API authentication
+
+By default the monitor calls the admin API of your participant without credentials. If you have enabled authentication on the participant admin API (`adminApi.disableAuth: false` in the values of the `splice-participant` chart, enabled by default from 0.11.0), the monitor needs credentials of its own.
+
+<Note>
+Support for authenticating the monitor is available starting with Splice 0.10.4. Authentication on the participant admin API itself is available starting with Splice 0.10.3.
+</Note>
+
+The monitor authenticates with a JWT that you sign with a dedicated private key. The participant verifies the signature with the matching self-signed certificate. It accepts the token through an additional authentication service that knows a single user, `topology-key-monitor`, and that only allows the following services of the admin API:
+
+- `com.digitalasset.canton.topology.admin.v30.TopologyManagerReadService`
+- `com.digitalasset.canton.admin.participant.v30.SynchronizerConnectivityService`
+- `com.digitalasset.canton.connection.v30.ApiInfoService`
+
+The token does not authenticate against anything else, and the participant does not accept it for any other user. The token has no expiry.
+
+### Creating the credentials
+
+The charts expect the following objects in the namespace of your participant. Their names and the claims of the token are fixed:
+
+| Object    | Name                                              | Key         | Content                                                                                               |
+|-----------|---------------------------------------------------|-------------|-------------------------------------------------------------------------------------------------------|
+| ConfigMap | `topology-key-monitor-admin-api-token-public-key` | `publicKey` | The self-signed certificate, which the participant uses to verify the token.                          |
+| Secret    | `topology-key-monitor-admin-api-token`            | `token`     | The signed JWT with the claims `sub: topology-key-monitor` and `aud: topology-key-monitor-admin-api`. |
+
+The following script creates both. It needs `openssl` and `kubectl`, and discards the private key when it finishes:
+
+```bash
+NAMESPACE=sv # the namespace your participant and topology key monitor
+WORKDIR="$(mktemp -d)"
+
+# 1. Create a key pair and a self-signed certificate
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+  -subj "/CN=splice-topology-key-monitor" \
+  -keyout "$WORKDIR/signing-key.pem" -out "$WORKDIR/public-key.crt"
+
+# 2. Sign a JWT with the key. The token has no "exp" claim.
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+header="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)"
+payload="$(printf '{"sub":"topology-key-monitor","aud":"topology-key-monitor-admin-api"}' | b64url)"
+signature="$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign "$WORKDIR/signing-key.pem" | b64url)"
+
+# 3. Create the ConfigMap and the Secret
+kubectl create configmap topology-key-monitor-admin-api-token-public-key -n "$NAMESPACE" \
+  --from-file=publicKey="$WORKDIR/public-key.crt" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic topology-key-monitor-admin-api-token -n "$NAMESPACE" \
+  --from-literal=token="$header.$payload.$signature" --dry-run=client -o yaml | kubectl apply -f -
+
+# 4. Discard the private key
+rm -rf "$WORKDIR"
+```
+
+<Warning>
+The token has no expiry. Anyone who obtains it can call the services listed above on your participant, which include operations that disconnect the participant from a synchronizer. Restrict access to the `topology-key-monitor-admin-api-token` secret accordingly. Anyone who can modify the ConfigMap can replace the certificate and thereby sign tokens that the participant accepts as the monitor, so restrict write access to it as well.
+</Warning>
+
+### Enabling the authentication
+
+Create the objects before you change any Helm release. Once the participant is configured to use the ConfigMap, its pod does not start without it, and the monitor pod does not start without the Secret.
+
+1. Add the following to the values of your `participant` release and upgrade it. The value only takes effect if authentication is enabled on the participant admin API, and is ignored otherwise.
+
+   ```yaml
+   enableTopologyKeyMonitorAccess: true
+   ```
+
+2. Add the following to the values of your `topology-key-monitor` release and upgrade it:
+
+   ```yaml
+   participant:
+     disableAdminApiAuth: false
+   ```
+
+### Rotating or revoking the credentials
+
+To rotate the credentials, run the script again. The new certificate replaces the old one, so tokens signed with the previous key stop working. If [Stakater Reloader](https://github.com/stakater/Reloader) is installed in your cluster, the participant and the monitor restart automatically when the ConfigMap and the Secret change, as the charts enable Reloader by default. Otherwise restart both deployments yourself:
+
+```bash
+kubectl rollout restart deployment/participant deployment/topology-key-monitor -n sv
+```
+
+To revoke the access without replacing it, set `enableTopologyKeyMonitorAccess` back to `false`, upgrade the participant release, and delete the ConfigMap and the Secret.
 
 ## Alerting
 

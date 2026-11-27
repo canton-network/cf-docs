@@ -3,20 +3,62 @@ title: "Interfaces"
 description: "Define and implement Daml interfaces for polymorphic contract behavior and cross-template interoperability"
 ---
 
-# Interfaces
-
 In Daml, an interface defines an abstract type together with a behavior specified by its view type, method signatures, and choices. For a template to conform to an interface, there must be a corresponding `interface instance` definition where all the methods of the interface (including the special `view` method) are implemented. This lets other developers write applications in terms of the interface instead of the concrete template, so contracts built on different templates can interoperate as long as they implement the same interface.
-
-To use interfaces, your Daml project must target Daml-LF version `1.15` or higher (the current default), and if using Canton, the synchronizer's protocol version must be `4` or higher.
 
 For the full syntax — interface declarations, view types, interface choices, `interface instance` clauses, required interfaces, and the `toInterface`/`fromInterface` family of functions — see [Reference: Interfaces](/appdev/reference/daml-language-reference#reference-interfaces) in the Daml Language Reference.
 
+## Define interfaces in their own package
+
+Interface definitions can't be upgraded. If one package defines an interface and also a template that implements it, the compiler stops with an error like this:
+
+```text
+error type checking template Asset.SimpleAsset interface instance Asset:Asset for Asset:SimpleAsset:
+  The interface Asset was defined in this package and implemented in Asset by SimpleAsset
+
+  This may make this package and its dependents not upgradeable.
+
+  It is recommended that interfaces are defined in their own package separate from their implementations.
+  Downgrade this error to a warning with -Wupgrade-interfaces
+  Disable this error entirely with -Wno-upgrade-interfaces
+```
+
+Don't switch the check off with `-Wupgrade-interfaces` or `-Wno-upgrade-interfaces`. A template that shares a package with an interface can never be upgraded, so the problem only moves to your first upgrade. Split the code into two packages instead: one that holds the interfaces, and one that holds the implementing templates and imports the interface package through `data-dependencies`.
+
+```text
+my-project/
+├── multi-package.yaml
+├── asset-interface/
+│   ├── daml.yaml
+│   └── daml/Asset.daml              # interface Asset, its view type
+└── simple-asset/
+    ├── daml.yaml
+    └── daml/SimpleAsset.daml        # template SimpleAsset, interface instance Asset
+```
+
+`multi-package.yaml` lists both packages, so `dpm build --all` builds them in dependency order:
+
+```yaml
+packages:
+  - ./asset-interface
+  - ./simple-asset
+```
+
+The template package depends on the interface package's DAR:
+
+```yaml
+sdk-version: <sdk-version>
+name: simple-asset
+version: 0.0.1
+source: daml
+dependencies:
+  - daml-prim
+  - daml-stdlib
+data-dependencies:
+  - ../asset-interface/.daml/dist/asset-interface-0.0.1.dar
+```
+
+For package naming conventions, see [Separating Interfaces from Templates](/appdev/modules/m6-package-naming#separating-interfaces-from-templates). For the upgrade rules behind this check, see [Separate Interfaces/Exceptions from Templates](/appdev/deep-dives/smart-contract-upgrade#separate-interfaces/exceptions-from-templates).
+
 ## Interfaces on Canton Network
 
-Interfaces are central to interoperability across the Canton Network. Two Canton Improvement Proposals (CIPs) define standard interfaces that app developers should be aware of:
-
-- [CIP-0056 — Token Standard](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md): Defines a standard interface for fungible tokens on Canton Network. If your application issues or transfers tokens, implementing this interface ensures compatibility with wallets and other applications in the ecosystem.
-
-- [CIP-0103 — dApp Standard](https://github.com/mjuchli-da/cips/blob/cip-dapp-standard/cip-0103/cip-0103.md): Defines standard interfaces for decentralized applications. This CIP is particularly relevant for developers coming from Ethereum, as it maps familiar ERC-style patterns to Daml interfaces.
-
-When building applications on Canton Network, implementing these standard interfaces lets your contracts participate in the broader ecosystem without requiring custom integration with each counterparty.
+Interfaces are central to interoperability across the Canton Network. [CIP-0056 — Token Standard](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md) defines the standard Daml interfaces for tokens on Canton Network. If your application issues or transfers tokens, implementing these interfaces makes your assets usable by wallets and other applications in the ecosystem without custom integration with each counterparty.

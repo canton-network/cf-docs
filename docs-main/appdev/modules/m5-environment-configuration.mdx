@@ -421,6 +421,131 @@ dpm update
 
 See the docs section on [Publishing Dars](/sdks-tools/cli-tools/dpm#publishing-dars-to-an-oci-repository) to learn how to publish your own `oci://` dars
 
+#### Git Dars
+
+<Note>
+Git DAR dependencies are available in [dpm 1.1.0](https://github.com/digital-asset/dpm/releases/tag/1.1.0) or later. The structured mapping needs SDK 3.6 or later, because that is the first `damlc` that can read a mapping in `dependencies` and `data-dependencies`. The `git:` one-liner works on earlier SDKs.
+</Note>
+
+You can depend on a `.dar` stored in a public git repository. Git is another remote source, like OCI. Put the location under `dependencies` or `data-dependencies`.
+
+A git DAR is either a one-liner or a YAML mapping. Both name a file in the repository, or a GitHub release asset.
+
+##### One-liner
+
+The canonical form is:
+
+```
+git:<host>/<repo>#<ref>?path=<path/inside/the/repo.dar>
+```
+
+- `<ref>` is a branch, a tag, or a commit SHA.
+- `?path=` is required, relative to the repo root, and must end in `.dar`.
+- A trailing `.git` on the repo is optional.
+- HTTPS only. SSH clone URLs are not supported. The repository must be public.
+
+You can add a dependency using `dpm add dar`:
+
+```shell
+dpm add dar --data-dependencies 'git:example.com/my/dars#1.2.3?path=my-package-1.2.3.dar'
+```
+
+A new entry is written as a one-liner. A branch or tag `<ref>` is rewritten to a commit SHA. You can pass `--dependencies` instead of `--data-dependencies`.
+
+Resulting `daml.yaml`:
+
+```yaml
+# daml.yaml
+data-dependencies:
+  - git:example.com/my/dars#82a5467ac5bf4ed78415dee71f7af587a9e7a8f5?path=my-package-1.2.3.dar
+```
+
+For a GitHub release asset:
+
+```
+git:github.com/example/my-dars?release=1.2.3&asset=my-package-1.2.3.dar
+```
+
+`?release=` is supported on `github.com` only. Omit `&asset=` to expand the entry into one line per `.dar` on that release. On other hosts, use `#<ref>?path=` instead. Release lines are not rewritten to a commit SHA.
+
+##### Structured mapping
+
+The same fields can be a mapping. Pinning rewrites `ref` and leaves the mapping in place:
+
+```yaml
+data-dependencies:
+  - git:
+      url: example.com/my/dars
+      ref: 1.2.3
+      path: my-package-1.2.3.dar
+```
+
+After `dpm install`:
+
+```yaml
+data-dependencies:
+  - git:
+      url: example.com/my/dars
+      ref: 82a5467ac5bf4ed78415dee71f7af587a9e7a8f5
+      path: my-package-1.2.3.dar
+```
+
+`url` is the repository (`host/owner/repo`). An `https://` prefix is accepted and dropped when `dpm` rewrites the entry.
+
+For a file in the repository, set `ref` and `path`. For a GitHub release asset, set `release` and, optionally, `asset`:
+
+```yaml
+data-dependencies:
+  - git:
+      url: github.com/example/my-dars
+      release: 1.2.3
+      asset: my-package-1.2.3.dar
+```
+
+Omit `asset` to expand the entry into one mapping per `.dar` on that release. `release` cannot be combined with `ref` or `path`. `asset` requires `release`. Any other key under `git` is rejected.
+
+`main-package-id` may sit beside `git`. It is the only other key allowed on the entry:
+
+```yaml
+dependencies:
+  - git:
+      url: github.com/example/my-dars
+      ref: main
+      path: packages/foo.dar
+    main-package-id: <package-id>
+```
+
+<Note>
+`dpm` refuses an SDK command when the package contains a structured git dependency and the SDK that command would run is older than 3.6. The version it checks is `DPM_SDK_VERSION` when that is set, otherwise `sdk-version` in `daml.yaml`, otherwise the version in `multi-package.yaml`. An empty version is refused as well. The error tells you to use a `git:` one-liner.
+
+`dpm install`, `dpm install package`, `dpm update`, and `dpm resolve` still fetch, pin, and resolve a structured entry on an older SDK. The check runs when `dpm` is about to hand `daml.yaml` to `damlc`.
+
+The check does not run when `daml.yaml` or `multi-package.yaml` selects tools with `components:`, or when a multi-package command is started from the project root. In those cases `damlc` reports the mapping itself. The check applies to structured mappings only.
+</Note>
+
+Updating an existing structured entry with `dpm add dar` keeps the mapping and writes the new SHA into `ref`.
+
+##### Shared repository URL
+
+To reuse one repository URL for several DARs, name it under `artifact-locations` and refer to it as `@alias`. The alias is only the repo URL. `#ref` and `?path=` (or `?release=` and `&asset=`) stay on the dependency line. A location URL that already contains `#` or `?` is rejected. After `dpm install`, the alias is replaced by a full `git:` line.
+
+```yaml
+artifact-locations:
+  "@my-dars":
+    url: git:example.com/my/dars
+
+data-dependencies:
+  - "@my-dars#1.2.3?path=my-package-1.2.3.dar"
+```
+
+`dpm add dar` also accepts a browser `raw`/`blob` URL to a `.dar` and writes the canonical line into `daml.yaml`. Do not paste a browser URL into `daml.yaml` yourself.
+
+```shell
+dpm add dar --data-dependencies 'https://github.com/example/my-dars/raw/refs/tags/1.2.3/my-package-1.2.3.dar'
+```
+
+See [Building and Packaging](/appdev/modules/m3-building-packaging#how-to-depend-on-daml-packages) for `dependencies` vs `data-dependencies`.
+
 ## Next Steps
 
 - [Deployment Progression](/appdev/modules/m5-deployment-progression) — Environment differences and promotion checklist

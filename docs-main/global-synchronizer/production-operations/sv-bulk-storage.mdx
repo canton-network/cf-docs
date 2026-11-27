@@ -1,0 +1,94 @@
+---
+title: "SV Bulk Storage"
+description: "Export Scan's update history and ACS snapshots to S3-compatible object storage"
+---
+
+import ExternalSpliceMainSpliceLiteralMarkerAppsAppSrcPackExamplesSvHelmScanValuesBulkStorageStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-scan-values-bulk-storage-start.mdx';
+
+Scan exports its earlier update history and ACS snapshots to S3-compatible object storage. The exported files let anyone
+read the full history of the network without paging through the Scan API. Each SV writes its own copy. A file is published only after other SVs produced the same
+content, so the published files carry the same BFT guarantees as Scan's API.
+
+Bulk storage needs Splice 0.10.3 or later. Enabling it is optional for now and will become required in a later release.
+
+## What gets written
+
+- **Update history**, one segment per UTC day, starting from the genesis of the network.
+- **ACS snapshots**, the daily snapshot that Scan takes at 00:00 UTC.
+- Every file exists in two encodings, `ledger_api_json` and `protobuf_json`, as zstd-compressed newline-delimited JSON.
+  Files are split at about 128 MiB.
+
+After it is enabled, Scan writes everything from genesis up to now from its own database, then keeps up with new days.
+
+## Staging and committed buckets
+
+Each SV needs two buckets:
+
+- **Staging.** Scan writes every file here first, then compares its checksums with other SVs' Scans.
+- **Committed.** Once enough SVs report the same checksums, Scan copies the files from staging to committed and
+  deletes them from staging. Files in committed are never overwritten or deleted by Scan.
+
+Committed stays empty until enough SVs run bulk storage and have written the same day; until then staging grows.
+This is expected.
+
+## Buckets and credentials
+
+Create the two buckets in an S3-compatible object store reachable from the Scan pod. On Google Cloud Storage, use the
+endpoint `https://storage.googleapis.com` with HMAC keys.
+On AWS S3, use the Region-specific endpoint `https://s3.<region>.amazonaws.com` with the bucket's region.
+
+Scan accesses each bucket with the credentials configured for it. You can use one service account for both buckets,
+or one per bucket. Grant:
+
+| Credentials used for | Permissions |
+|---|---|
+| Staging | create, read, overwrite and delete objects in the staging bucket |
+| Committed | create and read objects in the committed bucket, and read objects in the staging bucket (Scan copies files server-side from staging to committed) |
+
+With a single service account for both buckets, grant it both rows.
+
+Giving the committed credentials no delete or overwrite permission protects the published files against mistakes.
+On AWS S3, permissions cannot separate creating from overwriting an object. Enable versioning on the committed bucket
+to keep every version, or S3 Object Lock with a default retention period to prevent overwrites and deletions. Do not
+enforce conditional writes with a bucket policy: Scan copies files into the committed bucket with CopyObject without
+conditional headers, which such a policy rejects.
+
+Store the HMAC keys in Kubernetes secrets, with the keys `accessKey` and `secretAccessKey`:
+
+```bash
+kubectl create secret --namespace sv generic splice-app-bulk-storage-staging-credentials \
+    --from-literal=accessKey=${STAGING_ACCESS_KEY} \
+    --from-literal=secretAccessKey=${STAGING_SECRET_KEY}
+
+kubectl create secret --namespace sv generic splice-app-bulk-storage-committed-credentials \
+    --from-literal=accessKey=${COMMITTED_ACCESS_KEY} \
+    --from-literal=secretAccessKey=${COMMITTED_SECRET_KEY}
+```
+
+## Configuration
+
+Uncomment the `bulkStorage` section in the values of the `splice-scan` Helm chart (`scan-values.yaml`), fill in the
+buckets, and upgrade the release:
+
+<ExternalSpliceMainSpliceLiteralMarkerAppsAppSrcPackExamplesSvHelmScanValuesBulkStorageStart />
+
+Bulk storage is enabled when both `staging` and `committed` are set.
+
+## Checking that it works
+
+Within minutes of the upgrade, objects appear in the staging bucket, under one folder per day from genesis on.
+
+Scan logs these lines at INFO level:
+
+- `UpdateHistoryBulkStorageStaging starts` and `AcsSnapshotBulkStorageStaging starts` when the export starts.
+- `Successfully completed processing updates segment ...` for every day written.
+- `Successfully completed processing snapshots up to timestamp ...` for every snapshot written.
+
+These metrics show how far it got, as timestamps: `splice_history_bulk_storage_latest_updates_segment_staging`,
+`..._latest_updates_segment_committed`, `..._latest_acs_snapshot_staging` and `..._latest_acs_snapshot_committed`.
+
+Errors that need attention: `Checksums do not match for objects ...` and `Could not reach consensus on checksums ...`.
+
+## Operating it
+
+Treat bulk storage as an internal database of Scan, and never modify it by hand in any way.

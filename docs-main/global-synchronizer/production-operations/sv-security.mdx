@@ -9,9 +9,6 @@ import KmsParticipantsContext from "/snippets/external/splice/main/common/kms-pa
 import KmsConfigGeneral from "/snippets/external/splice/main/common/kms-config-general.mdx";
 import KmsConfigGcp from "/snippets/external/splice/main/common/kms-config-gcp.mdx";
 import KmsConfigAws from "/snippets/external/splice/main/common/kms-config-aws.mdx";
-import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvSecurityBash110 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-security-bash-110.mdx";
-import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvSecurityJson94 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-security-json-94.mdx";
-import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvSecurityBash73 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-security-bash-73.mdx";
 
 {/* COPIED_START source="splice:docs/src/sv_operator/sv_security.rst" hash="ae70b7be" */}
 
@@ -41,42 +38,7 @@ One approach for switching to use KMS for SV participant keys while minimizing t
 
 ### Configuring a fresh SV to use an external KMS
 
-In addition to [configuration changes to the participant Helm chart](/global-synchronizer/production-operations/sv-security) itself, you will also need to [change the way in which your CometBFT governance key is managed](/global-synchronizer/production-operations/sv-security) compared to the default setup.
-
-#### External management of CometBFT governance key
-
-By default, the CometBFT governance key is managed transparently by the SV app, using the participant for key generation and storage. The specific way in which this is realized is not supported for KMS-enabled participants. Therefore, SV operators that wish to use an external KMS for managing their participant keys must manage the CometBFT governance key of their SV externally.
-
-This involves the following steps:
-
-1.  Generate a new CometBFT governance key.
-2.  Configure your SV app to use this externally generated key.
-
-##### Generating a CometBFT governance key
-
-Use the following shell commands to generate a keypair in the expected format:
-
-<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvSecurityBash73 />
-
-These commands should result in an output similar to:
-
-<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvSecurityJson94 />
-
-Save this output to a file, e.g., `cometbft-governance-keys.json`.
-
-##### Configuring SV app to use the externally generated CometBFT governance key
-
-You inject the externally generated CometBFT governance key into the SV app via storing it in a k8s secret named `splice-app-sv-cometbft-governance-key`.
-
-Assuming that your SV deployment resides in the `sv` namespace, use the following command to create the secret from the JSON file generated [above](/global-synchronizer/production-operations/sv-security):
-
-<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvSecurityBash110 />
-
-To instruct the SV app to use the externally managed CometBFT governance key instead of generating a fresh one itself, set the `cometBFT.externalGovernanceKey` value in the `splice-sv-node` Helm chart to `true`. (You can comment out the respective line in `splice-node/examples/sv-helm/sv-values.yaml`.)
-
-#### Configuring participant to use an external KMS
-
-Beyond the [changes to the SV app deployment](/global-synchronizer/production-operations/sv-security) described above, the setup of an SV participant to use an external KMS is identical to the [setup of a validator participant with KMS](/global-synchronizer/production-operations/validator-security). It involves configuration changes to the `splice-participant` Helm chart that depend on the KMS provider you choose.
+The setup of an SV participant to use an external KMS is identical to the [setup of a validator participant with KMS](/global-synchronizer/production-operations/validator-security). It involves configuration changes to the `splice-participant` Helm chart that depend on the KMS provider you choose.
 
 <KmsConfigGeneral />
 

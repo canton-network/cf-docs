@@ -8,8 +8,6 @@ import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLargeL
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/configure/apis/apis.rst" hash="5f9779f4" */}
 
-# API Configuration
-
 Participant nodes expose the Admin API, the gRPC Ledger API, and optionally the JSON Ledger API.
 
 This page explains how to configure general options that apply to both the Admin API and the gRPC Ledger API. For the configuration options that apply only to specific APIs, please refer to the Administration API, the gRPC Ledger API, and the JSON Ledger API pages.
@@ -118,9 +116,9 @@ Even when this is expected, falling back to NIO might lead to a warning being em
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/configure/apis/admin_api.rst" hash="0a2898e4" */}
 
-# Admin API Configuration
+## Admin API Configuration
 
-## Administration API
+### Administration API
 
 The nature and scope of the Admin API on participant nodes and the Admin API on synchronizers has some overlap. As an example, you will find the same key management commands on the synchronizer and the participant node API, whereas the participant has different commands to connect to several synchronizers.
 
@@ -134,7 +132,7 @@ You should not expose the admin-api publicly in an unsecured way as it serves ad
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/configure/apis/ledger_api.rst" hash="e7b70b5f" */}
 
-# gRPC Ledger API Configuration
+## gRPC Ledger API Configuration
 
 The configuration of the gRPC Ledger API is similar to the Admin API configuration, except that the group starts with `ledger-api` instead of `admin-api`.
 
@@ -176,13 +174,13 @@ To configure the gRPC Ledger API connectivity, you should specify **address** an
 - Define **keep-alive-server** parameter group to to configure gRPC keepalive
 - Define **max-inbound-message-size** parameter to control the max size of gRPC messages
 
-## Ledger API Caches
+### Ledger API Caches
 
 The `max-contract-state-cache-size` and `max-contract-key-state-cache-size` parameters control the sizes of the Ledger API contract and contract key caches, respectively. Modifying these parameters changes the likelihood that a transaction using a contract or a contract key that was recently accessed (created or read) can still find it in the memory, rather than needing to query it from the database. Larger caches might be of interest when there is a big pool of ambient contracts that are consistently being fetched or used for non-consuming exercises. Larger caches can also benefit use cases where a big pool of contracts rotates through a create -\> archive -\> create-successor cycle. Consider adjusting these parameters explicitly if the performance of your specific workflow depends on large caches.
 
 <ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLargeInMemoryFanOut />
 
-## Max Transactions in the In-Memory Fan-Out
+### Max Transactions in the In-Memory Fan-Out
 
 The `max-transactions-in-memory-fan-out-buffer-size` parameter controls the size of the in-memory fan-out buffer. This buffer allows serving the transaction streams from memory as they are finalized, rather than from the database. Make sure this buffer is large enough so applications are less likely to have to stream transactions from the database. In most cases, a 10s buffer works well. For example, if you expect a throughput of 20 tx/s, set this number to 200. The new default setting of 1000 assumes 100 tx/s. Consider adjusting these parameters explicitly if the performance of your workflow foresees transaction rates larger than 100 tx/s.
 
@@ -198,7 +196,7 @@ canton.participants.participant.ledger-api.index-service {
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/configure/apis/json_api.rst" hash="ced27d6c" */}
 
-# JSON Ledger API Configuration
+## JSON Ledger API Configuration
 
 The configuration of the JSON Ledger API is similar to the gRPC Ledger API configuration. The corresponding parameter group starts with `http-ledger-api`.
 
@@ -225,7 +223,7 @@ canton {
 
 The JSON Ledger API is enabled by default. If you want to disable it, set the `enabled` field to `false`.
 
-## JSON Ledger API Endpoint
+### JSON Ledger API Endpoint
 
 Configure the JSON API endpoint by adding the `server` parameter group.
 
@@ -234,7 +232,7 @@ Configure the JSON API endpoint by adding the `server` parameter group.
 - Specify `port-file`, if you want the Participant Node to write a text file with the port on which the JSON Ledger API is listening. This is useful as a tool to synchronize the start-up of dependent services, as the Participant Node only writes the file once the JSON Ledger API is fully initialized.
 - Specify `path-prefix` if you want the JSON Ledger API content to be served on a customized path instead of `/`.
 
-## Websockets
+### Websockets
 
 The endpoints that result in large data sets (`/v2/commands/completions`, `/v2/state/active-contracts`, `/v2/updates`) come in two flavors:
 
@@ -246,7 +244,7 @@ The latter type of requests can be parameterized in the Participant Node's confi
 - Set the `http-list-max-elements-limit` to specify the maximum number of returned rows.
 - Set the `http-list-wait-time` to specify the number of milliseconds of idle time to wait before sending result This parameter is needed in case of open-ended streams such as completions. JSON Ledger API reads from the gRPC stream, and when there are no new elements for "wait" milliseconds -\> the result is sent to the client.
 
-## Daml definitions service
+### Daml definitions service
 
 You can enable the experimental `Daml Definitions Service` by setting the `daml-definitions-service-enabled` parameter to `true`.
 
@@ -256,9 +254,9 @@ You can enable the experimental `Daml Definitions Service` by setting the `daml-
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/optimize/caching.rst" hash="3188f1ed" */}
 
-# Configure Caching
+## Configure Caching
 
-## Ledger API Caches
+### Ledger API Caches
 
 The `max-contract-state-cache-size` and `max-contract-key-state-cache-size` parameters control the size of the Ledger API contract and contract key caches, respectively. Modifying these parameters changes the likelihood that a transaction using a contract or a contract key that was recently accessed (created or read) can still find it in the memory, rather than needing to query it from the database. Larger caches might be of interest when there is a big pool of ambient contracts that are consistently fetched or used for non-consuming exercises. Larger caches can also benefit use cases where a big pool of contracts rotates through a create -\> archive -\> create-successor cycle. Consider adjusting these parameters explicitly if the performance of your specific workflow depends on large caches.
 

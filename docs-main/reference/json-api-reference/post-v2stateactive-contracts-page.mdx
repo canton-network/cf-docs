@@ -24,6 +24,8 @@ sidebarTitle: "/v2/state/active-contracts-page"
 
   <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-3-5">Added 3.5</a>
 
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-3-7">Updated 3.7</a>
+
 </div>
 
 
@@ -54,7 +56,8 @@ curl --request POST \
     "verbose": false
   },
   "maxPageSize": 123,
-  "pageToken": "<string>"
+  "pageToken": "<string>",
+  "includeIncompleteReassignments": false
 }'
 ```
 
@@ -80,7 +83,8 @@ payload = json.loads(r'''{
     "verbose": false
   },
   "maxPageSize": 123,
-  "pageToken": "<string>"
+  "pageToken": "<string>",
+  "includeIncompleteReassignments": false
 }''')
 response = requests.request(
     "POST", url, headers=headers, json=payload
@@ -112,7 +116,8 @@ const response = await fetch('http://localhost:7575/v2/state/active-contracts-pa
     "verbose": false
   },
   "maxPageSize": 123,
-  "pageToken": "<string>"
+  "pageToken": "<string>",
+  "includeIncompleteReassignments": false
 }),
 });
 
@@ -144,7 +149,8 @@ curl_setopt_array($curl, [
     "verbose": false
   },
   "maxPageSize": 123,
-  "pageToken": "<string>"
+  "pageToken": "<string>",
+  "includeIncompleteReassignments": false
 }
 JSON,
     CURLOPT_HTTPHEADER => [
@@ -184,7 +190,8 @@ func main() {
     "verbose": false
   },
   "maxPageSize": 123,
-  "pageToken": "<string>"
+  "pageToken": "<string>",
+  "includeIncompleteReassignments": false
 }`))
   req.Header.Set("Authorization", "Bearer <token>")
   req.Header.Set("Content-Type", "application/json")
@@ -222,7 +229,8 @@ var request = HttpRequest.newBuilder()
     "verbose": false
   },
   "maxPageSize": 123,
-  "pageToken": "<string>"
+  "pageToken": "<string>",
+  "includeIncompleteReassignments": false
 }
 """))
     .build();
@@ -256,7 +264,8 @@ request.body = <<~JSON
     "verbose": false
   },
   "maxPageSize": 123,
-  "pageToken": "<string>"
+  "pageToken": "<string>",
+  "includeIncompleteReassignments": false
 }
 JSON
 response = Net::HTTP.start(uri.hostname, uri.port) do |http|
@@ -586,7 +595,7 @@ This filter matches contracts that implement a specific interface.
 <ParamField body="interfaceId" type="string" required>
 
 
-The interface that a matching contract must implement. The ``interface_id`` needs to be valid: corresponding interface should be defined in one of the available packages at the time of the query. Both package-name and package-id reference formats for the identifier are supported. Note: The package-id reference identifier format is deprecated. We plan to end support for this format in version 3.4. Required
+The interface that a matching contract must implement. The ``interface_id`` needs to be valid: corresponding interface should be defined in one of the available packages at the time of the query. Only package-name reference format for the identifier is supported. Note: The package-id reference identifier format was removed in version 3.5. Required
 
 
 
@@ -696,7 +705,7 @@ This filter matches contracts of a specific template.
 <ParamField body="templateId" type="string" required>
 
 
-A template for which the payload should be included in the response. The ``template_id`` needs to be valid: corresponding template should be defined in one of the available packages at the time of the query. Both package-name and package-id reference formats for the identifier are supported. Note: The package-id reference identifier format is deprecated. We plan to end support for this format in version 3.4. Required
+A template for which the payload should be included in the response. The ``template_id`` needs to be valid: corresponding template should be defined in one of the available packages at the time of the query. Only package-name reference format for the identifier is supported. Note: The package-id reference identifier format was removed in version 3.5. Required
 
 
 
@@ -892,7 +901,21 @@ The result page will contain at most max_page_size entries of the respective act
 <ParamField body="pageToken" type="string">
 
 
-To get the next page of the active contracts snapshot, the ``page_token`` should be set to the ``next_page_token`` of the last ``GetActiveContractsPageResponse``. The page token only works if subsequent requests: - are executed on the same participant, - use the same active_at_offset and event_format, - and the participant&#x27;s store was not pruned to after the active_at_offset. If not specified, the first page of the active contracts snapshot will be returned. Optional: can be empty
+To get the next page of the active contracts snapshot, the ``page_token`` should be set to the ``next_page_token`` of the last ``GetActiveContractsPageResponse``. The page token only works if subsequent requests: - are executed on the same participant, - use the same active_at_offset, event_format and include_incomplete_reassignments, - and the participant&#x27;s store was not pruned to after the active_at_offset. If not specified, the first page of the active contracts snapshot will be returned. Optional: can be empty
+
+
+
+
+
+
+</ParamField>
+
+
+
+<ParamField body="includeIncompleteReassignments" type="boolean">
+
+
+If this flag is true, the IncompleteAssigned and IncompleteUnassigned events will be included in the stream based on the specified event_format. If this flag is set to false, Incomplete Reassignments will be omitted. Optional
 
 
 
@@ -1402,7 +1425,7 @@ A valid synchronizer id Required
 
 <ResponseField name="reassignmentCounter" type="integer (int64)" required>
 
-Each corresponding assigned and unassigned event has the same reassignment_counter. This strictly increases with each unassign command for the same contract. Creation of the contract corresponds to reassignment_counter equals zero. This field will be the reassignment_counter of the latest observable activation event on this synchronizer, which is before the active_at_offset. Required
+The reassignment counter of this event. Reassignment counters strictly increase with each unassign command for the same contract. Creation of the contract corresponds to a reassignment_counter equal to zero. This field will be the reassignment_counter of the latest observable activation event on this synchronizer, which is before the active_at_offset. Required
 
 
 
@@ -1548,7 +1571,7 @@ Party on whose behalf the assign command was executed. Empty if the assignment h
 
 <ResponseField name="reassignmentCounter" type="integer (int64)" required>
 
-Each corresponding assigned and unassigned event has the same reassignment_counter. This strictly increases with each unassign command for the same contract. Creation of the contract corresponds to reassignment_counter equals zero. Required
+The reassignment counter associated with this assignment on the target synchronizer. Reassignment counters strictly increase with each unassign command for the same contract. Creation of the contract corresponds to reassignment_counter equal to zero. Required
 
 
 
@@ -2500,7 +2523,7 @@ Party on whose behalf the unassign command was executed. Empty if the unassignme
 
 <ResponseField name="reassignmentCounter" type="integer (int64)" required>
 
-Each corresponding assigned and unassigned event has the same reassignment_counter. This strictly increases with each unassign command for the same contract. Creation of the contract corresponds to reassignment_counter equals zero. Required
+The reassignment counter associated with this unassignment on the source synchronizer. Reassignment counters strictly increase with each unassign command for the same contract. Creation of the contract corresponds to reassignment_counter equal to zero. Required
 
 
 
@@ -2513,7 +2536,7 @@ Each corresponding assigned and unassigned event has the same reassignment_count
 
 <ResponseField name="assignmentExclusivity" type="string">
 
-Assignment exclusivity Before this time (measured on the target synchronizer), only the submitter of the unassignment can initiate the assignment Defined for reassigning participants. Optional
+Assignment exclusivity Before this time (measured on the target synchronizer), only the submitter of the unassignment can initiate the assignment Defined for reassigning participants, up to protocol version 36. Starting with protocol version 37, it is not set: any stakeholder can submit the assignment as soon as the unassignment is completed. Optional
 
 
 
@@ -2822,6 +2845,26 @@ Invalid value, Invalid value for: body
 ## History
 
 <div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-7">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Updated</span>
+      <code class="x2mdx-ref-history-event-version">3.7</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The POST /v2/state/active-contracts-page operation changed in this snapshot.</p>
+
+  </div>
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-6">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Updated</span>
+      <code class="x2mdx-ref-history-event-version">3.6</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The POST /v2/state/active-contracts-page operation changed in this snapshot.</p>
+
+  </div>
 
   <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-3-5">
     <div class="x2mdx-ref-history-event-head">

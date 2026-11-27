@@ -248,42 +248,85 @@ def test_highest_stable_npm_version_ignores_latest_tag_regression() -> None:
     assert module.typescript_bindings.highest_stable_npm_version("@daml/types") == "3.5.2"
 
 
-def test_update_ledger_api_source_updates_publish_version_canton_release(tmp_path: Path) -> None:
+def stub_latest_bundles(module: ModuleType, latest_by_line: dict[str, str]) -> None:
+    module.canton_release_bundles.latest_public_canton_bundle_versions = lambda *_args, **_kwargs: latest_by_line
+
+
+def test_update_ledger_api_source_bumps_stable_pins_and_skips_snapshots(tmp_path: Path) -> None:
     module = load_script_module()
     assert module.canton_release_bundles.DEFAULT_CANTON_REMOTE == "https://github.com/digital-asset/canton.git"
     source_config_path = tmp_path / "source-artifacts.json"
-    write_ledger_api_source_config(source_config_path, canton_version="3.5.0-snapshot.20260405.18555.0.vbee160e5")
-    module.canton_release_bundles.latest_public_canton_bundle_version = lambda *_args, **_kwargs: "3.5.5"
+    write_ledger_api_source_config(source_config_path, canton_version="3.5.0")
+    config = json.loads(source_config_path.read_text(encoding="utf-8"))
+    config["versions"][0]["canton_version"] = "3.4.12-snapshot.20260331.17644.0.v82050917"
+    source_config_path.write_text(json.dumps(config), encoding="utf-8")
+    stub_latest_bundles(module, {"3.4": "3.4.13", "3.5": "3.5.5"})
 
-    update = module.canton_release_bundles.update_source(
-        source_config_path=source_config_path,
-        dry_run=False,
+    updates = module.canton_release_bundles.update_source(source_config_path=source_config_path, dry_run=False)
+
+    assert updates == [
+        module.SourceUpdate(
+            source="JSON Ledger API release bundle",
+            path=source_config_path,
+            field="versions[3.5].canton_version",
+            previous="3.5.0",
+            current="3.5.5",
+        )
+    ]
+    written = json.loads(source_config_path.read_text(encoding="utf-8"))
+    assert [entry["canton_version"] for entry in written["versions"]] == [
+        "3.4.12-snapshot.20260331.17644.0.v82050917",
+        "3.5.5",
+    ]
+    assert written["publish_version"] == "3.5"
+
+
+def test_update_ledger_api_source_adds_newer_release_lines_and_publishes_newest(tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config_path = tmp_path / "source-artifacts.json"
+    write_ledger_api_source_config(source_config_path, canton_version="3.5.19")
+    stub_latest_bundles(
+        module,
+        {"3.4": "3.4.11", "3.5": "3.5.19", "3.6": "3.6.4", "3.7": "3.7.4"},
     )
 
-    assert update == module.SourceUpdate(
-        source="JSON Ledger API release bundle",
-        path=source_config_path,
-        field="versions[3.5].canton_version",
-        previous="3.5.0-snapshot.20260405.18555.0.vbee160e5",
-        current="3.5.5",
-    )
-    versions = json.loads(source_config_path.read_text(encoding="utf-8"))["versions"]
-    assert versions[1]["canton_version"] == "3.5.5"
+    updates = module.canton_release_bundles.update_source(source_config_path=source_config_path, dry_run=False)
+
+    assert [(update.field, update.previous, update.current) for update in updates] == [
+        ("versions[3.6]", "(not configured)", "3.6.4"),
+        ("versions[3.7]", "(not configured)", "3.7.4"),
+        ("publish_version", "3.5", "3.7"),
+    ]
+    written = json.loads(source_config_path.read_text(encoding="utf-8"))
+    assert [(entry["version"], entry["canton_version"]) for entry in written["versions"]] == [
+        ("3.4", "3.4.11"),
+        ("3.5", "3.5.19"),
+        ("3.6", "3.6.4"),
+        ("3.7", "3.7.4"),
+    ]
+    assert written["publish_version"] == "3.7"
+
+
+def test_update_ledger_api_source_dry_run_does_not_write(tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config_path = tmp_path / "source-artifacts.json"
+    write_ledger_api_source_config(source_config_path, canton_version="3.5.19")
+    before = source_config_path.read_text(encoding="utf-8")
+    stub_latest_bundles(module, {"3.4": "3.4.11", "3.5": "3.5.19", "3.6": "3.6.4"})
+
+    updates = module.canton_release_bundles.update_source(source_config_path=source_config_path, dry_run=True)
+
+    assert updates
+    assert source_config_path.read_text(encoding="utf-8") == before
 
 
 def test_update_ledger_api_source_noops_when_current(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
     write_ledger_api_source_config(source_config_path, canton_version="3.5.5")
-    module.canton_release_bundles.latest_public_canton_bundle_version = lambda *_args, **_kwargs: "3.5.5"
+    stub_latest_bundles(module, {"3.4": "3.4.11", "3.5": "3.5.5"})
 
-    assert (
-        module.canton_release_bundles.update_source(
-            source_config_path=source_config_path,
-            dry_run=False,
-        )
-        is None
-    )
+    assert module.canton_release_bundles.update_source(source_config_path=source_config_path, dry_run=False) == []
 
 
 def test_update_ledger_bindings_source_appends_latest_maven_version(tmp_path: Path) -> None:

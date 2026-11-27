@@ -1,6 +1,6 @@
 ---
 title: "POST /v2/parties/external/generate-topology"
-description: "You may use this endpoint to generate the common external topology transactions which can be signed externally and uploaded as part of the allocate party process Note that this request will create a normal namespace using the same key for the identity as for signing. More elaborate schemes such as multi-signature or decentralized parties require you to construct the topology transactions yourself."
+description: "Alpha 3.3: Convenience endpoint to generate topology transactions for external signing Expected to be stable in 3.5 You may use this endpoint to generate the common external topology transactions which can be signed externally and uploaded as part of the allocate party process Note that this request will create a normal namespace using the same key for the identity as for signing."
 api: "POST http://localhost:7575/v2/parties/external/generate-topology"
 authMethod: "bearer"
 playground: "interactive"
@@ -15,14 +15,14 @@ sidebarTitle: "/v2/parties/external/generate-topology"
 
 
 
-  <p class="x2mdx-ref-summary">You may use this endpoint to generate the common external topology transactions which can be signed externally and uploaded as part of the allocate party process Note that this request will create a normal namespace using the same key for the identity as for signing. More elaborate schemes such as multi-signature or decentralized parties require you to construct the topology transactions yourself.</p>
+  <p class="x2mdx-ref-summary">Alpha 3.3: Convenience endpoint to generate topology transactions for external signing Expected to be stable in 3.5 You may use this endpoint to generate the common external topology transactions which can be signed externally and uploaded as part of the allocate party process Note that this request will create a normal namespace using the same key for the identity as for signing.</p>
 
 
 <div class="x2mdx-ref-badges">
 
   <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
 
-  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-3-5">Updated 3.5</a>
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-3-7">Updated 3.7</a>
 
 </div>
 
@@ -53,7 +53,8 @@ curl --request POST \
   "confirmationThreshold": 123,
   "observingParticipantUids": [
     "<string>"
-  ]
+  ],
+  "protocolVersion": 123
 }'
 ```
 
@@ -78,7 +79,8 @@ payload = json.loads(r'''{
   "confirmationThreshold": 123,
   "observingParticipantUids": [
     "<string>"
-  ]
+  ],
+  "protocolVersion": 123
 }''')
 response = requests.request(
     "POST", url, headers=headers, json=payload
@@ -109,7 +111,8 @@ const response = await fetch('http://localhost:7575/v2/parties/external/generate
   "confirmationThreshold": 123,
   "observingParticipantUids": [
     "<string>"
-  ]
+  ],
+  "protocolVersion": 123
 }),
 });
 
@@ -140,7 +143,8 @@ curl_setopt_array($curl, [
   "confirmationThreshold": 123,
   "observingParticipantUids": [
     "<string>"
-  ]
+  ],
+  "protocolVersion": 123
 }
 JSON,
     CURLOPT_HTTPHEADER => [
@@ -179,7 +183,8 @@ func main() {
   "confirmationThreshold": 123,
   "observingParticipantUids": [
     "<string>"
-  ]
+  ],
+  "protocolVersion": 123
 }`))
   req.Header.Set("Authorization", "Bearer <token>")
   req.Header.Set("Content-Type", "application/json")
@@ -216,7 +221,8 @@ var request = HttpRequest.newBuilder()
   "confirmationThreshold": 123,
   "observingParticipantUids": [
     "<string>"
-  ]
+  ],
+  "protocolVersion": 123
 }
 """))
     .build();
@@ -249,7 +255,8 @@ request.body = <<~JSON
   "confirmationThreshold": 123,
   "observingParticipantUids": [
     "<string>"
-  ]
+  ],
+  "protocolVersion": 123
 }
 JSON
 response = Net::HTTP.start(uri.hostname, uri.port) do |http|
@@ -520,6 +527,22 @@ Other observing participant ids for this party Optional: can be empty
 
 
 
+<ParamField body="protocolVersion" type="number">
+OpenAPI type: <code>integer (int32)</code>.
+
+
+
+The protocol version to create the topology transactions for, so that clients that only read topology transactions of an older protocol version can read them, e.g. 36 on a synchronizer with protocol version 37. Must be the synchronizer&#x27;s protocol version or a lower one whose topology transactions the synchronizer admits: from protocol version 37 on, a synchronizer admits those of protocol version 36. Defaults to the synchronizer&#x27;s protocol version. Optional
+
+
+
+
+
+
+</ParamField>
+
+
+
 
 
 
@@ -570,7 +593,7 @@ The fingerprint of the supplied public key Required
 
 <ResponseField name="topologyTransactions" type="string[]" required>
 
-The serialized topology transactions which need to be signed and submitted as part of the allocate party process Note that the serialization includes the versioning information. Therefore, the transaction here is serialized as an `UntypedVersionedMessage` which in turn contains the serialized `TopologyTransaction` in the version supported by the synchronizer. Required: must be non-empty
+The serialized topology transactions which need to be signed and submitted as part of the allocate party process Note that the serialization includes the versioning information. Therefore, the transaction here is serialized as an `UntypedVersionedMessage` which in turn contains the serialized `TopologyTransaction` for the requested protocol version, or for the synchronizer&#x27;s protocol version if none is requested. Required: must be non-empty
 
 
 
@@ -761,6 +784,26 @@ Invalid value, Invalid value for: body
 ## History
 
 <div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-7">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Updated</span>
+      <code class="x2mdx-ref-history-event-version">3.7</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The POST /v2/parties/external/generate-topology operation changed in this snapshot.</p>
+
+  </div>
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-6">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Updated</span>
+      <code class="x2mdx-ref-history-event-version">3.6</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The POST /v2/parties/external/generate-topology operation changed in this snapshot.</p>
+
+  </div>
 
   <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-5">
     <div class="x2mdx-ref-history-event-head">

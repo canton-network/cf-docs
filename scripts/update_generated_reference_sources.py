@@ -160,19 +160,19 @@ def main() -> int:
             )
         )
     if SOURCE_LEDGER_API in sources:
-        update = canton_release_bundles.update_source(
-            source_config_path=args.ledger_api_source_config.resolve(),
-            dry_run=args.dry_run or args.check,
+        updates.extend(
+            canton_release_bundles.update_source(
+                source_config_path=args.ledger_api_source_config.resolve(),
+                dry_run=args.dry_run or args.check,
+            )
         )
-        if update is not None:
-            updates.append(update)
     if SOURCE_LEDGER_API_ASYNCAPI in sources:
-        update = canton_release_bundles.update_source(
-            source_config_path=args.ledger_api_asyncapi_source_config.resolve(),
-            dry_run=args.dry_run or args.check,
+        updates.extend(
+            canton_release_bundles.update_source(
+                source_config_path=args.ledger_api_asyncapi_source_config.resolve(),
+                dry_run=args.dry_run or args.check,
+            )
         )
-        if update is not None:
-            updates.append(update)
     if SOURCE_LEDGER_BINDINGS in sources:
         updates.extend(
             ledger_bindings.update_source(

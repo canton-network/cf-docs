@@ -2,6 +2,170 @@
 title: "Splice"
 description: "Release notes and version history for Global Synchronizer software"
 ---
+## 0.10.4
+
+    - Canton: Upgrade Canton to [3.7.5](/global-synchronizer/release-notes/canton-releases/3-7-5).
+
+    - Scan App
+
+      - Removed the internal `/v0/transfer-command-counter/{party}` and `/v0/transfer-command/status` endpoints.
+        Most of the deprecated TransferCommand functionality has already been removed in splice 0.8.0, this removes
+        the remaining parts.
+      - Removed the deprecated `/v0/amulet-config-for-round` endpoint. Use the `transferConfigUsd` and `amuletPrice`
+        fields of the `OpenMiningRound` contracts returned by `/v0/open-and-issuing-mining-rounds` instead.
+      - The `DeleteCorruptAcsSnapshotTrigger` is removed because it is obsolete.
+      - Scan switches its update history to tables partitioned by record time. On the first start, a database migration
+        renames the existing update history tables to `*_legacy` (no data is copied) and creates the new tables.
+        An SV that joins after the switch cannot backfill update history from other SVs until a later release.
+
+    - Validator App
+
+      - Removed the `/v0/scan-proxy/transfer-command-counter/{party}` and `/v0/scan-proxy/transfer-command/status`
+        endpoints. Most of the deprecated TransferCommand functionality has already been removed in splice 0.8.0,
+        this removes the remaining parts.
+
+    - Topology Key Monitor
+
+      - Added support for participant admin API auth. See the [documentation](/global-synchronizer/production-operations/topology-key-monitor#participant-admin-api-authentication)
+        for instructions on how to enable it on the participant and topology key monitor Helm charts.
+        Note that admin API auth will be enabled by default starting from Splice 0.11.0.
+
+## 0.10.3
+
+    - Canton: Upgrade Canton to [3.7.4](/global-synchronizer/release-notes/canton-releases/3-7-4).
+
+    - Scan App
+
+      - New ACS snapshot pruning, off by default. With `canton.scan-apps.scan-app.pruning.snapshots.enabled = true` (Helm
+        value `pruning.snapshots.enabled`) and a finite analyzable time window, Scan deletes the ACS snapshots stored in
+        per-snapshot tables that are older than the window, except the daily snapshot that bulk storage exports. Later
+        releases will extend this setting to the daily snapshots once they are in bulk storage.
+        ACS snapshot queries with `record_time_match=exact` for a time whose snapshot was pruned then return `not found`.
+      - Added an optional `daml_value_encoding` field to the requests of `/v2/state/acs` and `/v2/holdings/state`.
+        It defaults to `compact_json`, which is what these endpoints returned so far.
+      - Added the `ledger_api_json` option to the `DamlValueEncoding` enum, used by the `daml_value_encoding`
+        parameter of the update history and event history endpoints.
+        It encodes Daml values like the JSON Ledger API (v2) does. The encoding is identical to the existing
+        `compact_json`, with two differences: numeric values are encoded differently ("0E-10" vs "0.0000000000"),
+        and it omits trailing `null` fields of Daml records. The latter is important: with `compact_json`,
+        a Daml upgrade that adds new optional fields to templates caused old values to be returned with those
+        fields included in the JSON object (as `null`), so the returned JSON depends on the Scan version.
+        The new `ledger_api_json` encoding returns the same JSON regardless of the Scan version.
+        `compact_json` remains the default for now. All users are advised to switch to the new encoding:
+
+        - The `ledger_api_json` encoding will become the new default in a future release, replacing `compact_json`.
+        - In the coming months, Scan will start serving updates in bulk, and historical data more than a few weeks old
+          will be available only in bulk. The bulk data will not support the `compact_json` encoding.
+
+    - SV App
+
+      - Joining SVs now download the DSO party ACS and sequencer onboarding state from their sponsor as files
+        instead of keeping the responses in the SV app's memory, reducing SV app memory usage for large
+        snapshots. SVs that restrict SV app ingress must allow other SVs to reach the new
+        `/v0/onboard/sv/party-migration/prepare`, `/v0/onboard/sv/sequencer/prepare` and
+        `/v0/onboard/sv/download/{id}` endpoints, which are tagged `x-external-audience: svs`.
+        Interrupted downloads resume where they stopped. Proxies between SVs must pass through the
+        `Repr-Digest` response header, which the joining SV uses to verify the snapshot. They should also
+        pass through the `Range` and `Content-Range` headers; otherwise, interrupted downloads start again
+        from the beginning.
+
+    - Deployment
+
+      - SV onboarding snapshots are kept in `canton.sv-apps.sv.onboarding-snapshots.directory`, a new required setting
+        that must point to persistent storage. The SV Helm chart now always creates a dedicated 35 GiB
+        `onboardingSnapshotsPvc` for it, mounted at `/onboarding-snapshots`.
+      - The Postgres images used by the Docker Compose deployments and by the Helm `pg-init` init containers are bumped
+        to `postgres:18.7-trixie`, and the `splice-postgres` chart to `postgres:14.25-trixie`. If you run the Compose
+        Postgres or the `splice-postgres` chart, recreate the Postgres container to pick up the new version.
+      - App Helm charts and the validator compose now support participant Admin API authentication. Until 0.11.0, it is opt-in
+        and requires additional setup in the auth provider. From 0.11.0 it will be enabled by default and require an explicit
+        opt-out configuration to keep running without it. It is strongly encouraged to configure it as soon as possible.
+        Please see the [k8s deployment](/global-synchronizer/deployment/validator-kubernetes#configuring-authentication)
+        and [docker compose deployment](/global-synchronizer/deployment/validator-docker-compose#configuring-authentication)
+        docs for more information on how to set it up.
+        For SV deployment look [here](/global-synchronizer/deployment/kubernetes-deployment#configuring-authentication).
+      - As a mitigation for CVE-2026-114938, the Helm charts and Docker Compose setups now pass
+        `-XX:-UseBASE64Intrinsics` to the JVM by default, disabling the JVM's Base64 intrinsics.
+        If you override `defaultJvmOptions` in Helm, or set `PARTICIPANT_JVM_OPTS` / `VALIDATOR_JVM_OPTS`
+        in Docker Compose, add `-XX:-UseBASE64Intrinsics` to your JVM options yourself.
+      - Docker Compose: Bump nginx to 1.31.9, which includes the fixes for CVE-2026-123633 and CVE-2026-123007.
+        This matters only for validator and LocalNet Compose deployments whose nginx is reachable from outside the host (e.g., validators started with `-E`),
+        which our docs explicitly recommend against. If you pin `NGINX_VERSION` yourself, update it to 1.31.9 or later.
+
+## 0.10.2
+
+  - Canton: Upgrade Canton to [3.7.3](/global-synchronizer/release-notes/canton-releases/3-7-3).
+
+  - Scan App
+
+    - `/v0/events` responses now include two new per-event fields:
+
+      - `asset_activity_records`: asset-side activity records (CIP-104). Omitted from JSON when there is no asset activity.
+      - `submitting_app_provider`: the submitting app provider party identifier when the submitter is a featured app. Omitted from JSON when absent.
+
+    - CIP-104 v1.1 populates four optional fields on `OpenMiningRoundSummary`:
+      `optIssuancePerFeaturedAppRewardCoupon`, `optUnclaimedAppRewards`,
+      `optIssuancePerFeaturedAssetRewardCoupon`, and
+      `optTotalFeaturedAssetRewardCoupons`. The two `*Asset*` fields carry
+      the asset-side issuance ratio and the total featured-asset reward
+      coupons.
+
+    - Explorer operators:
+
+      Because featured-app and featured-asset activity now have separate
+      issuance ratios, explorers should ingest the new `*Asset*` fields
+      alongside the existing app-activity ones; explorers that only read the
+      app-activity fields will under-report total app rewards minted.
+
+    - Changed `/v0/internal/reward-accounting-process/rounds/{round_number}/activity-totals` to include additional fields.
+
+    - Added `POST /v0/reward-coupons-v2-disclosures`, which returns base64-encoded
+      created event blobs for active `Splice.Amulet:RewardCouponV2` contracts (up to
+      100 contract IDs per request) for use by external reward-sharing automation.
+
+  - SV App
+
+    - Removed the remaining CometBFT support from the SV app and UI, including the
+      `/v0/admin/domain/cometbft/{status,json-rpc,debug}` endpoints, the
+      `splice_sv_cometbft_*` metrics and the CometBFT debug tab in the SV UI.
+
+    - Added support for the CIP-104 v1.1 (TBAR) governance changes:
+
+      - The amended activity record computation is only used for rounds opening at or after
+        the time set for the switch-over key `cip-104/use-amended-calculation-after`
+        in `svOperationsSwitchOverTimes` of the DSO rules configuration.
+        SVs activate it with a "Set Decentralized Synchronizer Operations (DSO) Rules Configuration" vote.
+
+      - The "Set Amulet Rules Configuration" vote request now supports setting the new
+        Amulet configuration parameters `extraFeaturedAssetActivityWeight` (default `0.2`),
+        `maxExtraFeaturedAssetActivityWeightPerAsset` (default `0.1`), and
+        `dsoAppActivityWeight` (default `0.1`). Leave a parameter blank to use its default.
+
+      - The "Feature Application" vote request now supports setting all featured app metadata:
+        app category (basic featured app, featured asset-moving app, or featured asset),
+        app operations parties, and app composition weight.
+
+      - Added the vote request type "Update Featured Application Metadata (use with Splice 0.10.0 and later)"
+        to change the metadata of an already featured app.
+        Once the vote is accepted, SV app automation applies the change to the app's featured app right;
+        if that does not happen before the vote request timeout, the change expires and is discarded.
+        The older "Update Featured Application Metadata (use before Splice 0.10.0)" vote request type
+        can only change the app composition weight, and will be removed in Splice 0.11.0.
+
+      - The SV app rejects creating a vote request to feature an app or update its metadata if:
+
+        - the provider is already featured (when featuring an app),
+        - the app operations parties contain duplicates or the provider itself, or
+        - one of the app operations parties is already the provider or an app operations party
+          of another featured app.
+
+        The SV UI already flags the first two conditions while filling in the form,
+        and additionally warns if one of the app operations parties is used in another pending vote request.
+
+  - Helm charts and Docker images
+
+    - Removed the remaining CometBFT support including the cometbft Helm charts, docker images and unused `splice-info` values.
+
 ## 0.10.1
 
   - Canton: Upgrade Canton to [3.7.2](/global-synchronizer/release-notes/canton-releases/3-7-2).
@@ -1256,7 +1420,7 @@ Note: 0.8.2 is skipped as it packaged a broken `splice-node` executable in the r
   - Daml
 
     - Add `RewardCouponV2` to represent rewards available from traffic-based app rewards that are computed
-      by the SV apps off-ledger as described in [CIP 104](https://github.com/canton-foundation/cips/blob/main/cip-0104/cip-0104.md>).
+      by the SV apps off-ledger as described in [CIP 104](https://github.com/canton-foundation/cips/blob/main/cip-0104/cip-0104.md).
       They are created in an efficient batched fashion once per-round for every party that is eligible for traffic-based app rewards.
       In contrast to the existing reward coupons, these new coupons are using time based expiry, and can be minted by default up to 36h after their creation,
       thereby allowing their beneficiaries to batch the minting to save traffic costs.
@@ -1779,7 +1943,7 @@ The validator APIs `/v0/admin/external-party/transfer-preapproval/prepare-send` 
 ## 0.5.14
 
 - Participant
-  - Increase default retention parameters of the [session encryption keys cache](https://docs.digitalasset.com/operate/3.4/howtos/optimize/session_keys.html#configure-session-keys). Most notably, increase the lifetime of session encryption keys from 10 minutes to 1 hour, to improve performance and reduce (KMS) costs throughout the network. This change has no practical security implication for participants that are not using an external KMS: in this case the main (asymmetric) encryption keys are usually already available in memory (in addition to being stored inside the participant database). We encourage operators of KMS-enabled participants to review the updated sections on KMS usage for validator participants and SV participants for more pointers about the security impact of session key caching and ways to tweak the relevant parameters to individual needs.
+  - Increase default retention parameters of the [session encryption keys cache](/global-synchronizer/production-operations/key-management#configure-session-keys). Most notably, increase the lifetime of session encryption keys from 10 minutes to 1 hour, to improve performance and reduce (KMS) costs throughout the network. This change has no practical security implication for participants that are not using an external KMS: in this case the main (asymmetric) encryption keys are usually already available in memory (in addition to being stored inside the participant database). We encourage operators of KMS-enabled participants to review the updated sections on KMS usage for validator participants and SV participants for more pointers about the security impact of session key caching and ways to tweak the relevant parameters to individual needs.
 - SV app
   - Improve the automation for converting featured app activity markers to handle batches of markers for nodes that have not vetted the same version of the amulet package.
 - Validator app
@@ -1817,7 +1981,7 @@ The validator APIs `/v0/admin/external-party/transfer-preapproval/prepare-send` 
 
   - Sequencer Inspection Service
 
-    A new service is available on the Admin API of the sequencer. It provides an RPC that allows to query for traffic summaries of sequenced events. Refer to the [traffic documentation](https://docs.digitalasset.com/subnet/3.4/howtos/operate/traffic.html) for more details.
+    A new service is available on the Admin API of the sequencer. It provides an RPC that allows to query for traffic summaries of sequenced events. Refer to the [traffic documentation](/global-synchronizer/extension-synchronizers/synchronizer-operations#sequencer-traffic-management) for more details.
 
   - Minor Improvements
 
@@ -2303,7 +2467,7 @@ Note: 0.4.24 was published incorrectly and should be skipped in favor of 0.4.25.
 ## 0.4.16
 
 - Daml
-  - Add the `splice-util-featured-app-proxies` package to simplify the creation of featured app activity markers for token standard actions. This is a utility package that is not uploaded by default to a validator node. An example use-case for this package is an exchange that wants to [earn app rewards on deposits and withdrawals](https://docs.digitalasset.com/integrate/devnet/exchange-integration/extensions.html) of CN token standard tokens.
+  - Add the `splice-util-featured-app-proxies` package to simplify the creation of featured app activity markers for token standard actions. This is a utility package that is not uploaded by default to a validator node. An example use-case for this package is an exchange that wants to [earn app rewards on deposits and withdrawals](/sdks-tools/api-reference/splice-daml-apis#how-to-earn-featured-app-rewards-for-wallet-user-activity) of CN token standard tokens.
 - Docs
   - SV
     - Document process for ignoring party IDs for reward expiry automation that is currently recommended after each Daml upgrade, to reduce the impact of validators that are unable to complete the Daml upgrade due to being on an outdated version of Splice.
@@ -2462,7 +2626,7 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
     The relevant documentation is updated at `sv-helm`.
 - Scan
   - Fix [bug \#1252](https://github.com/canton-network/splice/issues/1252): populate the token metadata total supply using the aggregates used for closed rounds. The data used corresponds to the data served by the `/v0/total-amulet-balance` endpoint in `app_dev_scan_api` for the latest closed round.
-  - Fix [bug \#1280](https://github.com/canton-network/splice/pull/1280): `record_time` in Scan API `/updates` is now right-padded to 6 digits (microseconds).
+  - Fix [bug \#1280](https://github.com/canton-network/splice/issues/1280): `record_time` in Scan API `/updates` is now right-padded to 6 digits (microseconds).
 - Validator
   - Fix a bug where sweeps through transfer preapprovals failed with a `CONTRACT_NOT_FOUND` error if the transfer preapproval provider party (usually the validator operator) of the receiver is featured.
 - Splice
@@ -2630,7 +2794,7 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
 - Docs
 
   - Improve the application development documentation to better explain the available APIs and how to use them.
-  - Add relevant links to the new application developer documentation pages published by Digital Asset at [https://docs.digitalasset.com/build/3.4/](https://docs.digitalasset.com/build/3.4/).
+  - Add relevant links to the new application developer documentation pages published by Digital Asset in the [App Development documentation](/appdev/get-started/choose-your-path).
   - Fixed docker-compose docs around migrating from a non-authenticated validator to an authenticated validator. A complete wipe of the validator database is not required, as opposed to what the docs previously stated. See the relevant section on authenticated docker-compose validators.
 
 ## 0.4.3
@@ -3332,7 +3496,7 @@ Note: This release must be applied through the `Synchronizer Upgrades with Downt
     | walletPayments     | 0.1.4   |
 - Deployment
   - Added an `livenessProbeInitialDelaySeconds` parameter to all helm charts.
-  - Helm charts that deploy a frontend (`cn-scan`, `cn-validator`, `cn-sv-node`, and `cn-splitwell-web-ui`) now accept a new parameter, `spliceInstanceNames`, to configure network-specific terminology. The correct values should be consumed from the [cn-svc-configs ui-config-values.yaml](https://github.com/DACH-NY/cn-svc-configs/blob/main/configs/ui-config-values.yaml)
+  - Helm charts that deploy a frontend (`cn-scan`, `cn-validator`, `cn-sv-node`, and `cn-splitwell-web-ui`) now accept a new parameter, `spliceInstanceNames`, to configure network-specific terminology. The correct values should be consumed from the [configs ui-config-values.yaml](https://github.com/canton-foundation/configs/blob/main/configs/ui-config-values.yaml)
   - Docker environment variables of the form `CN_APP_*_UI_*` have been renamed to `CN_APP_UI_*`, dropping the app name prefix. For users of the Helm charts, no further action is needed.
 - Sequencer
   - Improve performance of sequencer startup and querying the sequencer onboarding snapshot when onboarding new SVs. This adds a new index to the sequencer database so can take a while depending on the size of the DB.
@@ -3480,7 +3644,7 @@ Note: 0.1.11 was skipped as it contained some issues. Upgrade directly from 0.1.
   - The wallet automation for collecting rewards is started only once per Daml party instead of once per onboarded wallet user. This enables setups where multiple wallet users have access to the same coin holdings for the same Daml party.
   - Fixed a bug where a user wallet wrongly attempted to use the featured app right of the validator admin party if that existed, which resulted in failed transactions.
 
-- The `approved-sv-id-values-\*.yaml` files have been removed from the release bundle. The approved SV identities for each network instance can now exclusively be obtained from the [cn-svc-configs repo](https://github.com/DACH-NY/cn-svc-configs) .
+- The `approved-sv-id-values-\*.yaml` files have been removed from the release bundle. The approved SV identities for each network instance can now exclusively be obtained from the [configs repo](https://github.com/canton-foundation/configs) .
 
 - CC Scan
 

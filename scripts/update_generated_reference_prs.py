@@ -65,6 +65,7 @@ class UpdateTarget:
     require_summary_changes: bool = False
     auto_merge: bool = True
     requires_daml_tooling: bool = False
+    history_reports: tuple[str, ...] = ()
 
 
 UPDATE_TARGETS = (
@@ -181,30 +182,26 @@ UPDATE_TARGETS = (
         title="Update Wallet Gateway OpenRPC reference",
         branch="generated-references/wallet-gateway-openrpc/update",
         description=(
-            "Updates the Wallet Gateway OpenRPC source pin to the latest stable "
-            "wallet-gateway-remote release and regenerates the checked-in Wallet Gateway "
-            "OpenRPC reference pages."
+            "Regenerates the Wallet Gateway OpenRPC reference from every stable "
+            "wallet-gateway-remote release at or above the configured lower bound."
         ),
         generate_commands=(
             nix_develop_command("npm run generate:wallet-gateway-openrpc-reference"),
         ),
         paths=(
-            "config/x2mdx/wallet-gateway-openrpc/source-artifacts.json",
             "docs-main/docs.json",
             "docs-main/reference/wallet-gateway-json-rpc",
         ),
-        summary_kind="source-config",
-        summary_path="config/x2mdx/wallet-gateway-openrpc/source-artifacts.json",
+        summary_kind="history-report",
+        summary_path=None,
         summary_label="Wallet Gateway OpenRPC",
+        history_reports=(
+            "docs-main/reference/wallet-gateway-json-rpc/history-report.json",
+        ),
         validation=(
-            "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc",
             "npm run generate:wallet-gateway-openrpc-reference",
             "git diff --check",
         ),
-        source_update_commands=(
-            nix_develop_command("npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
-        ),
-        source_update_paths=("config/x2mdx/wallet-gateway-openrpc/source-artifacts.json",),
     ),
     UpdateTarget(
         key="json-api-reference",
@@ -315,30 +312,27 @@ UPDATE_TARGETS = (
         title="Update Java ledger bindings reference",
         branch="generated-references/ledger-bindings/update",
         description=(
-            "Updates the Java ledger bindings source pins to the latest stable "
-            "Maven artifacts and regenerates the checked-in Java bindings reference pages."
+            "Regenerates the Java ledger bindings reference from every stable Maven "
+            "release at or above the configured lower bound."
         ),
         generate_commands=(
             nix_develop_command("npm run generate:ledger-bindings-api-reference"),
         ),
         paths=(
-            "config/x2mdx/ledger-bindings/source-artifacts.json",
             "docs-main/docs.json",
             "docs-main/reference/java-bindings.mdx",
             "docs-main/reference/java",
         ),
-        summary_kind="artifact-source-config",
-        summary_path="config/x2mdx/ledger-bindings/source-artifacts.json",
+        summary_kind="history-report",
+        summary_path=None,
         summary_label="Java ledger bindings",
+        history_reports=(
+            "docs-main/reference/java/history-report.json",
+        ),
         validation=(
-            "npm run update:generated-reference-sources -- --source ledger-bindings",
             "npm run generate:ledger-bindings-api-reference",
             "git diff --check",
         ),
-        source_update_commands=(
-            nix_develop_command("npm run update:generated-reference-sources -- --source ledger-bindings"),
-        ),
-        source_update_paths=("config/x2mdx/ledger-bindings/source-artifacts.json",),
         auto_merge=False,
     ),
     UpdateTarget(
@@ -346,29 +340,26 @@ UPDATE_TARGETS = (
         title="Update Daml Standard Library reference",
         branch="generated-references/daml-standard-library/update",
         description=(
-            "Updates the Daml Standard Library source pin to the latest DPM SDK "
-            "version and regenerates the checked-in Daml Standard Library reference pages."
+            "Regenerates the Daml Standard Library reference from every DPM SDK "
+            "release at or above the configured lower bound."
         ),
         generate_commands=(
             nix_develop_command("npm run generate:daml-standard-library-reference"),
         ),
         paths=(
-            "config/x2mdx/daml-standard-library/source-artifacts.json",
             "docs-main/docs.json",
             "docs-main/appdev/reference/daml-standard-library",
         ),
-        summary_kind="source-config",
-        summary_path="config/x2mdx/daml-standard-library/source-artifacts.json",
+        summary_kind="history-report",
+        summary_path=None,
         summary_label="Daml Standard Library",
+        history_reports=(
+            "docs-main/appdev/reference/daml-standard-library/history-report.json",
+        ),
         validation=(
-            "npm run update:generated-reference-sources -- --source daml-standard-library",
             "npm run generate:daml-standard-library-reference",
             "git diff --check",
         ),
-        source_update_commands=(
-            nix_develop_command("npm run update:generated-reference-sources -- --source daml-standard-library"),
-        ),
-        source_update_paths=("config/x2mdx/daml-standard-library/source-artifacts.json",),
         requires_daml_tooling=True,
     ),
     UpdateTarget(
@@ -376,29 +367,26 @@ UPDATE_TARGETS = (
         title="Update Daml Script reference",
         branch="generated-references/daml-script/update",
         description=(
-            "Updates the Daml Script source pin to the latest DPM SDK version and "
-            "regenerates the checked-in Daml Script reference pages."
+            "Regenerates the Daml Script reference from every DPM SDK release at or "
+            "above the configured lower bound."
         ),
         generate_commands=(
             nix_develop_command("npm run generate:daml-script-reference"),
         ),
         paths=(
-            "config/x2mdx/daml-script/source-artifacts.json",
             "docs-main/docs.json",
             "docs-main/appdev/reference/daml-script",
         ),
-        summary_kind="source-config",
-        summary_path="config/x2mdx/daml-script/source-artifacts.json",
+        summary_kind="history-report",
+        summary_path=None,
         summary_label="Daml Script",
+        history_reports=(
+            "docs-main/appdev/reference/daml-script/history-report.json",
+        ),
         validation=(
-            "npm run update:generated-reference-sources -- --source daml-script",
             "npm run generate:daml-script-reference",
             "git diff --check",
         ),
-        source_update_commands=(
-            nix_develop_command("npm run update:generated-reference-sources -- --source daml-script"),
-        ),
-        source_update_paths=("config/x2mdx/daml-script/source-artifacts.json",),
         requires_daml_tooling=True,
     ),
     UpdateTarget(
@@ -406,30 +394,29 @@ UPDATE_TARGETS = (
         title="Update TypeScript bindings reference",
         branch="generated-references/typescript-bindings/update",
         description=(
-            "Updates the TypeScript bindings source pins to the latest stable npm "
-            "releases and regenerates the checked-in TypeScript bindings reference pages."
+            "Regenerates the TypeScript bindings reference from every stable npm "
+            "release at or above each package's configured lower bound."
         ),
         generate_commands=(
             nix_develop_command("npm run generate:typescript-bindings-reference"),
         ),
         paths=(
-            "config/x2mdx/typescript-bindings/source-artifacts.json",
             "docs-main/docs.json",
             "docs-main/reference/typescript.mdx",
             "docs-main/reference/typescript",
         ),
-        summary_kind="package-source-config",
-        summary_path="config/x2mdx/typescript-bindings/source-artifacts.json",
+        summary_kind="history-report",
+        summary_path=None,
         summary_label="TypeScript bindings",
+        history_reports=(
+            "docs-main/reference/typescript/daml-types-history-report.json",
+            "docs-main/reference/typescript/wallet-sdk-history-report.json",
+            "docs-main/reference/typescript/dapp-sdk-history-report.json",
+        ),
         validation=(
-            "npm run update:generated-reference-sources -- --source typescript-bindings",
             "npm run generate:typescript-bindings-reference",
             "git diff --check",
         ),
-        source_update_commands=(
-            nix_develop_command("npm run update:generated-reference-sources -- --source typescript-bindings"),
-        ),
-        source_update_paths=("config/x2mdx/typescript-bindings/source-artifacts.json",),
     ),
     UpdateTarget(
         key="canton-console-reference",
@@ -656,6 +643,23 @@ def body_markdown(*, target: UpdateTarget, changes: list[str]) -> str:
     )
 
 
+def summarize_history_report_changes(target: UpdateTarget, base_sha: str) -> list[str]:
+    """Summarize version changes from generated history reports for targets with no source pin."""
+    changes: list[str] = []
+    for report_path in target.history_reports:
+        after_path = REPO_ROOT / report_path
+        if not after_path.exists():
+            continue
+        try:
+            before_file = pr_utils.write_base_file(base_sha, report_path)
+        except Exception:
+            before_file = None
+        changes.extend(
+            summarize_version_changes.history_report_changes(before_file, after_path)
+        )
+    return changes
+
+
 def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[str]:
     if target.summary_path is None:
         return []
@@ -773,7 +777,10 @@ def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, rep
         pr_utils.run(command)
 
     if changes is None:
-        changes = summarize_target_changes(target, before_path) if before_path is not None else []
+        if target.history_reports:
+            changes = summarize_history_report_changes(target, base_sha)
+        else:
+            changes = summarize_target_changes(target, before_path) if before_path is not None else []
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as body_file:
         body_path = Path(body_file.name)
     body_path.write_text(body_markdown(target=target, changes=changes), encoding="utf-8")
