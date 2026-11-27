@@ -250,6 +250,98 @@ def test_unpinned_target_generates_even_when_no_source_file_changed(monkeypatch,
     ]
 
 
+def test_generation_failure_is_retried_from_a_clean_checkout(monkeypatch) -> None:
+    import subprocess
+
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+    generate = module.nix_develop_command("npm run generate:daml-script-reference")
+    calls: list[tuple[str, ...]] = []
+    failures = [subprocess.CalledProcessError(1, list(generate))]
+    sleeps: list[float] = []
+
+    def fake_run(command):
+        calls.append(tuple(command))
+        if failures:
+            raise failures.pop(0)
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(module, "summarize_history_report_changes", lambda target, base_sha: ["- changed"])
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr", kwargs["target"].key)))
+    monkeypatch.setattr(module.pr_utils, "run", fake_run)
+    monkeypatch.setattr(module.time, "sleep", sleeps.append)
+
+    module.process_target(
+        target=target, base_sha="base-sha", base_branch="main", repository="canton-network/cf-docs"
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        generate,
+        ("reset", "base-sha"),
+        generate,
+        ("pr", "daml-script"),
+    ]
+    assert sleeps == [module.GENERATION_RETRY_DELAY_SECONDS]
+
+
+def test_generation_failure_is_raised_after_the_second_attempt(monkeypatch) -> None:
+    import subprocess
+
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+    published: list[str] = []
+
+    def always_fails(command):
+        raise subprocess.CalledProcessError(1, list(command))
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: None)
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(module.pr_utils, "run", always_fails)
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: published.append("pr"))
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+
+    try:
+        module.process_target(
+            target=target, base_sha="base-sha", base_branch="main", repository="canton-network/cf-docs"
+        )
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        raise AssertionError("expected CalledProcessError")
+    assert published == []
+
+
+def test_publish_failures_are_not_regenerated(monkeypatch) -> None:
+    import subprocess
+
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+    generations: list[str] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: None)
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(module, "summarize_history_report_changes", lambda target, base_sha: ["- changed"])
+    monkeypatch.setattr(module.pr_utils, "run", lambda command: generations.append("run"))
+
+    def failing_publish(**_kwargs):
+        raise subprocess.CalledProcessError(1, ["gh", "pr", "create"])
+
+    monkeypatch.setattr(module, "create_or_update_pull_request", failing_publish)
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: (_ for _ in ()).throw(AssertionError("no sleep")))
+
+    try:
+        module.process_target(
+            target=target, base_sha="base-sha", base_branch="main", repository="canton-network/cf-docs"
+        )
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        raise AssertionError("expected CalledProcessError")
+    assert generations == ["run"]
+
+
 def test_pinned_target_skips_generation_when_source_is_unchanged(monkeypatch) -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "json-api-reference")
