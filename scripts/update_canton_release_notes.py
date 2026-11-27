@@ -9,11 +9,13 @@ import sys
 import tarfile
 import urllib.error
 import urllib.request
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
 import canton_release_reference
+import network_retry
 from generated_reference_sources import canton_release_bundles
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -133,7 +135,8 @@ def fetch_release_note_markdown(
         source.url,
         headers={"User-Agent": USER_AGENT},
     )
-    try:
+
+    def read_release_notes() -> str | None:
         with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
             with tarfile.open(fileobj=response, mode="r|gz") as archive:
                 for member in archive:
@@ -141,11 +144,23 @@ def fetch_release_note_markdown(
                         continue
                     release_notes = archive.extractfile(member)
                     if release_notes is None:
-                        break
+                        return None
                     return release_notes.read().decode("utf-8")
+        return None
+
+    def is_retryable(error: BaseException) -> bool:
+        # A stream cut short surfaces as a tar or gzip error rather than a network error.
+        return network_retry.is_transient(error) or isinstance(error, (tarfile.ReadError, zlib.error))
+
+    try:
+        markdown = network_retry.retry_call(
+            f"release notes {source.url}", read_release_notes, is_retryable=is_retryable
+        )
     except (urllib.error.URLError, tarfile.TarError, UnicodeDecodeError) as error:
         raise RuntimeError(f"Could not read {source.archive_path} from {source.url}: {error}") from error
-    raise RuntimeError(f"Could not find {source.archive_path} in {source.url}")
+    if markdown is None:
+        raise RuntimeError(f"Could not find {source.archive_path} in {source.url}")
+    return markdown
 
 
 def current_release_version(page_text: str) -> str:

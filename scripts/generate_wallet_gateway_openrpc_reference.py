@@ -13,6 +13,7 @@ from typing import Any
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
 import generated_reference_nav
+import network_retry
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
@@ -93,7 +94,7 @@ def git(args: list[str], *, cwd: Path, capture: bool = False) -> str:
 
 
 def gh(args: list[str], *, capture: bool = False) -> str:
-    return run(["gh", *args], capture=capture)
+    return network_retry.run_gh(args, capture=capture)
 
 
 def git_try_show(repo_dir: Path, tag: str, source_path: str) -> str | None:
@@ -113,11 +114,18 @@ def git_try_show(repo_dir: Path, tag: str, source_path: str) -> str | None:
 def ensure_repo(repo_dir: Path, *, remote: str, fetch: bool) -> Path:
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
     if not repo_dir.exists():
-        run(["git", "clone", "--bare", remote, str(repo_dir)])
+        network_retry.run_command(
+            ["git", "clone", "--bare", remote, str(repo_dir)], operation="git clone", retry=True
+        )
     elif git(["remote", "get-url", "origin"], cwd=repo_dir, capture=True) != remote:
         git(["remote", "set-url", "origin", remote], cwd=repo_dir)
     if fetch:
-        git(["fetch", "origin", "--tags", "--prune", "--force"], cwd=repo_dir)
+        network_retry.run_command(
+            ["git", "fetch", "origin", "--tags", "--prune", "--force"],
+            cwd=repo_dir,
+            operation="git fetch",
+            retry=True,
+        )
     return repo_dir
 
 

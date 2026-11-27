@@ -13,6 +13,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import network_retry
 from docs_env import repo_direnv_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -53,8 +54,7 @@ def github_json(url: str) -> Any:
         url,
         headers=request_headers(url),
     )
-    with urllib.request.urlopen(request, timeout=180) as response:
-        return json.loads(response.read().decode("utf-8"))
+    return json.loads(network_retry.read_url(request, timeout=180).decode("utf-8"))
 
 
 def selected_releases(
@@ -153,14 +153,11 @@ def ensure_archive(
         return output_path
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
     request = urllib.request.Request(
         release["download_url"],
         headers={"User-Agent": USER_AGENT},
     )
-    with urllib.request.urlopen(request, timeout=180) as response, temp_path.open("wb") as handle:
-        shutil.copyfileobj(response, handle)
-    temp_path.replace(output_path)
+    network_retry.download_url(request, output_path, timeout=180)
     return output_path
 
 

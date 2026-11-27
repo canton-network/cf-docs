@@ -56,7 +56,8 @@ TRANSIENT_STDERR_PATTERN = re.compile(
     r"connection reset|connection refused|broken pipe|unexpected eof|unexpected end of json|"
     r"unexpected disconnect|early eof|tls handshake timeout|i/o timeout|timed? ?out|"
     r"temporary failure in name resolution|no such host|could not resolve host|"
-    r"remote end hung up|rate limit",
+    r"remote end hung up|rate limit|rpc failed|ssl_read|gnutls_|http/2 stream|"
+    r"curl (?:18|35|52|55|56)\b",
     re.IGNORECASE,
 )
 

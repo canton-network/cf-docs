@@ -8,6 +8,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+import network_retry
+
 
 DEFAULT_TIMEOUT_SECONDS = 20.0
 DPM_LATEST_URL = "https://get.digitalasset.com/install/latest"
@@ -37,8 +39,7 @@ def write_json(path: Path, payload: dict[str, object]) -> None:
 
 def latest_dpm_version(*, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> str:
     request = urllib.request.Request(DPM_LATEST_URL, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        version = response.read().decode("utf-8").strip()
+    version = network_retry.read_url(request, timeout=timeout).decode("utf-8").strip()
     if not version:
         raise ValueError(f"{DPM_LATEST_URL} returned an empty latest version")
     return version

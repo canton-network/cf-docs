@@ -5,7 +5,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
-from urllib.request import Request, urlopen
+from urllib.request import Request
+
+import network_retry
 
 from generated_reference_sources.common import SourceUpdate, load_json
 
@@ -69,8 +71,7 @@ def stable_npm_versions(package_name: str, *, timeout: float = DEFAULT_TIMEOUT_S
         f"https://registry.npmjs.org/{encoded_name}",
         headers={"User-Agent": USER_AGENT},
     )
-    with urlopen(request, timeout=timeout) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    payload = json.loads(network_retry.read_url(request, timeout=timeout).decode("utf-8"))
     # npm's latest tag follows publication order and can move to an older maintained major line.
     versions = payload.get("versions")
     if not isinstance(versions, dict):

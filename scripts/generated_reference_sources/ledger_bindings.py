@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import network_retry
 from generated_reference_sources.common import SourceUpdate, load_json, write_json
 
 
@@ -108,8 +109,7 @@ def latest_maven_version(
         metadata_url(repo_base, group=group, artifact=artifact),
         headers={"User-Agent": USER_AGENT},
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        payload = response.read()
+    payload = network_retry.read_url(request, timeout=timeout)
     root = ET.fromstring(payload)
     versions = [
         node.text.strip()

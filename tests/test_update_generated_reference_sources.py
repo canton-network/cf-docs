@@ -3,8 +3,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import urllib.request
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -217,7 +220,7 @@ def test_update_typescript_bindings_source_is_dynamic_and_unpinned(tmp_path: Pat
     assert all("versions" not in package and "publish_version" not in package for package in packages)
 
 
-def test_highest_stable_npm_version_ignores_latest_tag_regression() -> None:
+def test_highest_stable_npm_version_ignores_latest_tag_regression(monkeypatch: pytest.MonkeyPatch) -> None:
     module = load_script_module()
 
     class RegistryResponse:
@@ -243,7 +246,7 @@ def test_highest_stable_npm_version_ignores_latest_tag_regression() -> None:
                 }
             ).encode("utf-8")
 
-    module.typescript_bindings.urlopen = lambda *_args, **_kwargs: RegistryResponse()
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_args, **_kwargs: RegistryResponse())
 
     assert module.typescript_bindings.highest_stable_npm_version("@daml/types") == "3.5.2"
 

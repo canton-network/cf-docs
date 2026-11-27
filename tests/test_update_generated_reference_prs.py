@@ -1080,6 +1080,63 @@ def test_wait_for_check_success_accepts_successful_check(monkeypatch) -> None:
     )
 
 
+def test_wait_for_check_success_survives_transient_poll_errors(monkeypatch) -> None:
+    load_script_module()
+    import subprocess
+
+    import generated_reference_pr_utils as pr_utils
+
+    outcomes: list[object] = [
+        subprocess.CalledProcessError(1, ["gh", "api"], stderr="HTTP 502"),
+        pr_utils.json.JSONDecodeError("unexpected end of JSON input", "", 0),
+        [{"name": "mintlify validate", "status": "completed", "conclusion": "success"}],
+    ]
+
+    def fake_check_runs(**_kwargs: object) -> object:
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(pr_utils, "check_runs_for_sha", fake_check_runs)
+    monkeypatch.setattr(pr_utils.time, "sleep", lambda _seconds: None)
+
+    pr_utils.wait_for_check_success(
+        repository="canton-network/cf-docs",
+        head_sha="abc123",
+        check_name="mintlify validate",
+    )
+    assert outcomes == []
+
+
+def test_wait_for_check_success_gives_up_on_persistent_poll_errors(monkeypatch) -> None:
+    load_script_module()
+    import subprocess
+
+    import generated_reference_pr_utils as pr_utils
+
+    calls: list[int] = []
+
+    def always_fails(**_kwargs: object) -> object:
+        calls.append(1)
+        raise subprocess.CalledProcessError(1, ["gh", "api"], stderr="HTTP 502")
+
+    monkeypatch.setattr(pr_utils, "check_runs_for_sha", always_fails)
+    monkeypatch.setattr(pr_utils.time, "sleep", lambda _seconds: None)
+
+    try:
+        pr_utils.wait_for_check_success(
+            repository="canton-network/cf-docs",
+            head_sha="abc123",
+            check_name="mintlify validate",
+        )
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        raise AssertionError("expected CalledProcessError")
+    assert len(calls) == pr_utils.MAX_CONSECUTIVE_POLL_ERRORS
+
+
 def test_wait_for_check_success_rejects_failed_check(monkeypatch) -> None:
     load_script_module()
     import generated_reference_pr_utils as pr_utils

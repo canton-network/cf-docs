@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
+import network_retry
 import reference_nav
 
 
@@ -374,8 +375,7 @@ def discover_stable_maven_versions(
         headers={"User-Agent": "digital-asset-docs-x2mdx/1.0"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            root = ET.fromstring(response.read())
+        root = ET.fromstring(network_retry.read_url(request, timeout=60))
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"HTTP {exc.code} while downloading {url}") from exc
     except urllib.error.URLError as exc:
@@ -401,8 +401,7 @@ def download_file(url: str, target: Path, *, force: bool) -> None:
     print(f"Downloading: {url}")
     request = urllib.request.Request(url, headers={"User-Agent": "digital-asset-docs-x2mdx/1.0"})
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            target.write_bytes(response.read())
+        target.write_bytes(network_retry.read_url(request, timeout=60))
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"HTTP {exc.code} while downloading {url}") from exc
     except urllib.error.URLError as exc:

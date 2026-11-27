@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import generate_canton_protobuf_history as canton_protobuf_history
+import network_retry
 
 from generate_canton_protobuf_history import semver_key
 from generated_reference_sources.common import SourceUpdate, load_json, write_json
@@ -90,9 +91,12 @@ def release_bundle_exists(
         method="HEAD",
         headers={"User-Agent": USER_AGENT},
     )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout):
+    def head(candidate: urllib.request.Request) -> bool:
+        with urllib.request.urlopen(candidate, timeout=timeout):
             return True
+
+    try:
+        return network_retry.retry_call(f"HEAD {request.full_url}", lambda: head(request))
     except urllib.error.HTTPError as error:
         if error.code in {403, 405}:
             fallback = urllib.request.Request(
@@ -100,8 +104,7 @@ def release_bundle_exists(
                 headers={"User-Agent": USER_AGENT, "Range": "bytes=0-0"},
             )
             try:
-                with urllib.request.urlopen(fallback, timeout=timeout):
-                    return True
+                return network_retry.retry_call(f"GET {fallback.full_url}", lambda: head(fallback))
             except urllib.error.URLError:
                 return False
         if error.code == 404:
