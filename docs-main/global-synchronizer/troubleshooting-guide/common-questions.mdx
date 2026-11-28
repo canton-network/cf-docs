@@ -80,19 +80,17 @@ MainNet has never been reset and is not expected to be. The network upgrade proc
 
 ### Can I skip versions?
 
-It depends on the upgrade type. For minor patch releases within the same Splice version, you can generally skip intermediate patches. For major version upgrades that involve a synchronizer migration, you must follow the specific upgrade path documented in the release notes.
+- **Patch releases**, for example 0.10.1 to 0.10.4: yes. See [Version skipping](/global-synchronizer/release-notes/weekly-patch-releases#version-skipping).
+- **Release lines**: only as far as [Logical Synchronizer Upgrades](/global-synchronizer/production-operations/logical-synchronizer-upgrade) (LSUs) allow. Before each LSU, your node must run a release that supports both the old and the new protocol version, and later releases can drop the old one. The [SV Operations Schedule](/shared/sv-operations-schedule) lists each LSU and the release it requires.
 
-If the network has moved several versions ahead while your validator was offline, upgrade directly to the current network version. Running an older version results in `You don't speak X.Y.Z` errors since the network rejects incompatible protocol versions.
+Read the [release notes](/global-synchronizer/release-notes/splice) of every release you skip for required configuration changes, and follow [Validator Upgrades](/global-synchronizer/production-operations/validator-upgrades).
 
-### What is the difference between Type 1, Type 2, and Type 3 upgrades?
+If your node missed an LSU or has been offline for 30 days or more, see [Validator Disaster Recovery](/global-synchronizer/production-operations/validator-disaster-recovery). For a node that ran Splice 0.8.2 or earlier at the November 2026 MainNet LSU, see [Recovering Stuck Validators after the November 2026 LSU](/global-synchronizer/production-operations/validator-recovery-november-2026-lsu).
 
-These categories describe the scope and impact of an upgrade:
+### What types of upgrades are there?
 
-- **Type 1 (patch)** -- Bug fixes and minor improvements. No synchronizer migration, no downtime expected. Apply by updating the Helm chart version and running `helm upgrade`.
-- **Type 2 (minor)** -- New features or behavior changes. May require configuration updates. No synchronizer migration, but a rolling restart is needed.
-- **Type 3 (major)** -- Involves a synchronizer migration. The network moves to a new synchronizer ID, and validators must update their database configuration (e.g., `participant_4` becomes `participant_5`). Coordinated across all validators with a scheduled migration window.
-
-Check the release notes for each version to determine its upgrade type and follow the corresponding procedure.
+- **Version upgrades** (`0.A.X` to `0.B.Y`): each node upgrades on its own. See [Validator Upgrades](/global-synchronizer/production-operations/validator-upgrades).
+- **Protocol upgrades**: the super validators move the network to a new physical synchronizer through an [LSU](/global-synchronizer/production-operations/logical-synchronizer-upgrade). Validators must run the release the LSU requires before its topology freeze time.
 
 ### How do I verify my validator is running the correct version?
 
